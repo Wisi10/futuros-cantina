@@ -13,6 +13,7 @@ import SuccessScreen from "@/components/vender/SuccessScreen";
 import CreditsModal from "@/components/vender/CreditsModal";
 import ConfigView from "@/components/config/ConfigView";
 import InventarioView from "@/components/inventario/InventarioView";
+import CajaView from "@/components/caja/CajaView";
 import GastosView from "@/components/gastos/GastosView";
 import ReportesView from "@/components/reportes/ReportesView";
 
@@ -30,7 +31,6 @@ export default function POSPage() {
   const [processing, setProcessing] = useState(false);
   const [lastSale, setLastSale] = useState(null);
   const [todayStats, setTodayStats] = useState({ total: 0, count: 0 });
-  const [selectedCategory, setSelectedCategory] = useState("todos");
 
   // Credits state
   const [showCredits, setShowCredits] = useState(false);
@@ -333,8 +333,6 @@ export default function POSPage() {
                   products={products}
                   cart={cart}
                   rate={rate}
-                  selectedCategory={selectedCategory}
-                  onSelectCategory={setSelectedCategory}
                   onAdd={addToCart}
                 />
                 <CartSidebar
@@ -352,6 +350,12 @@ export default function POSPage() {
         {activeTab === "inventario" && (
           <div className="flex-1 overflow-hidden">
             <InventarioView user={user} />
+          </div>
+        )}
+
+        {activeTab === "caja" && (
+          <div className="flex-1 overflow-hidden">
+            <CajaView user={user} rate={rate} />
           </div>
         )}
 
