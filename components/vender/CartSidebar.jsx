@@ -1,9 +1,10 @@
 "use client";
 import { Minus, Plus, Trash2, ShoppingCart } from "lucide-react";
+import { formatBs } from "@/lib/utils";
 
-export default function Cart({ cart, rate, onUpdateQty, onRemove, onCheckout }) {
+export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheckout }) {
   const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
-  const totalBs = rate ? totalRef * rate.eur : null;
+  const hasTasa = !!rate;
 
   return (
     <div className="w-[280px] bg-white border-l border-stone-200 flex flex-col h-full shrink-0">
@@ -19,7 +20,6 @@ export default function Cart({ cart, rate, onUpdateQty, onRemove, onCheckout }) 
         </h2>
       </div>
 
-      {/* Items */}
       <div className="flex-1 overflow-auto p-3 space-y-2">
         {cart.length === 0 ? (
           <div className="text-center py-8 text-stone-300">
@@ -29,13 +29,12 @@ export default function Cart({ cart, rate, onUpdateQty, onRemove, onCheckout }) 
         ) : (
           cart.map((item) => {
             const subtotalRef = Number(item.product.price_ref) * item.qty;
-            const subtotalBs = rate ? subtotalRef * rate.eur : null;
 
             return (
               <div key={item.product.id} className="bg-stone-50 rounded-lg p-2.5">
                 <div className="flex items-start justify-between mb-1.5">
                   <p className="text-xs font-medium text-stone-700 leading-tight flex-1 pr-1">
-                    {item.product.name}
+                    {item.product.emoji || "🍽️"} {item.product.name}
                   </p>
                   <button
                     onClick={() => onRemove(item.product.id)}
@@ -56,7 +55,7 @@ export default function Cart({ cart, rate, onUpdateQty, onRemove, onCheckout }) 
                     <span className="text-sm font-bold w-6 text-center">{item.qty}</span>
                     <button
                       onClick={() => onUpdateQty(item.product.id, 1)}
-                      disabled={item.qty >= item.product.stock_quantity}
+                      disabled={item.qty >= (item.product.stock_quantity ?? 0)}
                       className="w-7 h-7 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200 disabled:opacity-30"
                     >
                       <Plus size={12} />
@@ -64,10 +63,8 @@ export default function Cart({ cart, rate, onUpdateQty, onRemove, onCheckout }) 
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-brand">REF {subtotalRef.toFixed(2)}</p>
-                    {subtotalBs != null && (
-                      <p className="text-[10px] text-stone-400">
-                        Bs {subtotalBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
+                    {hasTasa && (
+                      <p className="text-[10px] text-stone-400">{formatBs(subtotalRef, rate.eur)}</p>
                     )}
                   </div>
                 </div>
@@ -77,20 +74,16 @@ export default function Cart({ cart, rate, onUpdateQty, onRemove, onCheckout }) 
         )}
       </div>
 
-      {/* Totals & Checkout */}
       <div className="border-t border-stone-200 p-4 space-y-3">
         <div>
           <div className="flex justify-between items-baseline">
             <span className="text-xs text-stone-500">Total</span>
             <span className="text-xl font-bold text-brand">REF {totalRef.toFixed(2)}</span>
           </div>
-          {totalBs != null && (
-            <p className="text-right text-xs text-stone-400">
-              Bs {totalBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+          {hasTasa && (
+            <p className="text-right text-xs text-stone-400">{formatBs(totalRef, rate.eur)}</p>
           )}
         </div>
-
         <button
           onClick={onCheckout}
           disabled={cart.length === 0}

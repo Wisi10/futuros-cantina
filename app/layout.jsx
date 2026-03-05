@@ -1,5 +1,4 @@
 import './globals.css';
-import NavWrapper from '@/components/NavWrapper';
 
 export const metadata = {
   title: 'Futuros Cantina',
@@ -10,7 +9,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <body className="bg-brand-cream-light min-h-screen">
-        <NavWrapper>{children}</NavWrapper>
+        {children}
       </body>
     </html>
   );
