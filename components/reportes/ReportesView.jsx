@@ -1,0 +1,356 @@
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { BarChart3, Download, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { METHOD_LABELS, PAYMENT_METHODS } from "@/lib/utils";
+import CreditsModal from "@/components/vender/CreditsModal";
+import * as XLSX from "xlsx";
+
+const PERIODS = [
+  { id: "hoy", label: "Hoy" },
+  { id: "semana", label: "Semana" },
+  { id: "mes", label: "Mes" },
+  { id: "custom", label: "Personalizado" },
+];
+
+function getPeriodDates(period, customFrom, customTo) {
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+  if (period === "hoy") return { from: todayStr, to: todayStr };
+  if (period === "semana") {
+    const d = new Date(today);
+    d.setDate(d.getDate() - d.getDay());
+    return { from: d.toISOString().split("T")[0], to: todayStr };
+  }
+  if (period === "mes") {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: first.toISOString().split("T")[0], to: todayStr };
+  }
+  return { from: customFrom || todayStr, to: customTo || todayStr };
+}
+
+export default function ReportesView({ user, rate }) {
+  const [period, setPeriod] = useState("hoy");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const [sales, setSales] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [credits, setCredits] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const loadData = useCallback(async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const { from, to } = getPeriodDates(period, customFrom, customTo);
+
+    const [salesRes, expRes, creditsRes, prodsRes] = await Promise.all([
+      supabase.from("cantina_sales").select("*").gte("sale_date", from).lte("sale_date", to).order("created_at", { ascending: false }),
+      supabase.from("cantina_expenses").select("*").gte("expense_date", from).lte("expense_date", to),
+      supabase.from("cantina_credits").select("*").in("status", ["pending", "partial"]),
+      supabase.from("products").select("*").eq("is_cantina", true),
+    ]);
+
+    if (salesRes.data) setSales(salesRes.data);
+    if (expRes.data) setExpenses(expRes.data);
+    if (creditsRes.data) setCredits(creditsRes.data);
+    if (prodsRes.data) setProducts(prodsRes.data);
+    setLoading(false);
+  }, [period, customFrom, customTo]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // KPIs
+  const totalSalesRef = sales.reduce((s, v) => s + Number(v.total_ref || 0), 0);
+  const totalExpRef = expenses.reduce((s, e) => s + Number(e.amount_ref || 0), 0);
+  const totalCreditsOutstanding = credits.reduce(
+    (s, c) => s + Number(c.original_amount_ref || 0) - Number(c.paid_amount_ref || 0), 0
+  );
+  const utilidad = totalSalesRef - totalExpRef;
+
+  // P&L by product
+  const productPL = {};
+  sales.forEach((sale) => {
+    const items = sale.items || [];
+    items.forEach((item) => {
+      if (!productPL[item.name]) productPL[item.name] = { units: 0, revenue: 0, cost: 0 };
+      productPL[item.name].units += item.qty;
+      productPL[item.name].revenue += item.price_ref * item.qty;
+      productPL[item.name].cost += (item.cost_ref || 0) * item.qty;
+    });
+  });
+  const plRows = Object.entries(productPL)
+    .map(([name, d]) => ({ name, ...d, margin: d.revenue - d.cost, pct: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue) * 100 : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+
+  // Sales by payment method
+  const methodTotals = {};
+  sales.forEach((s) => {
+    const key = s.payment_status === "credit" ? "credit" : (s.payment_method || "otro");
+    methodTotals[key] = (methodTotals[key] || 0) + Number(s.total_ref || 0);
+  });
+
+  // Excel export
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Ventas
+      const ventasData = sales.map((s) => ({
+        Fecha: s.sale_date,
+        Productos: (s.items || []).map((i) => `${i.qty}x ${i.name}`).join(", "),
+        "Total REF": Number(s.total_ref || 0).toFixed(2),
+        "Total Bs": s.total_bs ? Number(s.total_bs).toFixed(2) : "",
+        Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || ""),
+        Cliente: s.client_name || "",
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventasData), "Ventas");
+
+      // Sheet 2: Gastos
+      const gastosData = expenses.map((e) => ({
+        Fecha: e.expense_date,
+        Categoría: e.category,
+        Descripción: e.description,
+        "Monto REF": Number(e.amount_ref || 0).toFixed(2),
+        "Monto Bs": e.amount_bs ? Number(e.amount_bs).toFixed(2) : "",
+        "Monto USD": e.amount_usd ? Number(e.amount_usd).toFixed(2) : "",
+        Método: METHOD_LABELS[e.payment_method] || e.payment_method || "",
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gastosData), "Gastos");
+
+      // Sheet 3: Créditos
+      const creditosData = credits.map((c) => ({
+        Cliente: c.client_name,
+        "Monto original REF": Number(c.original_amount_ref || 0).toFixed(2),
+        "Pagado REF": Number(c.paid_amount_ref || 0).toFixed(2),
+        "Pendiente REF": (Number(c.original_amount_ref || 0) - Number(c.paid_amount_ref || 0)).toFixed(2),
+        Status: c.status,
+        Fecha: c.created_at?.split("T")[0] || "",
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(creditosData), "Créditos");
+
+      // Sheet 4: Inventario
+      const invData = products.map((p) => ({
+        Producto: p.name,
+        Categoría: p.category || "",
+        "Stock actual": Number(p.stock_quantity || 0),
+        "Costo REF": Number(p.cost_ref || 0).toFixed(2),
+        "Valor REF": (Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)).toFixed(2),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invData), "Inventario");
+
+      XLSX.writeFile(wb, `Cantina_Reporte_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch (err) {
+      alert("Error exportando: " + err.message);
+    }
+    setExporting(false);
+  };
+
+  return (
+    <div className="h-full overflow-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="font-bold text-brand text-lg flex items-center gap-2">
+          <BarChart3 size={20} /> Reportes
+        </h1>
+        <button onClick={exportExcel} disabled={exporting || loading}
+          className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-1.5">
+          {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          Exportar Excel
+        </button>
+      </div>
+
+      {/* Period selector */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {PERIODS.map((p) => (
+          <button key={p.id} onClick={() => setPeriod(p.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              period === p.id ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+            }`}>{p.label}</button>
+        ))}
+        {period === "custom" && (
+          <div className="flex items-center gap-2 ml-2">
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+              className="border border-stone-300 rounded-lg px-2 py-1 text-xs" />
+            <span className="text-xs text-stone-400">—</span>
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+              className="border border-stone-300 rounded-lg px-2 py-1 text-xs" />
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-stone-400 animate-pulse py-8 text-center">Cargando reportes...</p>
+      ) : (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <p className="text-xs text-stone-500 mb-1">Ventas</p>
+              <p className="text-xl font-bold text-brand">REF {totalSalesRef.toFixed(2)}</p>
+              <p className="text-xs text-stone-400">{sales.length} ventas</p>
+            </div>
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <p className="text-xs text-stone-500 mb-1">Gastos</p>
+              <p className="text-xl font-bold text-red-600">REF {totalExpRef.toFixed(2)}</p>
+              <p className="text-xs text-stone-400">{expenses.length} gastos</p>
+            </div>
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <p className="text-xs text-stone-500 mb-1">Utilidad</p>
+              <p className={`text-xl font-bold ${utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>
+                REF {utilidad.toFixed(2)}
+              </p>
+              <p className="text-xs text-stone-400">
+                {totalSalesRef > 0 ? `${((utilidad / totalSalesRef) * 100).toFixed(0)}% margen` : "—"}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <p className="text-xs text-stone-500 mb-1">Créditos</p>
+              <p className="text-xl font-bold text-yellow-600">REF {totalCreditsOutstanding.toFixed(2)}</p>
+              <p className="text-xs text-stone-400">{credits.length} pendientes</p>
+            </div>
+          </div>
+
+          {/* P&L by product */}
+          {plRows.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-stone-100">
+                <h2 className="font-bold text-sm text-stone-700">P&L por producto</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-stone-50 text-stone-500 text-xs">
+                    <th className="text-left px-3 py-2 font-medium">Producto</th>
+                    <th className="text-right px-3 py-2 font-medium">Unidades</th>
+                    <th className="text-right px-3 py-2 font-medium">Ingreso REF</th>
+                    <th className="text-right px-3 py-2 font-medium">Costo REF</th>
+                    <th className="text-right px-3 py-2 font-medium">Margen REF</th>
+                    <th className="text-right px-3 py-2 font-medium">Margen %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plRows.map((r) => (
+                    <tr key={r.name} className="border-t border-stone-100">
+                      <td className="px-3 py-2 font-medium text-stone-800">{r.name}</td>
+                      <td className="px-3 py-2 text-right">{r.units}</td>
+                      <td className="px-3 py-2 text-right">{r.revenue.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right text-stone-500">{r.cost.toFixed(2)}</td>
+                      <td className={`px-3 py-2 text-right font-medium ${r.margin >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {r.margin.toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-medium ${r.pct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {r.pct.toFixed(0)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Sales by payment method */}
+          {Object.keys(methodTotals).length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <h2 className="font-bold text-sm text-stone-700 mb-3">Ventas por método de pago</h2>
+              <div className="space-y-2">
+                {Object.entries(methodTotals).sort((a, b) => b[1] - a[1]).map(([m, total]) => (
+                  <div key={m} className="flex items-center justify-between text-sm">
+                    <span className="text-stone-600">{METHOD_LABELS[m] || m}</span>
+                    <span className="font-bold text-brand">REF {total.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pending credits */}
+          {credits.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+                <h2 className="font-bold text-sm text-stone-700">Créditos pendientes</h2>
+                <button onClick={() => setShowCreditsModal(true)}
+                  className="text-xs text-brand hover:underline">Ver todos</button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-stone-50 text-stone-500 text-xs">
+                    <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                    <th className="text-right px-3 py-2 font-medium">Original</th>
+                    <th className="text-right px-3 py-2 font-medium">Pagado</th>
+                    <th className="text-right px-3 py-2 font-medium">Pendiente</th>
+                    <th className="text-left px-3 py-2 font-medium">Antigüedad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {credits.slice(0, 10).map((c) => {
+                    const outstanding = Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0);
+                    const days = Math.floor((new Date() - new Date(c.created_at)) / 86400000);
+                    return (
+                      <tr key={c.id} className="border-t border-stone-100">
+                        <td className="px-3 py-2 font-medium">{c.client_name}</td>
+                        <td className="px-3 py-2 text-right">REF {Number(c.original_amount_ref).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-stone-500">REF {Number(c.paid_amount_ref || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-brand">REF {outstanding.toFixed(2)}</td>
+                        <td className={`px-3 py-2 ${days > 7 ? "text-red-600" : days > 3 ? "text-yellow-600" : "text-green-600"}`}>
+                          {days === 0 ? "Hoy" : `${days}d`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Sales history */}
+          {sales.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-stone-100">
+                <h2 className="font-bold text-sm text-stone-700">Historial de ventas</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-stone-50 text-stone-500 text-xs">
+                    <th className="text-left px-3 py-2 font-medium">Hora</th>
+                    <th className="text-left px-3 py-2 font-medium">Productos</th>
+                    <th className="text-right px-3 py-2 font-medium">Total REF</th>
+                    <th className="text-left px-3 py-2 font-medium">Método</th>
+                    <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sales.map((s) => (
+                    <tr key={s.id} className="border-t border-stone-100 hover:bg-stone-50/50">
+                      <td className="px-3 py-2 text-stone-500 text-xs">
+                        {new Date(s.created_at).toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td className="px-3 py-2 text-stone-600 text-xs">
+                        {(s.items || []).map((i) => `${i.qty}x ${i.name}`).join(", ")}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">REF {Number(s.total_ref).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {s.payment_status === "credit" ? (
+                          <span className="text-yellow-600 font-medium">Crédito</span>
+                        ) : (
+                          METHOD_LABELS[s.payment_method] || s.payment_method
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-stone-400">{s.client_name || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {showCreditsModal && (
+        <CreditsModal user={user} rate={rate} onClose={() => setShowCreditsModal(false)} onUpdated={loadData} />
+      )}
+    </div>
+  );
+}

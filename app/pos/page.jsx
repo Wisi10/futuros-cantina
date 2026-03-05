@@ -13,6 +13,8 @@ import SuccessScreen from "@/components/vender/SuccessScreen";
 import CreditsModal from "@/components/vender/CreditsModal";
 import ConfigView from "@/components/config/ConfigView";
 import InventarioView from "@/components/inventario/InventarioView";
+import GastosView from "@/components/gastos/GastosView";
+import ReportesView from "@/components/reportes/ReportesView";
 
 export default function POSPage() {
   const router = useRouter();
@@ -354,14 +356,14 @@ export default function POSPage() {
         )}
 
         {activeTab === "gastos" && (
-          <div className="flex-1 flex items-center justify-center text-stone-400 text-sm">
-            Gastos — próximamente (Sesión 4)
+          <div className="flex-1 overflow-hidden">
+            <GastosView user={user} rate={rate} />
           </div>
         )}
 
         {activeTab === "reportes" && (
-          <div className="flex-1 flex items-center justify-center text-stone-400 text-sm">
-            Reportes — próximamente (Sesión 4)
+          <div className="flex-1 overflow-hidden">
+            <ReportesView user={user} rate={rate} />
           </div>
         )}
 
