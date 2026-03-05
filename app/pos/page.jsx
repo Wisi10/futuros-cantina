@@ -12,6 +12,7 @@ import PaymentModal from "@/components/vender/PaymentModal";
 import SuccessScreen from "@/components/vender/SuccessScreen";
 import CreditsModal from "@/components/vender/CreditsModal";
 import ConfigView from "@/components/config/ConfigView";
+import InventarioView from "@/components/inventario/InventarioView";
 
 export default function POSPage() {
   const router = useRouter();
@@ -347,8 +348,8 @@ export default function POSPage() {
         )}
 
         {activeTab === "inventario" && (
-          <div className="flex-1 flex items-center justify-center text-stone-400 text-sm">
-            Inventario — próximamente (Sesión 3)
+          <div className="flex-1 overflow-hidden">
+            <InventarioView user={user} />
           </div>
         )}
 
