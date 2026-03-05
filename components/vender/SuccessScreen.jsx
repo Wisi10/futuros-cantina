@@ -8,8 +8,14 @@ export default function SuccessScreen({ sale, todayStats, onNewSale }) {
       <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm w-full text-center">
         <CheckCircle size={56} className="text-green-500 mx-auto mb-4" strokeWidth={1.5} />
 
-        <h2 className="text-xl font-bold text-stone-800 mb-1">¡Venta registrada!</h2>
-        <p className="text-sm text-stone-400 mb-5">Stock actualizado automáticamente</p>
+        <h2 className="text-xl font-bold text-stone-800 mb-1">
+          {sale.paymentMethod === "credit" ? "¡Crédito registrado!" : "¡Venta registrada!"}
+        </h2>
+        <p className="text-sm text-stone-400 mb-5">
+          {sale.paymentMethod === "credit"
+            ? `Crédito para ${sale.creditClientName}`
+            : "Stock actualizado automáticamente"}
+        </p>
 
         <div className="bg-stone-50 rounded-xl p-4 mb-4 text-left">
           <div className="space-y-1 mb-3">

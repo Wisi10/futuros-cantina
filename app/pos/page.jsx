@@ -10,6 +10,7 @@ import ProductGrid from "@/components/vender/ProductGrid";
 import CartSidebar from "@/components/vender/CartSidebar";
 import PaymentModal from "@/components/vender/PaymentModal";
 import SuccessScreen from "@/components/vender/SuccessScreen";
+import CreditsModal from "@/components/vender/CreditsModal";
 import ConfigView from "@/components/config/ConfigView";
 
 export default function POSPage() {
@@ -27,6 +28,10 @@ export default function POSPage() {
   const [lastSale, setLastSale] = useState(null);
   const [todayStats, setTodayStats] = useState({ total: 0, count: 0 });
   const [selectedCategory, setSelectedCategory] = useState("todos");
+
+  // Credits state
+  const [showCredits, setShowCredits] = useState(false);
+  const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
 
   // Auth check
   useEffect(() => {
@@ -83,12 +88,22 @@ export default function POSPage() {
     }
   }, []);
 
+  const loadPendingCreditsCount = useCallback(async () => {
+    if (!supabase) return;
+    const { count } = await supabase
+      .from("cantina_credits")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending", "partial"]);
+    setPendingCreditsCount(count || 0);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     loadProducts();
     loadRate();
     loadTodayStats();
-  }, [user, loadProducts, loadRate, loadTodayStats]);
+    loadPendingCreditsCount();
+  }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount]);
 
   // Cart operations
   const addToCart = (product) => {
@@ -126,74 +141,78 @@ export default function POSPage() {
   const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
   const totalBs = calcBs(totalRef, rate?.eur);
 
-  // Confirm sale
+  // Shared sale logic (stock verify + items + movements + stock update)
+  const executeSale = async (saleData) => {
+    // Verify stock
+    for (const item of cart) {
+      const { data: current } = await supabase
+        .from("products")
+        .select("stock_quantity")
+        .eq("id", item.product.id)
+        .single();
+      if (current && current.stock_quantity < item.qty) {
+        alert(`Stock insuficiente para ${item.product.name}. Disponible: ${current.stock_quantity}`);
+        return null;
+      }
+    }
+
+    const items = cart.map((item) => ({
+      product_id: item.product.id,
+      name: item.product.name,
+      qty: item.qty,
+      price_ref: parseFloat(item.product.price_ref),
+      cost_ref: parseFloat(item.product.cost_ref || 0),
+    }));
+
+    // 1. Insert cantina_sales
+    const { data: sale, error: saleError } = await supabase
+      .from("cantina_sales")
+      .insert({ items, total_ref: totalRef, total_bs: totalBs, ...saleData })
+      .select()
+      .single();
+    if (saleError) throw saleError;
+
+    // 2. Insert stock_movements
+    const movements = cart.map((item) => ({
+      product_id: item.product.id,
+      product_name: item.product.name,
+      movement_type: "sale",
+      quantity: -item.qty,
+      reference_id: sale.id,
+      cost_ref: parseFloat(item.product.cost_ref || 0),
+      notes: saleData.payment_status === "credit" ? `Crédito — ${saleData.client_name}` : "Venta cantina",
+      created_by: user?.name || "Cantina",
+    }));
+    const { error: movError } = await supabase.from("stock_movements").insert(movements);
+    if (movError) throw movError;
+
+    // 3. Update product stock
+    for (const item of cart) {
+      const { error: stockError } = await supabase
+        .from("products")
+        .update({ stock_quantity: (item.product.stock_quantity ?? 0) - item.qty })
+        .eq("id", item.product.id);
+      if (stockError) throw stockError;
+    }
+
+    return { sale, items };
+  };
+
+  // Confirm regular sale
   const confirmSale = async (method, ref) => {
     setProcessing(true);
     try {
-      // Verify stock
-      for (const item of cart) {
-        const { data: current } = await supabase
-          .from("products")
-          .select("stock_quantity")
-          .eq("id", item.product.id)
-          .single();
-        if (current && current.stock_quantity < item.qty) {
-          alert(`Stock insuficiente para ${item.product.name}. Disponible: ${current.stock_quantity}`);
-          setProcessing(false);
-          return;
-        }
-      }
-
-      const items = cart.map((item) => ({
-        product_id: item.product.id,
-        name: item.product.name,
-        qty: item.qty,
-        price_ref: parseFloat(item.product.price_ref),
-        cost_ref: parseFloat(item.product.cost_ref || 0),
-      }));
-
-      // 1. Insert cantina_sales
-      const { data: sale, error: saleError } = await supabase
-        .from("cantina_sales")
-        .insert({
-          items,
-          total_ref: totalRef,
-          total_bs: totalBs,
-          payment_status: "paid",
-          payment_method: method,
-          reference: ref || null,
-          exchange_rate_bs: rate?.eur || null,
-          created_by: user?.name || "Cantina",
-        })
-        .select()
-        .single();
-      if (saleError) throw saleError;
-
-      // 2. Insert stock_movements
-      const movements = cart.map((item) => ({
-        product_id: item.product.id,
-        product_name: item.product.name,
-        movement_type: "sale",
-        quantity: -item.qty,
-        reference_id: sale.id,
-        cost_ref: parseFloat(item.product.cost_ref || 0),
-        notes: "Venta cantina",
+      const result = await executeSale({
+        payment_status: "paid",
+        payment_method: method,
+        reference: ref || null,
+        exchange_rate_bs: rate?.eur || null,
         created_by: user?.name || "Cantina",
-      }));
-      const { error: movError } = await supabase.from("stock_movements").insert(movements);
-      if (movError) throw movError;
-
-      // 3. Update product stock
-      for (const item of cart) {
-        const { error: stockError } = await supabase
-          .from("products")
-          .update({ stock_quantity: (item.product.stock_quantity ?? 0) - item.qty })
-          .eq("id", item.product.id);
-        if (stockError) throw stockError;
-      }
+      });
+      if (!result) { setProcessing(false); return; }
 
       setLastSale({
-        items,
+        items: result.items,
         totalRef,
         totalBs,
         paymentMethod: method,
@@ -205,6 +224,53 @@ export default function POSPage() {
       await loadTodayStats();
     } catch (err) {
       alert("Error registrando venta: " + err.message);
+    }
+    setProcessing(false);
+  };
+
+  // Confirm credit sale
+  const confirmCreditSale = async ({ clientId, clientName, notes, dueDate }) => {
+    setProcessing(true);
+    try {
+      const result = await executeSale({
+        payment_status: "credit",
+        payment_method: null,
+        client_id: clientId,
+        client_name: clientName,
+        notes: notes || null,
+        exchange_rate_bs: rate?.eur || null,
+        created_by: user?.name || "Cantina",
+      });
+      if (!result) { setProcessing(false); return; }
+
+      // Insert cantina_credits
+      const { error: creditError } = await supabase.from("cantina_credits").insert({
+        client_id: clientId || "manual",
+        client_name: clientName,
+        sale_id: result.sale.id,
+        original_amount_ref: totalRef,
+        paid_amount_ref: 0,
+        status: "pending",
+        due_date: dueDate || null,
+        notes: notes || null,
+        created_by: user?.name || "Cantina",
+      });
+      if (creditError) throw creditError;
+
+      setLastSale({
+        items: result.items,
+        totalRef,
+        totalBs,
+        paymentMethod: "credit",
+        creditClientName: clientName,
+      });
+      setCart([]);
+      setScreen("success");
+      await loadProducts();
+      await loadTodayStats();
+      await loadPendingCreditsCount();
+    } catch (err) {
+      alert("Error registrando crédito: " + err.message);
     }
     setProcessing(false);
   };
@@ -230,9 +296,16 @@ export default function POSPage() {
         <header className="bg-white border-b border-stone-200 px-4 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <RateChip rate={rate} />
-            {/* Credits shortcut - placeholder */}
-            <button disabled className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-400 bg-stone-100">
+            <button
+              onClick={() => setShowCredits(true)}
+              className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative"
+            >
               <CreditCard size={14} /> Créditos
+              {pendingCreditsCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {pendingCreditsCount}
+                </span>
+              )}
             </button>
           </div>
           <div className="flex items-center gap-3">
@@ -305,6 +378,7 @@ export default function POSPage() {
           rate={rate}
           processing={processing}
           onConfirm={confirmSale}
+          onConfirmCredit={confirmCreditSale}
           onBack={() => setScreen("pos")}
         />
       )}
@@ -314,6 +388,15 @@ export default function POSPage() {
           sale={lastSale}
           todayStats={todayStats}
           onNewSale={handleNewSale}
+        />
+      )}
+
+      {showCredits && (
+        <CreditsModal
+          user={user}
+          rate={rate}
+          onClose={() => setShowCredits(false)}
+          onUpdated={loadPendingCreditsCount}
         />
       )}
     </div>
