@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, Plus, Minus } from "lucide-react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 
@@ -12,6 +11,10 @@ export default function InventarioView({ user }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [adjusting, setAdjusting] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState("todos");
+  const [kpiFilter, setKpiFilter] = useState(null); // "sin_stock" | "stock_bajo" | null
+  const [restocks, setRestocks] = useState([]);
+  const [expandedSupplier, setExpandedSupplier] = useState(null);
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
@@ -24,11 +27,54 @@ export default function InventarioView({ user }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  const loadRestocks = useCallback(async () => {
+    if (!supabase) return;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const dateStr = thirtyDaysAgo.toISOString().split("T")[0];
+    const { data } = await supabase
+      .from("cantina_restocks")
+      .select("*")
+      .gte("restock_date", dateStr)
+      .order("restock_date", { ascending: false });
+    if (data) setRestocks(data);
+  }, []);
 
-  const filtered = products.filter((p) =>
-    !search || p.name.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    loadProducts();
+    loadRestocks();
+  }, [loadProducts, loadRestocks]);
+
+  // Categories from products
+  const categories = ["todos", ...new Set(products.map((p) => p.category || "Otro"))];
+
+  // KPIs
+  const sinStockCount = products.filter((p) => Number(p.stock_quantity || 0) <= 0).length;
+  const stockBajoCount = products.filter((p) => {
+    const stock = Number(p.stock_quantity || 0);
+    return stock > 0 && stock <= (p.low_stock_alert || 5);
+  }).length;
+  const valorTotal = products.reduce(
+    (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.cost_ref || 0), 0
   );
+  const pagadoProveedores = restocks.reduce(
+    (sum, r) => sum + Number(r.total_cost_ref || 0), 0
+  );
+
+  // Filtering
+  const filtered = products.filter((p) => {
+    // KPI filter
+    if (kpiFilter === "sin_stock" && Number(p.stock_quantity || 0) > 0) return false;
+    if (kpiFilter === "stock_bajo") {
+      const stock = Number(p.stock_quantity || 0);
+      if (!(stock > 0 && stock <= (p.low_stock_alert || 5))) return false;
+    }
+    // Category filter
+    if (selectedCategory !== "todos" && (p.category || "Otro") !== selectedCategory) return false;
+    // Search filter
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   const totalValue = filtered.reduce(
     (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.cost_ref || 0), 0
@@ -43,10 +89,41 @@ export default function InventarioView({ user }) {
 
   const stockBadge = (p) => {
     const stock = Number(p.stock_quantity || 0);
-    if (stock <= 0) return <span className="text-xs font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Sin stock</span>;
-    if (stock <= (p.low_stock_alert || 5)) return <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded">Bajo</span>;
-    return <span className="text-xs font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded">OK</span>;
+    if (stock <= 0) return <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin stock</span>;
+    if (stock <= (p.low_stock_alert || 5)) return <span className="text-[10px] font-medium text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded-full">Bajo</span>;
+    return <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">OK</span>;
   };
+
+  const handleKpiClick = (filter) => {
+    if (kpiFilter === filter) {
+      setKpiFilter(null);
+    } else {
+      setKpiFilter(filter);
+      setSelectedCategory("todos");
+    }
+  };
+
+  const handleCategoryClick = (cat) => {
+    setSelectedCategory(cat);
+    setKpiFilter(null);
+  };
+
+  // Supplier breakdown
+  const supplierData = {};
+  restocks.forEach((r) => {
+    const supplier = r.supplier || "Sin proveedor";
+    if (!supplierData[supplier]) {
+      supplierData[supplier] = { total: 0, count: 0, items: {} };
+    }
+    supplierData[supplier].total += Number(r.total_cost_ref || 0);
+    supplierData[supplier].count++;
+    const items = r.items || [];
+    items.forEach((item) => {
+      const name = item.name || "?";
+      supplierData[supplier].items[name] = (supplierData[supplier].items[name] || 0) + (item.qty || 0);
+    });
+  });
+  const suppliers = Object.entries(supplierData).sort((a, b) => b[1].total - a[1].total);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -77,74 +154,249 @@ export default function InventarioView({ user }) {
 
       {/* Sub-tab content */}
       {subTab === "stock" && (
-        <div className="flex-1 overflow-auto px-6 pb-6">
-          {/* Search */}
-          <div className="relative mb-3">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar producto..."
-              className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
-            />
-          </div>
-
+        <div className="flex-1 overflow-auto px-6 pb-6 space-y-4">
           {loading ? (
             <p className="text-sm text-stone-400 animate-pulse py-8 text-center">Cargando...</p>
           ) : (
-            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-stone-50 text-stone-500 text-xs">
-                    <th className="text-left px-3 py-2 font-medium">Producto</th>
-                    <th className="text-left px-3 py-2 font-medium">Categoría</th>
-                    <th className="text-right px-3 py-2 font-medium">Stock</th>
-                    <th className="text-right px-3 py-2 font-medium">Alerta</th>
-                    <th className="text-right px-3 py-2 font-medium">Costo REF</th>
-                    <th className="text-right px-3 py-2 font-medium">Valor REF</th>
-                    <th className="text-center px-3 py-2 font-medium">Estado</th>
-                    <th className="text-right px-3 py-2 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((p) => (
-                    <tr key={p.id} className={`border-t border-stone-100 ${rowBg(p)}`}>
-                      <td className="px-3 py-2 font-medium text-stone-800">
-                        <span className="mr-1.5">{p.emoji || "🍽️"}</span>{p.name}
-                      </td>
-                      <td className="px-3 py-2 text-stone-500">{p.category || "—"}</td>
-                      <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>
-                      <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 5}</td>
-                      <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right font-medium">
-                        {(Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)).toFixed(2)}
-                      </td>
-                      <td className="px-3 py-2 text-center">{stockBadge(p)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          onClick={() => setAdjusting(p)}
-                          className="text-xs text-brand hover:underline"
-                        >
-                          Ajustar
-                        </button>
-                      </td>
+            <>
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <button
+                  onClick={() => handleKpiClick("sin_stock")}
+                  className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                    kpiFilter === "sin_stock" ? "border-brand ring-1 ring-brand" : "border-[#e5e5e5]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <PackageX size={16} className="text-stone-400" />
+                    <span className="text-[11px] text-[#a3a3a3] font-medium">Sin stock</span>
+                  </div>
+                  <p className={`text-2xl font-extrabold ${sinStockCount > 0 ? "text-[#dc2626]" : "text-stone-400"}`}>
+                    {sinStockCount}
+                  </p>
+                  <p className="text-[11px] text-[#a3a3a3]">productos</p>
+                </button>
+
+                <button
+                  onClick={() => handleKpiClick("stock_bajo")}
+                  className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                    kpiFilter === "stock_bajo" ? "border-brand ring-1 ring-brand" : "border-[#e5e5e5]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle size={16} className="text-stone-400" />
+                    <span className="text-[11px] text-[#a3a3a3] font-medium">Stock bajo</span>
+                  </div>
+                  <p className={`text-2xl font-extrabold ${stockBajoCount > 0 ? "text-[#dc2626]" : "text-stone-400"}`}>
+                    {stockBajoCount}
+                  </p>
+                  <p className="text-[11px] text-[#a3a3a3]">productos</p>
+                </button>
+
+                <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <DollarSign size={16} className="text-stone-400" />
+                    <span className="text-[11px] text-[#a3a3a3] font-medium">Valor total</span>
+                  </div>
+                  <p className="text-2xl font-extrabold text-[#1a1a1a]">
+                    REF {valorTotal.toFixed(2)}
+                  </p>
+                  <p className="text-[11px] text-[#a3a3a3]">inventario</p>
+                </div>
+
+                <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Truck size={16} className="text-stone-400" />
+                    <span className="text-[11px] text-[#a3a3a3] font-medium">Pagado a proveedores</span>
+                  </div>
+                  <p className="text-2xl font-extrabold text-[#1a1a1a]">
+                    REF {pagadoProveedores.toFixed(2)}
+                  </p>
+                  <p className="text-[11px] text-[#a3a3a3]">últimos 30d</p>
+                </div>
+              </div>
+
+              {/* Category filter buttons */}
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => handleCategoryClick(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
+                      selectedCategory === cat && !kpiFilter
+                        ? "bg-brand text-brand-cream border-brand"
+                        : "bg-white text-[#525252] border-[#e5e5e5] hover:bg-stone-50"
+                    }`}
+                  >
+                    {cat === "todos" ? "Todos" : cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+                />
+              </div>
+
+              {/* Active filter indicator */}
+              {kpiFilter && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-stone-500">
+                    Filtro: <span className="font-semibold text-brand">{kpiFilter === "sin_stock" ? "Sin stock" : "Stock bajo"}</span>
+                  </span>
+                  <button
+                    onClick={() => setKpiFilter(null)}
+                    className="text-xs text-brand hover:underline"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              )}
+
+              {/* Product table */}
+              <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-stone-50 text-stone-500 text-xs">
+                      <th className="text-left px-3 py-2 font-medium">Producto</th>
+                      <th className="text-left px-3 py-2 font-medium">Categoría</th>
+                      <th className="text-right px-3 py-2 font-medium">Stock</th>
+                      <th className="text-right px-3 py-2 font-medium">Alerta</th>
+                      <th className="text-right px-3 py-2 font-medium">Costo REF</th>
+                      <th className="text-center px-3 py-2 font-medium">Estado</th>
+                      <th className="text-right px-3 py-2 font-medium"></th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-stone-200 bg-stone-50">
-                    <td colSpan={5} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
-                      Valor total inventario:
-                    </td>
-                    <td className="px-3 py-2 text-right text-sm font-bold text-brand">
-                      REF {totalValue.toFixed(2)}
-                    </td>
-                    <td colSpan={2}></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filtered.map((p) => (
+                      <tr key={p.id} className={`border-t border-stone-100 ${rowBg(p)}`}>
+                        <td className="px-3 py-2 font-medium text-stone-800">
+                          <span className="mr-1.5">{p.emoji || "🍽️"}</span>{p.name}
+                        </td>
+                        <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
+                        <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>
+                        <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 5}</td>
+                        <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-center">{stockBadge(p)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            onClick={() => setAdjusting(p)}
+                            className="text-xs text-brand hover:underline"
+                          >
+                            Ajustar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-8 text-center text-stone-400 text-xs">
+                          No hay productos con este filtro
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-stone-200 bg-stone-50">
+                      <td colSpan={4} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
+                        Valor total inventario:
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-brand" colSpan={1}>
+                        REF {totalValue.toFixed(2)}
+                      </td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Supplier section — only when "Todos" and no kpiFilter */}
+              {selectedCategory === "todos" && !kpiFilter && (
+                <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-stone-100">
+                    <h3 className="text-sm font-bold text-stone-700 flex items-center gap-2">
+                      <Truck size={16} /> Compras por proveedor — últimos 30 días
+                    </h3>
+                  </div>
+
+                  {suppliers.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-stone-400 text-xs">
+                      Sin compras registradas en este período
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-stone-100">
+                      {suppliers.map(([supplier, data]) => {
+                        const topItems = Object.entries(data.items)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 3)
+                          .map(([name]) => name);
+                        const expanded = expandedSupplier === supplier;
+
+                        return (
+                          <div key={supplier}>
+                            <button
+                              onClick={() => setExpandedSupplier(expanded ? null : supplier)}
+                              className="w-full px-4 py-3 flex items-center gap-4 text-left hover:bg-stone-50 transition-colors"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-stone-800">{supplier}</p>
+                                <p className="text-[11px] text-stone-400 truncate">
+                                  {topItems.join(", ")}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-sm font-bold text-brand">REF {data.total.toFixed(2)}</p>
+                                <p className="text-[11px] text-stone-400">{data.count} entrada{data.count !== 1 ? "s" : ""}</p>
+                              </div>
+                              <ChevronDown
+                                size={14}
+                                className={`text-stone-300 transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`}
+                              />
+                            </button>
+
+                            {expanded && (
+                              <div className="px-4 pb-3 bg-stone-50">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="text-stone-400">
+                                      <th className="text-left py-1 font-medium">Fecha</th>
+                                      <th className="text-left py-1 font-medium">Items</th>
+                                      <th className="text-right py-1 font-medium">Total REF</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {restocks
+                                      .filter((r) => (r.supplier || "Sin proveedor") === supplier)
+                                      .map((r) => (
+                                        <tr key={r.id} className="border-t border-stone-200">
+                                          <td className="py-1.5 text-stone-500">{r.restock_date}</td>
+                                          <td className="py-1.5 text-stone-600">
+                                            {(r.items || []).map((i) => `${i.name} x${i.qty}`).join(", ")}
+                                          </td>
+                                          <td className="py-1.5 text-right font-semibold text-stone-700">
+                                            REF {Number(r.total_cost_ref || 0).toFixed(2)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
