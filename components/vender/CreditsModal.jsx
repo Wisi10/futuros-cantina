@@ -54,10 +54,16 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
 
   const confirmPayment = async () => {
     if (!payingCredit || !payMethod || !payAmount) return;
-    setProcessing(true);
 
     const amount = parseFloat(payAmount);
     const outstanding = Number(payingCredit.original_amount_ref) - Number(payingCredit.paid_amount_ref || 0);
+
+    if (amount <= 0 || amount > outstanding) {
+      alert(`El monto debe ser entre 0.01 y ${outstanding.toFixed(2)} REF`);
+      return;
+    }
+
+    setProcessing(true);
 
     try {
       // 1. Insert payment

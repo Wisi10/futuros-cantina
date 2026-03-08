@@ -25,7 +25,15 @@ export default function POSPage() {
   // Vender state
   const [screen, setScreen] = useState("pos");
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem("cantina_cart");
+        return saved ? JSON.parse(saved) : [];
+      } catch { return []; }
+    }
+    return [];
+  });
   const [rate, setRate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -40,6 +48,11 @@ export default function POSPage() {
   // Confirmation dialog
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingPayment, setPendingPayment] = useState(null); // {method, ref} or {credit data}
+
+  // Persist cart to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem("cantina_cart", JSON.stringify(cart));
+  }, [cart]);
 
   // Credits state
   const [showCredits, setShowCredits] = useState(false);
@@ -261,7 +274,7 @@ export default function POSPage() {
   };
 
   const executeConfirmedSale = async () => {
-    if (!pendingPayment) return;
+    if (!pendingPayment || processing) return;
     setShowConfirm(false);
 
     if (pendingPayment.type === "sale") {
@@ -416,6 +429,22 @@ export default function POSPage() {
     }
     setVoidingState(false);
   };
+
+  // Keyboard shortcuts: Enter to confirm, Escape to cancel
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === "Enter" && showConfirm && !processing) {
+        e.preventDefault();
+        executeConfirmedSale();
+      }
+      if (e.key === "Escape") {
+        if (showConfirm) cancelConfirm();
+        else if (screen === "payment") setScreen("pos");
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [showConfirm, processing, screen]);
 
   const handleLogout = () => {
     sessionStorage.removeItem("cantina_user");

@@ -34,6 +34,14 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
     loadRateHistory();
   }, [loadProducts, loadRateHistory]);
 
+  // Pre-fill rate inputs with latest values
+  useEffect(() => {
+    if (rate && !eurInput && !usdInput) {
+      setEurInput(rate.eur.toFixed(2));
+      setUsdInput(rate.usd.toFixed(2));
+    }
+  }, [rate]);
+
   const toggleCantina = async (product) => {
     const { error } = await supabase
       .from("products")

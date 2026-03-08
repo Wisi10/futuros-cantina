@@ -4,11 +4,12 @@ import { Plus, Trash2, Loader2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 function emptyRow() {
-  return { productId: "", qty: "", costRef: "", costUsd: "", supplier: "" };
+  return { productId: "", qty: "", costRef: "", costUsd: "" };
 }
 
 export default function RestockForm({ products, user, onRestocked }) {
   const [rows, setRows] = useState([emptyRow()]);
+  const [supplier, setSupplier] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -57,7 +58,7 @@ export default function RestockForm({ products, user, onRestocked }) {
           items,
           total_cost_ref: totalCostRef,
           total_cost_usd: totalCostUsd,
-          supplier: validRows[0]?.supplier || null,
+          supplier: supplier || null,
           notes: notes || null,
           created_by: user?.name || "Cantina",
         })
@@ -94,6 +95,7 @@ export default function RestockForm({ products, user, onRestocked }) {
 
       // Reset form
       setRows([emptyRow()]);
+      setSupplier("");
       setNotes("");
       alert("Entrada registrada correctamente");
       onRestocked();
@@ -118,7 +120,6 @@ export default function RestockForm({ products, user, onRestocked }) {
                 <th className="text-center px-3 py-2 font-medium w-20">Qty</th>
                 <th className="text-center px-3 py-2 font-medium w-28">Costo/u REF</th>
                 <th className="text-center px-3 py-2 font-medium w-28">Costo/u USD</th>
-                <th className="text-left px-3 py-2 font-medium w-36">Proveedor</th>
                 <th className="w-10"></th>
               </tr>
             </thead>
@@ -170,15 +171,6 @@ export default function RestockForm({ products, user, onRestocked }) {
                     />
                   </td>
                   <td className="px-3 py-2">
-                    <input
-                      type="text"
-                      value={row.supplier}
-                      onChange={(e) => updateRow(i, "supplier", e.target.value)}
-                      className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-                      placeholder="Proveedor"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
                     <button
                       onClick={() => removeRow(i)}
                       disabled={rows.length <= 1}
@@ -200,8 +192,18 @@ export default function RestockForm({ products, user, onRestocked }) {
         </div>
       </div>
 
-      {/* Date & Notes */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Supplier, Date & Notes */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <label className="text-xs font-medium text-stone-500 block mb-1">Proveedor</label>
+          <input
+            type="text"
+            value={supplier}
+            onChange={(e) => setSupplier(e.target.value)}
+            placeholder="Nombre del proveedor"
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          />
+        </div>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Fecha de entrada</label>
           <input

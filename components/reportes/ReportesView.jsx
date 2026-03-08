@@ -184,6 +184,12 @@ export default function ReportesView({ user, rate }) {
 
       {loading ? (
         <p className="text-sm text-stone-400 animate-pulse py-8 text-center">Cargando reportes...</p>
+      ) : sales.length === 0 && expenses.length === 0 && credits.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-4xl mb-3">📊</p>
+          <p className="text-stone-500 text-sm font-medium">No hay datos para este período</p>
+          <p className="text-stone-400 text-xs mt-1">Registra tu primera venta para ver reportes aquí</p>
+        </div>
       ) : (
         <>
           {/* KPI Cards */}
