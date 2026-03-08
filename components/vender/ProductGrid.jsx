@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
+import { Search } from "lucide-react";
 import { formatBs } from "@/lib/utils";
 
 export default function ProductGrid({ products, cart, rate, onAdd }) {
   const [view, setView] = useState("categories");
   const [activeCategory, setActiveCategory] = useState(null);
+  const [search, setSearch] = useState("");
 
   // Build categories from products — emoji from first product in each category
   const categoryData = {};
@@ -25,22 +27,31 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
 
   const handleCategoryTap = (cat) => {
     setActiveCategory(cat);
+    setSearch("");
     setView("products");
   };
 
   const handleShowAll = () => {
     setActiveCategory(null);
+    setSearch("");
     setView("products");
   };
 
   const handleBack = () => {
     setView("categories");
     setActiveCategory(null);
+    setSearch("");
   };
 
-  const filtered = activeCategory
+  // Filter by category + search
+  let filtered = activeCategory
     ? products.filter((p) => (p.category || "Otro") === activeCategory)
     : products;
+
+  if (search.trim()) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((p) => p.name.toLowerCase().includes(q));
+  }
 
   // ── Category Grid ──
   if (view === "categories") {
@@ -84,18 +95,28 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      {/* Header with back button */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200 bg-white sticky top-0 z-10">
+      {/* Header with back button + search */}
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-stone-200 bg-white sticky top-0 z-10">
         <button
           onClick={handleBack}
-          className="flex items-center gap-1 text-[13px] font-semibold text-brand rounded-lg px-3 py-2 bg-brand-cream hover:bg-stone-200 transition-colors"
+          className="flex items-center gap-1 text-[13px] font-semibold text-brand rounded-lg px-3 py-2 bg-brand-cream hover:bg-stone-200 transition-colors shrink-0"
         >
           ← Categorías
         </button>
-        <div className="flex items-center gap-2 text-sm text-stone-600">
+        <div className="flex items-center gap-2 text-sm text-stone-600 shrink-0">
           <span>{headerEmoji}</span>
           <span className="font-bold">{activeCategory || "Todos"}</span>
-          <span className="text-stone-400">({filtered.length} productos)</span>
+          <span className="text-stone-400">({filtered.length})</span>
+        </div>
+        <div className="flex-1 max-w-xs ml-auto relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full border border-stone-200 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:border-brand focus:outline-none bg-white"
+          />
         </div>
       </div>
 
@@ -167,7 +188,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-stone-400 text-sm">
-            No hay productos en esta categoría
+            {search.trim() ? `Sin resultados para "${search}"` : "No hay productos en esta categoría"}
           </div>
         )}
       </div>

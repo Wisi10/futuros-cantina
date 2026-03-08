@@ -18,15 +18,18 @@ export default function LoginPage() {
         .select("id, name, role")
         .eq("pin", pin)
         .eq("is_active", true)
-        .single();
+        .not("pin", "is", null);
 
-      if (dbError || !data) {
+      if (dbError || !data || data.length === 0) {
         setError("PIN incorrecto");
         setLoading(false);
         return;
       }
 
-      sessionStorage.setItem("cantina_user", JSON.stringify(data));
+      // Use first match (pins should be unique)
+      const user = data[0];
+
+      sessionStorage.setItem("cantina_user", JSON.stringify(user));
       router.push("/pos");
     } catch {
       setError("Error de conexión");

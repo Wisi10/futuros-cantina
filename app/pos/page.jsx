@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, CreditCard } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -32,6 +32,15 @@ export default function POSPage() {
   const [lastSale, setLastSale] = useState(null);
   const [todayStats, setTodayStats] = useState({ total: 0, count: 0 });
 
+  // Void sale state
+  const [lastSaleRecord, setLastSaleRecord] = useState(null); // full DB record for void
+  const [lastSaleTime, setLastSaleTime] = useState(null); // timestamp for 5-min window
+  const [voidingState, setVoidingState] = useState(false); // "voiding" | false
+
+  // Confirmation dialog
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState(null); // {method, ref} or {credit data}
+
   // Credits state
   const [showCredits, setShowCredits] = useState(false);
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
@@ -58,18 +67,40 @@ export default function POSPage() {
 
   const loadRate = useCallback(async () => {
     if (!supabase) return;
-    const today = new Date().toISOString().split("T")[0];
-    const { data } = await supabase
+    // Try today first (local date, not UTC)
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const { data: todayRates } = await supabase
       .from("exchange_rates")
       .select("*")
-      .gte("created_at", today + "T00:00:00")
+      .gte("created_at", localToday + "T00:00:00")
       .order("created_at", { ascending: false })
       .limit(1);
-    if (data?.length) {
+
+    if (todayRates?.length) {
       setRate({
-        id: data[0].id,
-        eur: parseFloat(data[0].eur_rate),
-        usd: parseFloat(data[0].usd_rate),
+        id: todayRates[0].id,
+        eur: parseFloat(todayRates[0].eur_rate),
+        usd: parseFloat(todayRates[0].usd_rate),
+        isOld: false,
+      });
+      return;
+    }
+
+    // Fallback: get latest rate regardless of date
+    const { data: latestRates } = await supabase
+      .from("exchange_rates")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (latestRates?.length) {
+      setRate({
+        id: latestRates[0].id,
+        eur: parseFloat(latestRates[0].eur_rate),
+        usd: parseFloat(latestRates[0].usd_rate),
+        isOld: true,
       });
     } else {
       setRate(null);
@@ -78,7 +109,8 @@ export default function POSPage() {
 
   const loadTodayStats = useCallback(async () => {
     if (!supabase) return;
-    const today = new Date().toISOString().split("T")[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const { data } = await supabase
       .from("cantina_sales")
       .select("total_ref")
@@ -107,6 +139,9 @@ export default function POSPage() {
     loadTodayStats();
     loadPendingCreditsCount();
   }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount]);
+
+  // Check void window (5 minutes)
+  const canVoid = lastSaleRecord && lastSaleTime && (Date.now() - lastSaleTime < 5 * 60 * 1000);
 
   // Cart operations
   const addToCart = (product) => {
@@ -144,9 +179,14 @@ export default function POSPage() {
   const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
   const totalBs = calcBs(totalRef, rate?.eur);
 
-  // Shared sale logic (stock verify + items + movements + stock update)
+  // Local date string for sale_date
+  const getLocalDate = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  };
+
+  // Shared sale logic
   const executeSale = async (saleData) => {
-    // Verify stock
     for (const item of cart) {
       const { data: current } = await supabase
         .from("products")
@@ -167,15 +207,19 @@ export default function POSPage() {
       cost_ref: parseFloat(item.product.cost_ref || 0),
     }));
 
-    // 1. Insert cantina_sales
     const { data: sale, error: saleError } = await supabase
       .from("cantina_sales")
-      .insert({ items, total_ref: totalRef, total_bs: totalBs, ...saleData })
+      .insert({
+        items,
+        total_ref: totalRef,
+        total_bs: totalBs,
+        sale_date: getLocalDate(),
+        ...saleData,
+      })
       .select()
       .single();
     if (saleError) throw saleError;
 
-    // 2. Insert stock_movements
     const movements = cart.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
@@ -189,7 +233,6 @@ export default function POSPage() {
     const { error: movError } = await supabase.from("stock_movements").insert(movements);
     if (movError) throw movError;
 
-    // 3. Update product stock
     for (const item of cart) {
       const { error: stockError } = await supabase
         .from("products")
@@ -199,6 +242,34 @@ export default function POSPage() {
     }
 
     return { sale, items };
+  };
+
+  // Confirmation flow — PaymentModal calls these, which set pending + show confirm
+  const handlePaymentConfirm = (method, ref) => {
+    setPendingPayment({ type: "sale", method, ref });
+    setShowConfirm(true);
+  };
+
+  const handleCreditConfirm = (creditData) => {
+    setPendingPayment({ type: "credit", ...creditData });
+    setShowConfirm(true);
+  };
+
+  const cancelConfirm = () => {
+    setShowConfirm(false);
+    setPendingPayment(null);
+  };
+
+  const executeConfirmedSale = async () => {
+    if (!pendingPayment) return;
+    setShowConfirm(false);
+
+    if (pendingPayment.type === "sale") {
+      await confirmSale(pendingPayment.method, pendingPayment.ref);
+    } else {
+      await confirmCreditSale(pendingPayment);
+    }
+    setPendingPayment(null);
   };
 
   // Confirm regular sale
@@ -214,10 +285,13 @@ export default function POSPage() {
       });
       if (!result) { setProcessing(false); return; }
 
+      setLastSaleRecord(result.sale);
+      setLastSaleTime(Date.now());
       setLastSale({
         items: result.items,
         totalRef,
         totalBs,
+        rate: rate?.eur || null,
         paymentMethod: method,
         reference: ref,
       });
@@ -246,7 +320,6 @@ export default function POSPage() {
       });
       if (!result) { setProcessing(false); return; }
 
-      // Insert cantina_credits
       const { error: creditError } = await supabase.from("cantina_credits").insert({
         client_id: clientId || "manual",
         client_name: clientName,
@@ -260,10 +333,13 @@ export default function POSPage() {
       });
       if (creditError) throw creditError;
 
+      setLastSaleRecord(result.sale);
+      setLastSaleTime(Date.now());
       setLastSale({
         items: result.items,
         totalRef,
         totalBs,
+        rate: rate?.eur || null,
         paymentMethod: "credit",
         creditClientName: clientName,
       });
@@ -276,6 +352,69 @@ export default function POSPage() {
       alert("Error registrando crédito: " + err.message);
     }
     setProcessing(false);
+  };
+
+  // Void last sale
+  const handleVoidSale = async () => {
+    if (!lastSaleRecord || !canVoid) return;
+    const confirmed = window.confirm("¿Seguro que quieres anular esta venta? Se restaurará el stock.");
+    if (!confirmed) return;
+
+    setVoidingState(true);
+    try {
+      const saleId = lastSaleRecord.id;
+      const items = lastSaleRecord.items || [];
+
+      // 1. Restore stock
+      for (const item of items) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("stock_quantity")
+          .eq("id", item.product_id)
+          .single();
+        if (product) {
+          await supabase
+            .from("products")
+            .update({ stock_quantity: Number(product.stock_quantity || 0) + item.qty })
+            .eq("id", item.product_id);
+        }
+      }
+
+      // 2. Delete stock movements for this sale
+      await supabase.from("stock_movements").delete().eq("reference_id", saleId);
+
+      // 3. Delete credit if it was a credit sale
+      if (lastSaleRecord.payment_status === "credit") {
+        await supabase.from("cantina_credits").delete().eq("sale_id", saleId);
+      }
+
+      // 4. Delete the sale itself
+      await supabase.from("cantina_sales").delete().eq("id", saleId);
+
+      // 5. Record void movement
+      for (const item of items) {
+        await supabase.from("stock_movements").insert({
+          product_id: item.product_id,
+          product_name: item.name,
+          movement_type: "adjustment",
+          quantity: item.qty,
+          notes: `Anulación venta #${saleId.substring(0, 8)}`,
+          created_by: user?.name || "Cantina",
+        });
+      }
+
+      setLastSaleRecord(null);
+      setLastSaleTime(null);
+      setLastSale(null);
+      setScreen("pos");
+      await loadProducts();
+      await loadTodayStats();
+      await loadPendingCreditsCount();
+      alert("Venta anulada correctamente. Stock restaurado.");
+    } catch (err) {
+      alert("Error anulando venta: " + err.message);
+    }
+    setVoidingState(false);
   };
 
   const handleLogout = () => {
@@ -378,23 +517,67 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* Overlays */}
+      {/* Payment modal */}
       {screen === "payment" && (
         <PaymentModal
           cart={cart}
           rate={rate}
           processing={processing}
-          onConfirm={confirmSale}
-          onConfirmCredit={confirmCreditSale}
+          onConfirm={handlePaymentConfirm}
+          onConfirmCredit={handleCreditConfirm}
           onBack={() => setScreen("pos")}
         />
       )}
 
+      {/* Confirmation dialog */}
+      {showConfirm && pendingPayment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-stone-800 mb-2">
+              {pendingPayment.type === "credit" ? "¿Confirmar crédito?" : "¿Confirmar venta?"}
+            </h3>
+            <div className="bg-stone-50 rounded-xl p-3 mb-4 space-y-1">
+              {cart.map((item) => (
+                <div key={item.product.id} className="flex justify-between text-sm">
+                  <span className="text-stone-600">{item.qty}x {item.product.name}</span>
+                  <span className="font-medium">REF {(Number(item.product.price_ref) * item.qty).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="border-t border-stone-200 pt-1 mt-1 flex justify-between">
+                <span className="font-bold text-stone-700">Total</span>
+                <span className="font-bold text-brand">REF {totalRef.toFixed(2)}</span>
+              </div>
+            </div>
+            <p className="text-xs text-stone-500 mb-4">
+              Esta acción registrará la venta y descontará el stock. Podrás anularla durante los próximos 5 minutos.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={cancelConfirm}
+                className="flex-1 py-3 rounded-xl border-2 border-stone-200 text-stone-600 font-medium text-sm hover:bg-stone-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={executeConfirmedSale}
+                disabled={processing}
+                className="flex-1 py-3 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-dark disabled:opacity-50 transition-colors"
+              >
+                {processing ? "Procesando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success screen */}
       {screen === "success" && lastSale && (
         <SuccessScreen
           sale={lastSale}
           todayStats={todayStats}
           onNewSale={handleNewSale}
+          canVoid={canVoid}
+          onVoidSale={handleVoidSale}
         />
       )}
 

@@ -1,8 +1,8 @@
 "use client";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, RotateCcw } from "lucide-react";
 import { formatBs, METHOD_LABELS } from "@/lib/utils";
 
-export default function SuccessScreen({ sale, todayStats, onNewSale }) {
+export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale, canVoid }) {
   return (
     <div className="fixed inset-0 bg-brand-cream-light z-40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm w-full text-center">
@@ -31,11 +31,11 @@ export default function SuccessScreen({ sale, todayStats, onNewSale }) {
               <span className="text-sm text-stone-500">Total</span>
               <span className="font-bold text-brand">REF {sale.totalRef.toFixed(2)}</span>
             </div>
-            {sale.totalBs != null && (
+            {sale.rate != null && sale.rate > 0 && (
               <div className="flex justify-between">
                 <span className="text-sm text-stone-500"></span>
                 <span className="text-sm text-stone-400">
-                  {formatBs(sale.totalRef, sale.totalBs / sale.totalRef)}
+                  {formatBs(sale.totalRef, sale.rate)}
                 </span>
               </div>
             )}
@@ -60,6 +60,15 @@ export default function SuccessScreen({ sale, todayStats, onNewSale }) {
         >
           Nueva Venta
         </button>
+
+        {canVoid && onVoidSale && (
+          <button
+            onClick={onVoidSale}
+            className="w-full mt-2 py-3 rounded-xl border-2 border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <RotateCcw size={14} /> Anular esta venta
+          </button>
+        )}
       </div>
     </div>
   );

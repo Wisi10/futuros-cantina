@@ -77,7 +77,9 @@ export default function GastosView({ user, rate }) {
       amountRef = rate?.eur ? amountNum / rate.eur : 0;
     } else if (currency === "USD") {
       amountUsd = amountNum;
-      amountRef = rate?.usd ? amountNum * (rate.eur / rate.usd) : 0;
+      // rate.eur = Bs per 1 REF, rate.usd = Bs per 1 USD
+      // USD→REF: (amountUsd * bsPerUsd) / bsPerRef
+      amountRef = (rate?.eur && rate?.usd) ? amountNum * (rate.usd / rate.eur) : 0;
     }
 
     try {
