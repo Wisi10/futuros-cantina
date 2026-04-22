@@ -16,6 +16,10 @@ import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
 import GastosView from "@/components/gastos/GastosView";
 import ReportesView from "@/components/reportes/ReportesView";
+import ShiftPill from "@/components/shifts/ShiftPill";
+import OpenShiftModal from "@/components/shifts/OpenShiftModal";
+import CloseShiftModal from "@/components/shifts/CloseShiftModal";
+import ShiftsView from "@/components/shifts/ShiftsView";
 
 export default function POSPage() {
   const router = useRouter();
@@ -57,6 +61,11 @@ export default function POSPage() {
   // Credits state
   const [showCredits, setShowCredits] = useState(false);
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
+
+  // Shift state
+  const [activeShift, setActiveShift] = useState(null);
+  const [showOpenShift, setShowOpenShift] = useState(false);
+  const [showCloseShift, setShowCloseShift] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -145,13 +154,25 @@ export default function POSPage() {
     setPendingCreditsCount(count || 0);
   }, []);
 
+  const loadActiveShift = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("status", "open")
+      .limit(1)
+      .single();
+    setActiveShift(data || null);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     loadProducts();
     loadRate();
     loadTodayStats();
     loadPendingCreditsCount();
-  }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount]);
+    loadActiveShift();
+  }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount, loadActiveShift]);
 
   // Check void window (5 minutes)
   const canVoid = lastSaleRecord && lastSaleTime && (Date.now() - lastSaleTime < 5 * 60 * 1000);
@@ -227,6 +248,7 @@ export default function POSPage() {
         total_ref: totalRef,
         total_bs: totalBs,
         sale_date: getLocalDate(),
+        shift_id: activeShift?.id || null,
         ...saleData,
       })
       .select()
@@ -480,6 +502,10 @@ export default function POSPage() {
             </button>
           </div>
           <div className="flex items-center gap-3">
+            <ShiftPill
+              shift={activeShift}
+              onClick={() => activeShift ? setShowCloseShift(true) : setShowOpenShift(true)}
+            />
             <span className="text-xs text-stone-400">{user.name}</span>
             <button onClick={handleLogout}
               className="p-2 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors">
@@ -508,7 +534,10 @@ export default function POSPage() {
                   rate={rate}
                   onUpdateQty={updateQty}
                   onRemove={removeFromCart}
-                  onCheckout={() => setScreen("payment")}
+                  onCheckout={() => {
+                    if (!activeShift) { setShowOpenShift(true); return; }
+                    setScreen("payment");
+                  }}
                 />
               </>
             )}
@@ -537,6 +566,10 @@ export default function POSPage() {
           <div className="flex-1 overflow-hidden">
             <ReportesView user={user} rate={rate} />
           </div>
+        )}
+
+        {activeTab === "turnos" && (
+          <ShiftsView user={user} />
         )}
 
         {activeTab === "config" && (
@@ -616,6 +649,23 @@ export default function POSPage() {
           rate={rate}
           onClose={() => setShowCredits(false)}
           onUpdated={loadPendingCreditsCount}
+        />
+      )}
+
+      {showOpenShift && (
+        <OpenShiftModal
+          user={user}
+          onOpen={(shift) => { setActiveShift(shift); setShowOpenShift(false); }}
+          onClose={() => setShowOpenShift(false)}
+        />
+      )}
+
+      {showCloseShift && activeShift && (
+        <CloseShiftModal
+          shift={activeShift}
+          rate={rate}
+          onClose={() => setShowCloseShift(false)}
+          onClosed={() => { setActiveShift(null); setShowCloseShift(false); }}
         />
       )}
     </div>

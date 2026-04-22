@@ -16,6 +16,13 @@ module.exports = {
             light: '#faf8f5',
           },
         },
+        gold: {
+          DEFAULT: '#B8963E',
+          hover: '#9A7E33',
+        },
+        ok: '#2E7D32',
+        danger: '#C62828',
+        warn: '#F9A825',
       },
     },
   },

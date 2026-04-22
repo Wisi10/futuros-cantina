@@ -1,11 +1,12 @@
 "use client";
-import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings } from "lucide-react";
+import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings, Clock } from "lucide-react";
 
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
   { id: "caja", label: "Caja", icon: Wallet },
   { id: "gastos", label: "Gastos", icon: Receipt },
+  { id: "turnos", label: "Turnos", icon: Clock },
   { id: "reportes", label: "Reportes", icon: BarChart3 },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },
 ];
