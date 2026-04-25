@@ -20,7 +20,7 @@ export default function DashboardView({ user, rate }) {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     const [salesRes, shiftRes] = await Promise.all([
-      supabase.from("cantina_sales").select("*").eq("sale_date", today).order("created_at", { ascending: false }),
+      supabase.from("cantina_sales").select("*").eq("sale_date", today).is("voided_at", null).order("created_at", { ascending: false }),
       supabase.from("shifts").select("*").eq("status", "open").limit(1).single(),
     ]);
     setSales(salesRes.data || []);

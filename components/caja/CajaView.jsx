@@ -29,6 +29,7 @@ export default function CajaView({ user, rate }) {
       .from("cantina_sales")
       .select("*")
       .eq("sale_date", selectedDate)
+      .is("voided_at", null)
       .order("created_at", { ascending: false });
     setSales(data || []);
     setLoading(false);

@@ -137,7 +137,8 @@ export default function POSPage() {
     const { data } = await supabase
       .from("cantina_sales")
       .select("total_ref")
-      .eq("sale_date", today);
+      .eq("sale_date", today)
+      .is("voided_at", null);
     if (data) {
       setTodayStats({
         total: data.reduce((sum, s) => sum + parseFloat(s.total_ref), 0),
@@ -424,8 +425,11 @@ export default function POSPage() {
         await supabase.from("cantina_credits").delete().eq("sale_id", saleId);
       }
 
-      // 4. Delete the sale itself
-      await supabase.from("cantina_sales").delete().eq("id", saleId);
+      // 4. Soft-delete: mark as voided (preserves audit trail)
+      await supabase.from("cantina_sales").update({
+        voided_at: new Date().toISOString(),
+        voided_reason: `Anulada por ${user?.name || "Staff"} dentro de ventana de 5min`,
+      }).eq("id", saleId);
 
       // 5. Record void movement
       for (const item of items) {

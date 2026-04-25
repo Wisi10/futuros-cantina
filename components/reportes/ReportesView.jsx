@@ -110,6 +110,29 @@ function HeatMap({ sales, loading, rate }) {
   );
 }
 
+// ─── KPI Card with comparison badge ───────────────────────
+
+function KpiCard({ label, value, sub, change, hasPrev, partial, count, color }) {
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-4">
+      <p className="text-xs text-stone-500 mb-1">{label}</p>
+      <p className={`text-xl font-bold ${color || "text-stone-800"}`}>{value}</p>
+      {sub && <p className="text-[10px] text-stone-400">{sub}</p>}
+      {count && <p className="text-[10px] text-stone-400">{count}</p>}
+      {hasPrev === false ? null : change === null ? (
+        <p className="text-[10px] text-stone-400 mt-0.5">Sin datos del periodo anterior</p>
+      ) : (
+        <div className="flex items-center gap-1 mt-0.5">
+          <span className={`text-[10px] font-medium ${change >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {change >= 0 ? "▲" : "▼"} {change >= 0 ? "+" : ""}{change.toFixed(1)}% vs anterior
+          </span>
+          {partial && <span className="text-[9px] text-stone-400">(parcial)</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Report Periods ────────────────────────────────────────
 
 const PERIODS = [
@@ -150,22 +173,49 @@ export default function ReportesView({ user, rate }) {
   const [heatSales, setHeatSales] = useState([]);
   const [heatLoading, setHeatLoading] = useState(true);
 
+  const [prevSales, setPrevSales] = useState([]);
+  const [allTimeSales, setAllTimeSales] = useState([]);
+  const [slowMoverSales, setSlowMoverSales] = useState([]);
+  const [voidedCount, setVoidedCount] = useState(0);
+
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
     const { from, to } = getPeriodDates(period, customFrom, customTo);
 
-    const [salesRes, expRes, creditsRes, prodsRes] = await Promise.all([
-      supabase.from("cantina_sales").select("*").gte("sale_date", from).lte("sale_date", to).order("created_at", { ascending: false }),
+    // Calculate previous period dates
+    const periodDays = Math.max(1, Math.ceil((new Date(to + "T23:59:59") - new Date(from)) / 86400000) + 1);
+    const prevTo = new Date(from);
+    prevTo.setDate(prevTo.getDate() - 1);
+    const prevFrom = new Date(prevTo);
+    prevFrom.setDate(prevFrom.getDate() - periodDays + 1);
+    const prevFromStr = prevFrom.toISOString().split("T")[0];
+    const prevToStr = prevTo.toISOString().split("T")[0];
+
+    // Slow movers: last 14 days
+    const fourteenAgo = new Date();
+    fourteenAgo.setDate(fourteenAgo.getDate() - 14);
+    const fourteenStr = fourteenAgo.toISOString().split("T")[0];
+
+    const [salesRes, expRes, creditsRes, prodsRes, prevRes, slowRes, oldestRes, voidedRes] = await Promise.all([
+      supabase.from("cantina_sales").select("*").gte("sale_date", from).lte("sale_date", to).is("voided_at", null).order("created_at", { ascending: false }),
       supabase.from("cantina_expenses").select("*").gte("expense_date", from).lte("expense_date", to),
       supabase.from("cantina_credits").select("*").in("status", ["pending", "partial"]),
       supabase.from("products").select("*").eq("is_cantina", true),
+      supabase.from("cantina_sales").select("total_ref, items").gte("sale_date", prevFromStr).lte("sale_date", prevToStr).is("voided_at", null),
+      supabase.from("cantina_sales").select("items, created_at").gte("sale_date", fourteenStr).is("voided_at", null),
+      supabase.from("cantina_sales").select("created_at").is("voided_at", null).order("created_at", { ascending: true }).limit(1),
+      supabase.from("cantina_sales").select("id", { count: "exact", head: true }).gte("sale_date", from).lte("sale_date", to).not("voided_at", "is", null),
     ]);
 
     if (salesRes.data) setSales(salesRes.data);
     if (expRes.data) setExpenses(expRes.data);
     if (creditsRes.data) setCredits(creditsRes.data);
     if (prodsRes.data) setProducts(prodsRes.data);
+    setPrevSales(prevRes.data || []);
+    setSlowMoverSales(slowRes.data || []);
+    setAllTimeSales(oldestRes.data || []);
+    setVoidedCount(voidedRes.count || 0);
     setLoading(false);
 
     // Heat map: last 30 days (independent of period selector)
@@ -176,6 +226,7 @@ export default function ReportesView({ user, rate }) {
       .from("cantina_sales")
       .select("created_at, total_ref")
       .gte("created_at", thirtyDaysAgo.toISOString())
+      .is("voided_at", null)
       .order("created_at", { ascending: false });
     setHeatSales(heatData || []);
     setHeatLoading(false);
@@ -190,6 +241,70 @@ export default function ReportesView({ user, rate }) {
     (s, c) => s + Number(c.original_amount_ref || 0) - Number(c.paid_amount_ref || 0), 0
   );
   const utilidad = totalSalesRef - totalExpRef;
+
+  // New metrics
+  const activeSales = sales.filter(s => !s.voided_at);
+  const voidedSales = sales.length - activeSales.length; // sales already filtered by voided_at IS NULL in query, but voided count needs separate approach
+  const ticketPromedio = activeSales.length > 0 ? totalSalesRef / activeSales.length : 0;
+  const totalItems = activeSales.reduce((s, v) => s + (v.items || []).reduce((a, i) => a + (i.qty || 0), 0), 0);
+  const itemsPorVenta = activeSales.length > 0 ? totalItems / activeSales.length : 0;
+
+  // Comparativa vs periodo anterior
+  const prevTotalRef = prevSales.reduce((s, v) => s + Number(v.total_ref || 0), 0);
+  const prevCount = prevSales.length;
+  const prevTicket = prevCount > 0 ? prevTotalRef / prevCount : 0;
+  const hasPrevData = prevSales.length > 0;
+  const oldestSaleDate = allTimeSales[0]?.created_at ? new Date(allTimeSales[0].created_at) : null;
+  const { from: periodFrom } = getPeriodDates(period, customFrom, customTo);
+  const periodDays = Math.max(1, Math.ceil((new Date() - new Date(periodFrom)) / 86400000));
+  const historyDays = oldestSaleDate ? Math.floor((new Date() - oldestSaleDate) / 86400000) : 0;
+  const isPartialData = historyDays > 0 && historyDays < periodDays * 2;
+
+  const pctChange = (curr, prev) => prev > 0 ? ((curr - prev) / prev * 100) : null;
+  const salesChangePct = pctChange(totalSalesRef, prevTotalRef);
+  const countChangePct = pctChange(activeSales.length, prevCount);
+  const ticketChangePct = pctChange(ticketPromedio, prevTicket);
+
+  // Cancelacion: query ALL sales including voided for this period
+  // Since our main query filters voided_at IS NULL, we need the voided count from a separate source
+  // We'll compute from the data we have: sales are non-voided, we need voided count too
+  // For now, track voided via a useMemo on a broader dataset — or add to loadData
+  // Actually: the simplest approach is to count voided sales in the same period
+
+  // Top 10 products
+  const top10 = useMemo(() => {
+    const map = {};
+    activeSales.forEach(sale => {
+      (sale.items || []).forEach(item => {
+        const key = item.name || item.product_id;
+        if (!map[key]) map[key] = { name: key, units: 0, rev: 0, productId: item.product_id };
+        map[key].units += item.qty || 0;
+        map[key].rev += (item.price_ref || 0) * (item.qty || 0);
+      });
+    });
+    return Object.values(map).sort((a, b) => b.rev - a.rev).slice(0, 10);
+  }, [activeSales]);
+
+  // Slow movers: products with 0 sales in last 14 days
+  const slowMovers = useMemo(() => {
+    const soldIds = new Set();
+    const lastSaleDate = {};
+    (slowMoverSales || []).forEach(s => {
+      (s.items || []).forEach(item => {
+        const pid = item.product_id;
+        soldIds.add(pid);
+        const d = s.created_at;
+        if (!lastSaleDate[pid] || d > lastSaleDate[pid]) lastSaleDate[pid] = d;
+      });
+    });
+    return products
+      .filter(p => p.is_cantina && p.active !== false && !soldIds.has(p.id))
+      .map(p => ({
+        ...p,
+        daysSinceLastSale: null, // no sale in 14 days — could be longer
+      }))
+      .sort((a, b) => (Number(b.stock_quantity || 0)) - (Number(a.stock_quantity || 0)));
+  }, [products, slowMoverSales]);
 
   // P&L by product
   const productPL = {};
@@ -312,35 +427,84 @@ export default function ReportesView({ user, rate }) {
         </div>
       ) : (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <p className="text-xs text-stone-500 mb-1">Ventas</p>
-              <p className="text-xl font-bold text-brand">REF {totalSalesRef.toFixed(2)}</p>
-              <p className="text-xs text-stone-400">{sales.length} ventas</p>
-            </div>
+          {/* KPI Cards — Row 1 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard label="Ventas" value={formatREF(totalSalesRef)} sub={rate?.eur ? formatBs(totalSalesRef, rate.eur) : null}
+              change={salesChangePct} hasPrev={hasPrevData} partial={isPartialData} count={`${activeSales.length} ventas`} color="text-brand" />
+            <KpiCard label="Transacciones" value={activeSales.length} change={countChangePct} hasPrev={hasPrevData} partial={isPartialData} />
+            <KpiCard label="Ticket promedio" value={formatREF(ticketPromedio)} sub={rate?.eur ? formatBs(ticketPromedio, rate.eur) : null}
+              change={ticketChangePct} hasPrev={hasPrevData} partial={isPartialData} />
+            <KpiCard label="Items por venta" value={itemsPorVenta.toFixed(1)} sub="promedio por transaccion" />
+          </div>
+          {/* KPI Cards — Row 2 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl border border-stone-200 p-4">
               <p className="text-xs text-stone-500 mb-1">Gastos</p>
-              <p className="text-xl font-bold text-red-600">REF {totalExpRef.toFixed(2)}</p>
+              <p className="text-xl font-bold text-red-600">{formatREF(totalExpRef)}</p>
               <p className="text-xs text-stone-400">{expenses.length} gastos</p>
             </div>
             <div className="bg-white rounded-xl border border-stone-200 p-4">
               <p className="text-xs text-stone-500 mb-1">Utilidad</p>
-              <p className={`text-xl font-bold ${utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>
-                REF {utilidad.toFixed(2)}
-              </p>
-              <p className="text-xs text-stone-400">
-                {totalSalesRef > 0 ? `${((utilidad / totalSalesRef) * 100).toFixed(0)}% margen` : "—"}
-              </p>
+              <p className={`text-xl font-bold ${utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>{formatREF(utilidad)}</p>
+              <p className="text-xs text-stone-400">{totalSalesRef > 0 ? `${((utilidad / totalSalesRef) * 100).toFixed(0)}% margen` : "—"}</p>
             </div>
             <div className="bg-white rounded-xl border border-stone-200 p-4">
               <p className="text-xs text-stone-500 mb-1">Creditos</p>
-              <p className="text-xl font-bold text-yellow-600">REF {totalCreditsOutstanding.toFixed(2)}</p>
+              <p className="text-xl font-bold text-yellow-600">{formatREF(totalCreditsOutstanding)}</p>
               <p className="text-xs text-stone-400">{credits.length} pendientes</p>
+            </div>
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <p className="text-xs text-stone-500 mb-1">Anulaciones</p>
+              <p className="text-xl font-bold text-stone-600">{voidedCount}</p>
+              <p className="text-xs text-stone-400">
+                {(activeSales.length + voidedCount) > 0
+                  ? `${((voidedCount / (activeSales.length + voidedCount)) * 100).toFixed(1)}% del total`
+                  : "—"}
+              </p>
             </div>
           </div>
 
           {/* P&L by product */}
+          {/* ─── Top 10 Productos ─── */}
+          {top10.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-stone-100">
+                <h2 className="font-bold text-sm text-stone-700">Top 10 productos del periodo</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-stone-50 text-stone-500 text-xs">
+                    <th className="text-left px-3 py-2 font-medium w-8">#</th>
+                    <th className="text-left px-3 py-2 font-medium">Producto</th>
+                    <th className="text-right px-3 py-2 font-medium">Unidades</th>
+                    <th className="text-right px-3 py-2 font-medium">Total REF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top10.map((p, i) => {
+                    const prod = products.find(pr => pr.id === p.productId);
+                    return (
+                      <tr key={p.name} className="border-t border-stone-100">
+                        <td className="px-3 py-2 text-stone-400 text-xs">{i + 1}</td>
+                        <td className="px-3 py-2 font-medium text-stone-800 flex items-center gap-2">
+                          {prod?.photo_url ? (
+                            <img src={prod.photo_url} alt="" className="w-6 h-6 rounded object-cover shrink-0" loading="lazy" />
+                          ) : (
+                            <span className="text-base shrink-0">{prod?.emoji || "🍽️"}</span>
+                          )}
+                          {p.name}
+                        </td>
+                        <td className="px-3 py-2 text-right">{p.units}</td>
+                        <td className="px-3 py-2 text-right font-bold text-brand">{formatREF(p.rev)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ─── P&L por producto (existente) ─── */}
           {plRows.length > 0 && (
             <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-stone-100">
@@ -377,20 +541,74 @@ export default function ReportesView({ user, rate }) {
             </div>
           )}
 
-          {/* Sales by payment method */}
-          {Object.keys(methodTotals).length > 0 && (
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <h2 className="font-bold text-sm text-stone-700 mb-3">Ventas por metodo de pago</h2>
-              <div className="space-y-2">
-                {Object.entries(methodTotals).sort((a, b) => b[1] - a[1]).map(([m, total]) => (
-                  <div key={m} className="flex items-center justify-between text-sm">
-                    <span className="text-stone-600">{METHOD_LABELS[m] || m}</span>
-                    <span className="font-bold text-brand">REF {total.toFixed(2)}</span>
-                  </div>
-                ))}
+          {/* ─── Slow Movers (14 dias) ─── */}
+          {slowMovers.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-stone-100">
+                <h2 className="font-bold text-sm text-stone-700">Productos sin movimiento (14 dias)</h2>
+                <p className="text-[10px] text-stone-400 mt-0.5">{slowMovers.length} productos sin ventas en los ultimos 14 dias</p>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-stone-50">
+                    <tr className="text-stone-500 text-xs">
+                      <th className="text-left px-3 py-2 font-medium">Producto</th>
+                      <th className="text-right px-3 py-2 font-medium">Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slowMovers.slice(0, 20).map(p => (
+                      <tr key={p.id} className="border-t border-stone-100">
+                        <td className="px-3 py-2 font-medium text-stone-800 flex items-center gap-2">
+                          {p.photo_url ? (
+                            <img src={p.photo_url} alt="" className="w-5 h-5 rounded object-cover shrink-0" loading="lazy" />
+                          ) : (
+                            <span className="text-sm shrink-0">{p.emoji || "🍽️"}</span>
+                          )}
+                          {p.name}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {Number(p.stock_quantity || 0) <= 0 ? (
+                            <span className="text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">Sin stock</span>
+                          ) : (
+                            <span className="text-stone-600">{p.stock_quantity}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
+
+          {/* ─── Ventas por metodo de pago (barras) ─── */}
+          {Object.keys(methodTotals).length > 0 && (() => {
+            const maxMethod = Math.max(...Object.values(methodTotals));
+            const entries = Object.entries(methodTotals).sort((a, b) => b[1] - a[1]);
+            return (
+              <div className="bg-white rounded-xl border border-stone-200 p-4">
+                <h2 className="font-bold text-sm text-stone-700 mb-3">Ventas por metodo de pago</h2>
+                <div className="space-y-3">
+                  {entries.map(([m, total]) => {
+                    const pct = totalSalesRef > 0 ? (total / totalSalesRef * 100) : 0;
+                    const barW = maxMethod > 0 ? (total / maxMethod * 100) : 0;
+                    return (
+                      <div key={m}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-stone-600">{METHOD_LABELS[m] || m}</span>
+                          <span className="text-stone-500">{formatREF(total)} ({pct.toFixed(0)}%)</span>
+                        </div>
+                        <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${barW}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Pending credits */}
           {credits.length > 0 && (
