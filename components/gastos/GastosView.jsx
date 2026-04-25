@@ -130,7 +130,7 @@ export default function GastosView({ user, rate }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Categoría *</label>
+            <label className="text-xs text-stone-500 block mb-1">Categoria *</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none">
               <option value="">Seleccionar...</option>
@@ -138,7 +138,7 @@ export default function GastosView({ user, rate }) {
             </select>
           </div>
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Descripción *</label>
+            <label className="text-xs text-stone-500 block mb-1">Descripcion *</label>
             <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
               placeholder="Detalle del gasto" className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
           </div>
@@ -159,7 +159,7 @@ export default function GastosView({ user, rate }) {
             </div>
           </div>
           <div>
-            <label className="text-xs text-stone-500 block mb-1">Método de pago *</label>
+            <label className="text-xs text-stone-500 block mb-1">Metodo de pago *</label>
             <select value={method} onChange={(e) => { setMethod(e.target.value); setReference(""); }}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none">
               <option value="">Seleccionar...</option>
@@ -177,7 +177,7 @@ export default function GastosView({ user, rate }) {
           <div>
             <label className="text-xs text-stone-500 block mb-1">Referencia</label>
             <input type="text" value={reference} onChange={(e) => setReference(e.target.value)}
-              placeholder="Número de referencia" className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
+              placeholder="Numero de referencia" className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
           </div>
         )}
 
@@ -213,17 +213,17 @@ export default function GastosView({ user, rate }) {
         {loadingList ? (
           <p className="p-4 text-sm text-stone-400 animate-pulse">Cargando...</p>
         ) : expenses.length === 0 ? (
-          <p className="p-4 text-sm text-stone-400 text-center">Sin gastos en este período</p>
+          <p className="p-4 text-sm text-stone-400 text-center">Sin gastos en este periodo</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
                 <th className="text-left px-3 py-2 font-medium">Fecha</th>
-                <th className="text-left px-3 py-2 font-medium">Categoría</th>
-                <th className="text-left px-3 py-2 font-medium">Descripción</th>
+                <th className="text-left px-3 py-2 font-medium">Categoria</th>
+                <th className="text-left px-3 py-2 font-medium">Descripcion</th>
                 <th className="text-right px-3 py-2 font-medium">REF</th>
                 <th className="text-right px-3 py-2 font-medium">Original</th>
-                <th className="text-left px-3 py-2 font-medium">Método</th>
+                <th className="text-left px-3 py-2 font-medium">Metodo</th>
               </tr>
             </thead>
             <tbody>
@@ -254,7 +254,7 @@ export default function GastosView({ user, rate }) {
       {/* Category breakdown */}
       {Object.keys(catTotals).length > 0 && (
         <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <h3 className="font-bold text-xs text-stone-500 mb-3">Gastos por categoría</h3>
+          <h3 className="font-bold text-xs text-stone-500 mb-3">Gastos por categoria</h3>
           <div className="space-y-2">
             {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).map(([cat, total]) => (
               <div key={cat} className="flex items-center gap-3">

@@ -104,7 +104,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
           <h3 className="font-bold text-sm flex items-center gap-2">
-            <AlertCircle size={16} className="text-brand" /> Créditos pendientes
+            <AlertCircle size={16} className="text-brand" /> Creditos pendientes
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-stone-200 rounded"><X size={16} /></button>
         </div>
@@ -113,7 +113,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
           {loading ? (
             <p className="text-sm text-stone-400 animate-pulse text-center py-8">Cargando...</p>
           ) : credits.length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-8">No hay créditos pendientes</p>
+            <p className="text-sm text-stone-400 text-center py-8">No hay creditos pendientes</p>
           ) : payingCredit ? (
             /* Payment form */
             <div className="space-y-4">
@@ -139,7 +139,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-stone-500 block mb-1.5">Método de pago</label>
+                <label className="text-xs font-medium text-stone-500 block mb-1.5">Metodo de pago</label>
                 <div className="grid grid-cols-2 gap-2">
                   {PAYMENT_METHODS.map((m) => (
                     <button
@@ -164,7 +164,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                     type="text"
                     value={payRef}
                     onChange={(e) => setPayRef(e.target.value)}
-                    placeholder="Número de referencia"
+                    placeholder="Numero de referencia"
                     className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
                   />
                 </div>
@@ -193,7 +193,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                         {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: REF ${Number(c.paid_amount_ref).toFixed(2)}`}
                       </p>
                       <p className={`text-xs mt-0.5 ${ageColor(days)}`}>
-                        {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days} días`}
+                        {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days} dias`}
                         {c.status === "partial" && " · Pago parcial"}
                       </p>
                     </div>

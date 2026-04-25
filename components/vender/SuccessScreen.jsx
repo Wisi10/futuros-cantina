@@ -9,12 +9,12 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
         <CheckCircle size={56} className="text-green-500 mx-auto mb-4" strokeWidth={1.5} />
 
         <h2 className="text-xl font-bold text-stone-800 mb-1">
-          {sale.paymentMethod === "credit" ? "¡Crédito registrado!" : "¡Venta registrada!"}
+          {sale.paymentMethod === "credit" ? "Credito registrado!" : "Venta registrada!"}
         </h2>
         <p className="text-sm text-stone-400 mb-5">
           {sale.paymentMethod === "credit"
-            ? `Crédito para ${sale.creditClientName}`
-            : "Stock actualizado automáticamente"}
+            ? `Credito para ${sale.creditClientName}`
+            : "Stock actualizado automaticamente"}
         </p>
 
         <div className="bg-stone-50 rounded-xl p-4 mb-4 text-left">
@@ -40,7 +40,7 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-sm text-stone-500">Método</span>
+              <span className="text-sm text-stone-500">Metodo</span>
               <span className="text-sm font-medium">{METHOD_LABELS[sale.paymentMethod] || sale.paymentMethod}</span>
             </div>
           </div>
@@ -49,7 +49,7 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
         {todayStats.count > 1 && (
           <div className="bg-brand/5 rounded-xl p-3 mb-4">
             <p className="text-xs text-brand font-medium">
-              Total del día: REF {todayStats.total.toFixed(2)} en {todayStats.count} ventas
+              Total del dia: REF {todayStats.total.toFixed(2)} en {todayStats.count} ventas
             </p>
           </div>
         )}

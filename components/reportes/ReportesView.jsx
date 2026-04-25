@@ -105,7 +105,7 @@ export default function ReportesView({ user, rate }) {
         Productos: (s.items || []).map((i) => `${i.qty}x ${i.name}`).join(", "),
         "Total REF": Number(s.total_ref || 0).toFixed(2),
         "Total Bs": s.total_bs ? Number(s.total_bs).toFixed(2) : "",
-        Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || ""),
+        Metodo: s.payment_status === "credit" ? "Credito" : (METHOD_LABELS[s.payment_method] || s.payment_method || ""),
         Cliente: s.client_name || "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventasData), "Ventas");
@@ -113,16 +113,16 @@ export default function ReportesView({ user, rate }) {
       // Sheet 2: Gastos
       const gastosData = expenses.map((e) => ({
         Fecha: e.expense_date,
-        Categoría: e.category,
-        Descripción: e.description,
+        Categoria: e.category,
+        Descripcion: e.description,
         "Monto REF": Number(e.amount_ref || 0).toFixed(2),
         "Monto Bs": e.amount_bs ? Number(e.amount_bs).toFixed(2) : "",
         "Monto USD": e.amount_usd ? Number(e.amount_usd).toFixed(2) : "",
-        Método: METHOD_LABELS[e.payment_method] || e.payment_method || "",
+        Metodo: METHOD_LABELS[e.payment_method] || e.payment_method || "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gastosData), "Gastos");
 
-      // Sheet 3: Créditos
+      // Sheet 3: Creditos
       const creditosData = credits.map((c) => ({
         Cliente: c.client_name,
         "Monto original REF": Number(c.original_amount_ref || 0).toFixed(2),
@@ -131,12 +131,12 @@ export default function ReportesView({ user, rate }) {
         Status: c.status,
         Fecha: c.created_at?.split("T")[0] || "",
       }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(creditosData), "Créditos");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(creditosData), "Creditos");
 
       // Sheet 4: Inventario
       const invData = products.map((p) => ({
         Producto: p.name,
-        Categoría: p.category || "",
+        Categoria: p.category || "",
         "Stock actual": Number(p.stock_quantity || 0),
         "Costo REF": Number(p.cost_ref || 0).toFixed(2),
         "Valor REF": (Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)).toFixed(2),
@@ -187,8 +187,8 @@ export default function ReportesView({ user, rate }) {
       ) : sales.length === 0 && expenses.length === 0 && credits.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-4xl mb-3">📊</p>
-          <p className="text-stone-500 text-sm font-medium">No hay datos para este período</p>
-          <p className="text-stone-400 text-xs mt-1">Registra tu primera venta para ver reportes aquí</p>
+          <p className="text-stone-500 text-sm font-medium">No hay datos para este periodo</p>
+          <p className="text-stone-400 text-xs mt-1">Registra tu primera venta para ver reportes aqui</p>
         </div>
       ) : (
         <>
@@ -214,7 +214,7 @@ export default function ReportesView({ user, rate }) {
               </p>
             </div>
             <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <p className="text-xs text-stone-500 mb-1">Créditos</p>
+              <p className="text-xs text-stone-500 mb-1">Creditos</p>
               <p className="text-xl font-bold text-yellow-600">REF {totalCreditsOutstanding.toFixed(2)}</p>
               <p className="text-xs text-stone-400">{credits.length} pendientes</p>
             </div>
@@ -260,7 +260,7 @@ export default function ReportesView({ user, rate }) {
           {/* Sales by payment method */}
           {Object.keys(methodTotals).length > 0 && (
             <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <h2 className="font-bold text-sm text-stone-700 mb-3">Ventas por método de pago</h2>
+              <h2 className="font-bold text-sm text-stone-700 mb-3">Ventas por metodo de pago</h2>
               <div className="space-y-2">
                 {Object.entries(methodTotals).sort((a, b) => b[1] - a[1]).map(([m, total]) => (
                   <div key={m} className="flex items-center justify-between text-sm">
@@ -276,7 +276,7 @@ export default function ReportesView({ user, rate }) {
           {credits.length > 0 && (
             <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
-                <h2 className="font-bold text-sm text-stone-700">Créditos pendientes</h2>
+                <h2 className="font-bold text-sm text-stone-700">Creditos pendientes</h2>
                 <button onClick={() => setShowCreditsModal(true)}
                   className="text-xs text-brand hover:underline">Ver todos</button>
               </div>
@@ -323,7 +323,7 @@ export default function ReportesView({ user, rate }) {
                     <th className="text-left px-3 py-2 font-medium">Hora</th>
                     <th className="text-left px-3 py-2 font-medium">Productos</th>
                     <th className="text-right px-3 py-2 font-medium">Total REF</th>
-                    <th className="text-left px-3 py-2 font-medium">Método</th>
+                    <th className="text-left px-3 py-2 font-medium">Metodo</th>
                     <th className="text-left px-3 py-2 font-medium">Cliente</th>
                   </tr>
                 </thead>
@@ -339,7 +339,7 @@ export default function ReportesView({ user, rate }) {
                       <td className="px-3 py-2 text-right font-medium">REF {Number(s.total_ref).toFixed(2)}</td>
                       <td className="px-3 py-2 text-xs">
                         {s.payment_status === "credit" ? (
-                          <span className="text-yellow-600 font-medium">Crédito</span>
+                          <span className="text-yellow-600 font-medium">Credito</span>
                         ) : (
                           METHOD_LABELS[s.payment_method] || s.payment_method
                         )}

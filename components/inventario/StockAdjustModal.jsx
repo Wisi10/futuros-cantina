@@ -5,9 +5,9 @@ import { supabase } from "@/lib/supabase";
 
 const REASONS = [
   "Merma",
-  "Pérdida",
+  "Perdida",
   "Robo",
-  "Corrección de conteo",
+  "Correccion de conteo",
   "Otro",
 ];
 

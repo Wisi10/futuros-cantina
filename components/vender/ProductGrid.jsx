@@ -101,7 +101,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
           onClick={handleBack}
           className="flex items-center gap-1 text-[13px] font-semibold text-brand rounded-lg px-3 py-2 bg-brand-cream hover:bg-stone-200 transition-colors shrink-0"
         >
-          ← Categorías
+          ← Categorias
         </button>
         <div className="flex items-center gap-2 text-sm text-stone-600 shrink-0">
           <span>{headerEmoji}</span>
@@ -188,7 +188,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-stone-400 text-sm">
-            {search.trim() ? `Sin resultados para "${search}"` : "No hay productos en esta categoría"}
+            {search.trim() ? `Sin resultados para "${search}"` : "No hay productos en esta categoria"}
           </div>
         )}
       </div>

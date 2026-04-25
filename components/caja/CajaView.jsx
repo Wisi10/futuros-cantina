@@ -60,8 +60,8 @@ export default function CajaView({ user, rate }) {
       Items: (s.items || []).map((i) => `${i.name} x${i.qty}`).join(", "),
       "Total REF": parseFloat(s.total_ref || 0).toFixed(2),
       "Total Bs": s.total_bs ? parseFloat(s.total_bs).toFixed(2) : "—",
-      Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || "—"),
-      Estado: s.payment_status === "credit" ? "Crédito" : "Pagado",
+      Metodo: s.payment_status === "credit" ? "Credito" : (METHOD_LABELS[s.payment_method] || s.payment_method || "—"),
+      Estado: s.payment_status === "credit" ? "Credito" : "Pagado",
       Cliente: s.client_name || "—",
       Operador: s.created_by || "—",
     }));
@@ -77,7 +77,7 @@ export default function CajaView({ user, rate }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-stone-800">
-          {isToday ? "Caja del día" : `Caja — ${selectedDate}`}
+          {isToday ? "Caja del dia" : `Caja — ${selectedDate}`}
         </h2>
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -122,7 +122,7 @@ export default function CajaView({ user, rate }) {
             />
             <KPICard
               icon={<CreditCard size={20} />}
-              label="Créditos"
+              label="Creditos"
               value={`REF ${creditTotal.toFixed(2)}`}
               sub="pendientes"
               color="text-amber-600"
@@ -140,12 +140,12 @@ export default function CajaView({ user, rate }) {
           {Object.keys(methodBreakdown).length > 0 && (
             <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-stone-100">
-                <h3 className="text-sm font-bold text-stone-700">Desglose por método de pago</h3>
+                <h3 className="text-sm font-bold text-stone-700">Desglose por metodo de pago</h3>
               </div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-stone-400 border-b border-stone-100">
-                    <th className="text-left px-4 py-2 font-medium">Método</th>
+                    <th className="text-left px-4 py-2 font-medium">Metodo</th>
                     <th className="text-center px-4 py-2 font-medium"># ventas</th>
                     <th className="text-right px-4 py-2 font-medium">Total REF</th>
                     <th className="text-right px-4 py-2 font-medium">Total Bs</th>
@@ -177,7 +177,7 @@ export default function CajaView({ user, rate }) {
           <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-100">
               <h3 className="text-sm font-bold text-stone-700">
-                {isToday ? "Ventas de hoy" : "Ventas del día"} ({sales.length})
+                {isToday ? "Ventas de hoy" : "Ventas del dia"} ({sales.length})
               </h3>
             </div>
 
@@ -194,7 +194,7 @@ export default function CajaView({ user, rate }) {
                     minute: "2-digit",
                   });
                   const isCredit = sale.payment_status === "credit";
-                  const method = isCredit ? "Crédito" : (METHOD_LABELS[sale.payment_method] || sale.payment_method || "—");
+                  const method = isCredit ? "Credito" : (METHOD_LABELS[sale.payment_method] || sale.payment_method || "—");
                   const icon = isCredit ? "📋" : (METHOD_ICONS[sale.payment_method] || "💳");
                   const expanded = expandedSale === sale.id;
 

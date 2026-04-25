@@ -212,7 +212,7 @@ export default function InventarioView({ user }) {
                   <p className="text-2xl font-extrabold text-[#1a1a1a]">
                     REF {pagadoProveedores.toFixed(2)}
                   </p>
-                  <p className="text-[11px] text-[#a3a3a3]">últimos 30d</p>
+                  <p className="text-[11px] text-[#a3a3a3]">ultimos 30d</p>
                 </div>
               </div>
 
@@ -266,7 +266,7 @@ export default function InventarioView({ user }) {
                   <thead>
                     <tr className="bg-stone-50 text-stone-500 text-xs">
                       <th className="text-left px-3 py-2 font-medium">Producto</th>
-                      <th className="text-left px-3 py-2 font-medium">Categoría</th>
+                      <th className="text-left px-3 py-2 font-medium">Categoria</th>
                       <th className="text-right px-3 py-2 font-medium">Stock</th>
                       <th className="text-right px-3 py-2 font-medium">Alerta</th>
                       <th className="text-right px-3 py-2 font-medium">Costo REF</th>
@@ -322,13 +322,13 @@ export default function InventarioView({ user }) {
                 <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
                   <div className="px-4 py-3 border-b border-stone-100">
                     <h3 className="text-sm font-bold text-stone-700 flex items-center gap-2">
-                      <Truck size={16} /> Compras por proveedor — últimos 30 días
+                      <Truck size={16} /> Compras por proveedor — ultimos 30 dias
                     </h3>
                   </div>
 
                   {suppliers.length === 0 ? (
                     <div className="px-4 py-8 text-center text-stone-400 text-xs">
-                      Sin compras registradas en este período
+                      Sin compras registradas en este periodo
                     </div>
                   ) : (
                     <div className="divide-y divide-stone-100">

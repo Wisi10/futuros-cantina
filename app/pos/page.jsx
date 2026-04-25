@@ -16,6 +16,7 @@ import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
 import GastosView from "@/components/gastos/GastosView";
 import ReportesView from "@/components/reportes/ReportesView";
+import DashboardView from "@/components/dashboard/DashboardView";
 import ShiftPill from "@/components/shifts/ShiftPill";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
@@ -262,7 +263,7 @@ export default function POSPage() {
       quantity: -item.qty,
       reference_id: sale.id,
       cost_ref: parseFloat(item.product.cost_ref || 0),
-      notes: saleData.payment_status === "credit" ? `Crédito — ${saleData.client_name}` : "Venta cantina",
+      notes: saleData.payment_status === "credit" ? `Credito — ${saleData.client_name}` : "Venta cantina",
       created_by: user?.name || "Cantina",
     }));
     const { error: movError } = await supabase.from("stock_movements").insert(movements);
@@ -384,7 +385,7 @@ export default function POSPage() {
       await loadTodayStats();
       await loadPendingCreditsCount();
     } catch (err) {
-      alert("Error registrando crédito: " + err.message);
+      alert("Error registrando credito: " + err.message);
     }
     setProcessing(false);
   };
@@ -392,7 +393,7 @@ export default function POSPage() {
   // Void last sale
   const handleVoidSale = async () => {
     if (!lastSaleRecord || !canVoid) return;
-    const confirmed = window.confirm("¿Seguro que quieres anular esta venta? Se restaurará el stock.");
+    const confirmed = window.confirm("Seguro que quieres anular esta venta? Se restaurara el stock.");
     if (!confirmed) return;
 
     setVoidingState(true);
@@ -433,7 +434,7 @@ export default function POSPage() {
           product_name: item.name,
           movement_type: "adjustment",
           quantity: item.qty,
-          notes: `Anulación venta #${saleId.substring(0, 8)}`,
+          notes: `Anulacion venta #${saleId.substring(0, 8)}`,
           created_by: user?.name || "Cantina",
         });
       }
@@ -493,7 +494,7 @@ export default function POSPage() {
               onClick={() => setShowCredits(true)}
               className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative"
             >
-              <CreditCard size={14} /> Créditos
+              <CreditCard size={14} /> Creditos
               {pendingCreditsCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                   {pendingCreditsCount}
@@ -572,6 +573,10 @@ export default function POSPage() {
           <ShiftsView user={user} />
         )}
 
+        {activeTab === "dashboard" && (
+          <DashboardView user={user} rate={rate} />
+        )}
+
         {activeTab === "config" && (
           <div className="flex-1 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
@@ -596,7 +601,7 @@ export default function POSPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold text-stone-800 mb-2">
-              {pendingPayment.type === "credit" ? "¿Confirmar crédito?" : "¿Confirmar venta?"}
+              {pendingPayment.type === "credit" ? "Confirmar credito?" : "Confirmar venta?"}
             </h3>
             <div className="bg-stone-50 rounded-xl p-3 mb-4 space-y-1">
               {cart.map((item) => (
@@ -611,7 +616,7 @@ export default function POSPage() {
               </div>
             </div>
             <p className="text-xs text-stone-500 mb-4">
-              Esta acción registrará la venta y descontará el stock. Podrás anularla durante los próximos 5 minutos.
+              Esta accion registrara la venta y descontara el stock. Podras anularla durante los proximos 5 minutos.
             </p>
             <div className="flex gap-2">
               <button

@@ -83,13 +83,13 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   return (
     <div className="h-full overflow-auto p-6 space-y-6">
       <h1 className="font-bold text-brand text-lg flex items-center gap-2">
-        <Settings size={20} /> Configuración
+        <Settings size={20} /> Configuracion
       </h1>
 
       {/* Rate Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">
         <h2 className="font-bold text-sm text-stone-700 mb-3 flex items-center gap-2">
-          <RefreshCw size={14} /> Tasa del día
+          <RefreshCw size={14} /> Tasa del dia
         </h2>
         {rate ? (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3 text-sm">
@@ -119,7 +119,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
         </div>
         {rateHistory.length > 0 && (
           <div className="mt-3">
-            <p className="text-xs text-stone-500 flex items-center gap-1 mb-1"><History size={10} /> Últimas 7</p>
+            <p className="text-xs text-stone-500 flex items-center gap-1 mb-1"><History size={10} /> Ultimas 7</p>
             <div className="space-y-1">
               {rateHistory.map((r) => (
                 <div key={r.id} className="flex justify-between text-xs bg-stone-50 rounded px-2 py-1">
@@ -248,7 +248,7 @@ function EditProductModal({ product, onClose, onSave }) {
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-center text-xl focus:border-brand focus:outline-none" />
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 block mb-1">Categoría</label>
+              <label className="text-xs font-medium text-stone-500 block mb-1">Categoria</label>
               <input type="text" value={category} onChange={(e) => setCategory(e.target.value)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
             </div>

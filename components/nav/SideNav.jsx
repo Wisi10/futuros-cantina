@@ -1,5 +1,5 @@
 "use client";
-import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings, Clock } from "lucide-react";
+import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings, Clock, Monitor } from "lucide-react";
 
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
@@ -7,6 +7,7 @@ const TABS = [
   { id: "caja", label: "Caja", icon: Wallet },
   { id: "gastos", label: "Gastos", icon: Receipt },
   { id: "turnos", label: "Turnos", icon: Clock },
+  { id: "dashboard", label: "En Vivo", icon: Monitor },
   { id: "reportes", label: "Reportes", icon: BarChart3 },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },
 ];

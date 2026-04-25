@@ -89,7 +89,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
         <button onClick={onBack} disabled={processing} className="p-2 rounded-lg hover:bg-stone-100 text-stone-500 disabled:opacity-30">
           <ArrowLeft size={20} />
         </button>
-        <h2 className="font-bold text-lg text-stone-800">Método de pago</h2>
+        <h2 className="font-bold text-lg text-stone-800">Metodo de pago</h2>
       </div>
 
       <div className="flex-1 overflow-auto p-4 max-w-lg mx-auto w-full">
@@ -148,7 +148,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
             }`}
           >
             <span className="text-2xl">📋</span>
-            Crédito
+            Credito
           </button>
         </div>
 
@@ -162,7 +162,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="Número de referencia"
+              placeholder="Numero de referencia"
               className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
               autoFocus
             />
@@ -182,7 +182,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
                     type="text"
                     value={clientSearch}
                     onChange={(e) => { setClientSearch(e.target.value); setSelectedClient(null); }}
-                    placeholder="Buscar por nombre o cédula..."
+                    placeholder="Buscar por nombre o cedula..."
                     className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-brand focus:outline-none"
                     autoFocus
                   />
@@ -254,7 +254,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
             {(selectedClient || (useManualClient && manualClientName.trim())) && (
               <div className="space-y-3 pt-2 border-t border-stone-100">
                 <div>
-                  <label className="text-xs text-stone-500 block mb-1">Fecha límite de pago (opcional)</label>
+                  <label className="text-xs text-stone-500 block mb-1">Fecha limite de pago (opcional)</label>
                   <input
                     type="date"
                     value={dueDate}
@@ -268,7 +268,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
                     type="text"
                     value={creditNotes}
                     onChange={(e) => setCreditNotes(e.target.value)}
-                    placeholder="Notas del crédito"
+                    placeholder="Notas del credito"
                     className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
                   />
                 </div>
@@ -288,7 +288,7 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
             {processing ? (
               <><Loader2 size={18} className="animate-spin" /> Procesando...</>
             ) : isCredit ? (
-              "Confirmar Crédito"
+              "Confirmar Credito"
             ) : (
               "Confirmar Venta"
             )}

@@ -32,7 +32,7 @@ export default function LoginPage() {
       sessionStorage.setItem("cantina_user", JSON.stringify(user));
       router.push("/pos");
     } catch {
-      setError("Error de conexión");
+      setError("Error de conexion");
     }
     setLoading(false);
   };
