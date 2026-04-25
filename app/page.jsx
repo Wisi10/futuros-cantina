@@ -13,6 +13,14 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
+      // Admin PIN hardcoded — checked BEFORE DB query, always wins
+      if (pin === "9999") {
+        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "admin", name: "Admin", role: "admin", cantinaRole: "admin" }));
+        router.push("/pos");
+        setLoading(false);
+        return;
+      }
+
       const { data, error: dbError } = await supabase
         .from("user_profiles")
         .select("id, name, role")
@@ -26,9 +34,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Use first match (pins should be unique)
-      const user = data[0];
-
+      const user = { ...data[0], cantinaRole: "staff" };
       sessionStorage.setItem("cantina_user", JSON.stringify(user));
       router.push("/pos");
     } catch {

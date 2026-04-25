@@ -483,7 +483,7 @@ export default function POSPage() {
 
   return (
     <div className="h-screen flex bg-brand-cream-light overflow-hidden">
-      <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={user.role} />
+      <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={user.cantinaRole || "staff"} />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
@@ -551,25 +551,25 @@ export default function POSPage() {
           </div>
         )}
 
-        {activeTab === "caja" && (
+        {activeTab === "caja" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <CajaView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "gastos" && (
+        {activeTab === "gastos" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <GastosView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "reportes" && (
+        {activeTab === "reportes" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <ReportesView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "turnos" && (
+        {activeTab === "turnos" && user.cantinaRole === "admin" && (
           <ShiftsView user={user} />
         )}
 
@@ -577,7 +577,7 @@ export default function POSPage() {
           <DashboardView user={user} rate={rate} />
         )}
 
-        {activeTab === "config" && (
+        {activeTab === "config" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
           </div>

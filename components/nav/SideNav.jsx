@@ -4,11 +4,11 @@ import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings, Clock, Mon
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
-  { id: "caja", label: "Caja", icon: Wallet },
-  { id: "gastos", label: "Gastos", icon: Receipt },
-  { id: "turnos", label: "Turnos", icon: Clock },
   { id: "dashboard", label: "En Vivo", icon: Monitor },
-  { id: "reportes", label: "Reportes", icon: BarChart3 },
+  { id: "caja", label: "Caja", icon: Wallet, adminOnly: true },
+  { id: "gastos", label: "Gastos", icon: Receipt, adminOnly: true },
+  { id: "turnos", label: "Turnos", icon: Clock, adminOnly: true },
+  { id: "reportes", label: "Reportes", icon: BarChart3, adminOnly: true },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },
 ];
 
@@ -17,7 +17,10 @@ export default function SideNav({ activeTab, onTabChange, userRole }) {
 
   return (
     <nav className="w-16 bg-brand flex flex-col items-center py-4 gap-1 shrink-0">
-      <div className="text-white/80 font-bold text-xs mb-4 tracking-wider">FS</div>
+      <div className="text-white/80 font-bold text-xs tracking-wider">FS</div>
+      <div className={`text-[8px] font-medium tracking-wider uppercase mb-3 ${userRole === "admin" ? "text-gold" : "text-white/40"}`}>
+        {userRole === "admin" ? "Admin" : "Staff"}
+      </div>
       {visibleTabs.map((tab) => {
         const Icon = tab.icon;
         const active = activeTab === tab.id;
