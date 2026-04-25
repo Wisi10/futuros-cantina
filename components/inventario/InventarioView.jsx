@@ -427,7 +427,7 @@ export default function InventarioView({ user }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {products
-              .filter(p => ["Comida", "Bebida"].includes(p.category))
+              .filter(p => p.is_cantina)
               .filter(p => !photoSearch || p.name.toLowerCase().includes(photoSearch.toLowerCase()))
               .map(p => (
                 <div key={p.id} className="bg-white rounded-xl border-2 border-stone-200 p-3 flex flex-col items-center text-center">
@@ -470,7 +470,7 @@ export default function InventarioView({ user }) {
                 </div>
               ))}
           </div>
-          {products.filter(p => ["Comida", "Bebida"].includes(p.category)).length === 0 && (
+          {products.filter(p => p.is_cantina).length === 0 && (
             <p className="text-sm text-stone-400 text-center py-8">No hay productos de Comida o Bebida</p>
           )}
         </div>
