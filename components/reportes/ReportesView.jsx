@@ -113,22 +113,23 @@ function HeatMap({ sales, loading, rate }) {
 // ─── KPI Card with comparison badge ───────────────────────
 
 function KpiCard({ label, value, sub, change, hasPrev, partial, count, color }) {
+  const showComparison = typeof change === "number" || hasPrev === true;
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-4">
       <p className="text-xs text-stone-500 mb-1">{label}</p>
       <p className={`text-xl font-bold ${color || "text-stone-800"}`}>{value}</p>
       {sub && <p className="text-[10px] text-stone-400">{sub}</p>}
       {count && <p className="text-[10px] text-stone-400">{count}</p>}
-      {hasPrev === false ? null : change === null ? (
-        <p className="text-[10px] text-stone-400 mt-0.5">Sin datos del periodo anterior</p>
-      ) : (
+      {showComparison && (typeof change === "number" ? (
         <div className="flex items-center gap-1 mt-0.5">
           <span className={`text-[10px] font-medium ${change >= 0 ? "text-green-600" : "text-red-600"}`}>
             {change >= 0 ? "▲" : "▼"} {change >= 0 ? "+" : ""}{change.toFixed(1)}% vs anterior
           </span>
           {partial && <span className="text-[9px] text-stone-400">(parcial)</span>}
         </div>
-      )}
+      ) : hasPrev === true ? (
+        <p className="text-[10px] text-stone-400 mt-0.5">Sin datos del periodo anterior</p>
+      ) : null)}
     </div>
   );
 }
@@ -181,6 +182,7 @@ export default function ReportesView({ user, rate }) {
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
+    try {
     const { from, to } = getPeriodDates(period, customFrom, customTo);
 
     // Calculate previous period dates
@@ -230,6 +232,11 @@ export default function ReportesView({ user, rate }) {
       .order("created_at", { ascending: false });
     setHeatSales(heatData || []);
     setHeatLoading(false);
+    } catch (err) {
+      console.error("[REPORTES] loadData error:", err);
+      setLoading(false);
+      setHeatLoading(false);
+    }
   }, [period, customFrom, customTo]);
 
   useEffect(() => { loadData(); }, [loadData]);
