@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown } from "lucide-react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { uploadProductPhoto } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 
@@ -15,6 +16,8 @@ export default function InventarioView({ user }) {
   const [kpiFilter, setKpiFilter] = useState(null); // "sin_stock" | "stock_bajo" | null
   const [restocks, setRestocks] = useState([]);
   const [expandedSupplier, setExpandedSupplier] = useState(null);
+  const [uploading, setUploading] = useState(null); // product id being uploaded
+  const [photoSearch, setPhotoSearch] = useState("");
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
@@ -148,6 +151,14 @@ export default function InventarioView({ user }) {
             }`}
           >
             Registrar entrada
+          </button>
+          <button
+            onClick={() => setSubTab("fotos")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              subTab === "fotos" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+            }`}
+          >
+            <Camera size={14} /> Fotos
           </button>
         </div>
       </div>
@@ -404,6 +415,64 @@ export default function InventarioView({ user }) {
       {subTab === "entrada" && (
         <div className="flex-1 overflow-auto px-6 pb-6">
           <RestockForm products={products} user={user} onRestocked={loadProducts} />
+        </div>
+      )}
+
+      {subTab === "fotos" && (
+        <div className="flex-1 overflow-auto px-6 pb-6">
+          <div className="mb-4 relative max-w-xs">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input type="text" value={photoSearch} onChange={e => setPhotoSearch(e.target.value)}
+              placeholder="Buscar producto..." className="w-full border border-stone-200 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:border-brand focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {products
+              .filter(p => ["Comida", "Bebida"].includes(p.category))
+              .filter(p => !photoSearch || p.name.toLowerCase().includes(photoSearch.toLowerCase()))
+              .map(p => (
+                <div key={p.id} className="bg-white rounded-xl border-2 border-stone-200 p-3 flex flex-col items-center text-center">
+                  {/* Photo or emoji */}
+                  <div className="w-20 h-20 rounded-lg bg-stone-100 flex items-center justify-center mb-2 overflow-hidden">
+                    {p.photo_url ? (
+                      <img src={p.photo_url} alt={p.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-3xl">{p.emoji || "🍽️"}</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-medium text-stone-700 leading-tight mb-2 line-clamp-2 w-full">{p.name}</p>
+                  <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors ${
+                    uploading === p.id ? "bg-stone-200 text-stone-400" : p.photo_url ? "bg-stone-100 text-stone-600 hover:bg-stone-200" : "bg-gold/10 text-gold hover:bg-gold/20"
+                  }`}>
+                    {uploading === p.id ? (
+                      "Subiendo..."
+                    ) : (
+                      <>
+                        <Upload size={12} />
+                        {p.photo_url ? "Cambiar" : "Subir foto"}
+                      </>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" disabled={uploading === p.id}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !supabase) return;
+                        setUploading(p.id);
+                        try {
+                          const url = await uploadProductPhoto(supabase, p.id, file);
+                          setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, photo_url: url } : prod));
+                        } catch (err) {
+                          alert("Error subiendo foto: " + err.message);
+                        }
+                        setUploading(null);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              ))}
+          </div>
+          {products.filter(p => ["Comida", "Bebida"].includes(p.category)).length === 0 && (
+            <p className="text-sm text-stone-400 text-center py-8">No hay productos de Comida o Bebida</p>
+          )}
         </div>
       )}
 
