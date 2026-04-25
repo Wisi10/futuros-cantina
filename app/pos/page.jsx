@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, CreditCard } from "lucide-react";
+import { LogOut, CreditCard, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { calcBs } from "@/lib/utils";
 import SideNav from "@/components/nav/SideNav";
@@ -18,6 +18,7 @@ import GastosView from "@/components/gastos/GastosView";
 import ReportesView from "@/components/reportes/ReportesView";
 import DashboardView from "@/components/dashboard/DashboardView";
 import ShiftPill from "@/components/shifts/ShiftPill";
+import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
@@ -67,6 +68,7 @@ export default function POSPage() {
   const [activeShift, setActiveShift] = useState(null);
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [showCloseShift, setShowCloseShift] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -495,6 +497,12 @@ export default function POSPage() {
           <div className="flex items-center gap-3">
             <RateChip rate={rate} />
             <button
+              onClick={() => setShowClientModal(true)}
+              className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors"
+            >
+              <User size={14} /> Cliente
+            </button>
+            <button
               onClick={() => setShowCredits(true)}
               className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative"
             >
@@ -676,6 +684,10 @@ export default function POSPage() {
           onClose={() => setShowCloseShift(false)}
           onClosed={() => { setActiveShift(null); setShowCloseShift(false); }}
         />
+      )}
+
+      {showClientModal && (
+        <ClientModal rate={rate} onClose={() => setShowClientModal(false)} />
       )}
     </div>
   );
