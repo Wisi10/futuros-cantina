@@ -1,10 +1,116 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart3, Download, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { METHOD_LABELS, PAYMENT_METHODS } from "@/lib/utils";
+import { METHOD_LABELS, PAYMENT_METHODS, formatREF, formatBs } from "@/lib/utils";
 import CreditsModal from "@/components/vender/CreditsModal";
 import * as XLSX from "xlsx";
+
+// ─── Heat Map Component ────────────────────────────────────
+
+const HEAT_DAYS = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
+const HEAT_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+const DAY_MAP = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+function fmtHourLabel(h) {
+  if (h === 0 || h === 12) return `${h === 0 ? 12 : 12}p`;
+  return h < 12 ? `${h}a` : `${h - 12}p`;
+}
+
+function HeatMap({ sales, loading, rate }) {
+  const { grid, maxVal } = useMemo(() => {
+    const g = Array.from({ length: 7 }, () => Array(14).fill(0));
+    let max = 0;
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Caracas",
+      weekday: "short",
+      hour: "numeric",
+      hour12: false,
+    });
+    (sales || []).forEach((s) => {
+      const parts = fmt.formatToParts(new Date(s.created_at));
+      const weekday = parts.find((p) => p.type === "weekday").value;
+      const hour = parseInt(parts.find((p) => p.type === "hour").value);
+      const dayIdx = DAY_MAP[weekday];
+      const hourIdx = hour - 8;
+      if (dayIdx == null || hourIdx < 0 || hourIdx >= 14) return;
+      g[dayIdx][hourIdx] += Number(s.total_ref || 0);
+      if (g[dayIdx][hourIdx] > max) max = g[dayIdx][hourIdx];
+    });
+    return { grid: g, maxVal: max };
+  }, [sales]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mt-4">
+        <p className="text-xs text-stone-500 mb-3 font-medium">Mapa de calor — ultimos 30 dias</p>
+        <div className="grid gap-1" style={{ gridTemplateColumns: "60px repeat(14, 1fr)" }}>
+          {Array.from({ length: 7 * 15 }, (_, i) => (
+            <div key={i} className={`rounded ${i % 15 === 0 ? "h-6" : "h-6 bg-stone-100 animate-pulse"}`} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const hasData = maxVal > 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-4 mt-4">
+      <p className="text-xs text-stone-500 mb-3 font-medium">Mapa de calor — ultimos 30 dias (REF por franja)</p>
+
+      {!hasData ? (
+        <p className="text-xs text-stone-400 text-center py-6">Sin datos suficientes en los ultimos 30 dias</p>
+      ) : (
+        <div className="overflow-x-auto">
+          {/* Header row */}
+          <div className="grid gap-[3px]" style={{ gridTemplateColumns: "60px repeat(14, 1fr)", minWidth: 600 }}>
+            <div />
+            {HEAT_HOURS.map((h) => (
+              <div key={h} className="text-center text-[10px] text-stone-400 font-medium pb-1">{fmtHourLabel(h)}</div>
+            ))}
+
+            {/* Data rows */}
+            {HEAT_DAYS.map((day, dayIdx) => (
+              <React.Fragment key={day}>
+                <div className="text-[11px] text-stone-500 font-medium flex items-center">{day}</div>
+                {HEAT_HOURS.map((h, hourIdx) => {
+                  const val = grid[dayIdx][hourIdx];
+                  const opacity = val > 0 ? 0.15 + (val / maxVal) * 0.85 : 0;
+                  const bg = val > 0
+                    ? `rgba(184, 150, 62, ${opacity})`
+                    : "rgba(0,0,0,0.03)";
+                  const tooltip = val > 0
+                    ? `${day} ${fmtHourLabel(h)} — ${formatREF(val)}${rate?.eur ? ` (${formatBs(val, rate.eur)})` : ""}`
+                    : `${day} ${fmtHourLabel(h)} — Sin ventas`;
+                  return (
+                    <div
+                      key={hourIdx}
+                      title={tooltip}
+                      className="rounded-sm cursor-default transition-colors"
+                      style={{ backgroundColor: bg, height: 28 }}
+                    />
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center justify-end gap-2 mt-2">
+            <span className="text-[9px] text-stone-400">Menos</span>
+            {[0.1, 0.3, 0.5, 0.7, 0.9].map((op) => (
+              <div key={op} className="w-4 h-3 rounded-sm" style={{ backgroundColor: `rgba(184, 150, 62, ${op})` }} />
+            ))}
+            <span className="text-[9px] text-stone-400">Mas</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Report Periods ────────────────────────────────────────
 
 const PERIODS = [
   { id: "hoy", label: "Hoy" },
@@ -41,6 +147,8 @@ export default function ReportesView({ user, rate }) {
   const [products, setProducts] = useState([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [heatSales, setHeatSales] = useState([]);
+  const [heatLoading, setHeatLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
@@ -59,6 +167,18 @@ export default function ReportesView({ user, rate }) {
     if (creditsRes.data) setCredits(creditsRes.data);
     if (prodsRes.data) setProducts(prodsRes.data);
     setLoading(false);
+
+    // Heat map: last 30 days (independent of period selector)
+    setHeatLoading(true);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const { data: heatData } = await supabase
+      .from("cantina_sales")
+      .select("created_at, total_ref")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+      .order("created_at", { ascending: false });
+    setHeatSales(heatData || []);
+    setHeatLoading(false);
   }, [period, customFrom, customTo]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -351,6 +471,9 @@ export default function ReportesView({ user, rate }) {
               </table>
             </div>
           )}
+
+          {/* ─── Heat Map: Ventas ultimos 30 dias ─── */}
+          <HeatMap sales={heatSales} loading={heatLoading} rate={rate} />
         </>
       )}
 
