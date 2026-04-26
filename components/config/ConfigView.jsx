@@ -154,6 +154,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                 <th className="text-right px-3 py-2 font-medium">Precio REF</th>
                 <th className="text-right px-3 py-2 font-medium">Costo REF</th>
                 <th className="text-center px-3 py-2 font-medium">Emoji</th>
+                <th className="text-center px-3 py-2 font-medium">Canjeable</th>
                 <th className="text-right px-3 py-2 font-medium"></th>
               </tr>
             </thead>
@@ -176,6 +177,13 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                   <td className="px-3 py-2 text-right">{Number(p.price_ref).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
                   <td className="px-3 py-2 text-center"><ProductImage product={p} size={24} /></td>
+                  <td className="px-3 py-2 text-center text-xs">
+                    {p.is_redeemable ? (
+                      <span className="text-gold font-medium">🎁 {p.redemption_cost_points}pts</span>
+                    ) : (
+                      <span className="text-stone-300">—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <button onClick={() => setEditingProduct(p)}
                       className="text-xs text-brand hover:underline">Editar</button>
@@ -202,9 +210,19 @@ function EditProductModal({ product, onClose, onSave }) {
   const [emoji, setEmoji] = useState(product.emoji || "🍽️");
   const [category, setCategory] = useState(product.category || "");
   const [alert, setAlert] = useState(product.low_stock_alert?.toString() || "5");
+  const [isRedeemable, setIsRedeemable] = useState(!!product.is_redeemable);
+  const [redemptionCost, setRedemptionCost] = useState(product.redemption_cost_points?.toString() || "");
   const [saving, setSaving] = useState(false);
+  const [validationErr, setValidationErr] = useState("");
+
+  const suggestedPoints = Math.floor((parseFloat(priceRef) || 0) * 10);
 
   const handleSave = async () => {
+    if (isRedeemable && (!redemptionCost || parseInt(redemptionCost) <= 0)) {
+      setValidationErr("Costo en puntos es obligatorio y debe ser mayor a 0");
+      return;
+    }
+    setValidationErr("");
     setSaving(true);
     await onSave(product, {
       name,
@@ -213,6 +231,8 @@ function EditProductModal({ product, onClose, onSave }) {
       emoji,
       category,
       low_stock_alert: parseInt(alert) || 5,
+      is_redeemable: isRedeemable,
+      redemption_cost_points: isRedeemable ? parseInt(redemptionCost) : null,
     });
     setSaving(false);
   };
@@ -258,6 +278,34 @@ function EditProductModal({ product, onClose, onSave }) {
               <input type="number" value={alert} onChange={(e) => setAlert(e.target.value)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
             </div>
+          </div>
+
+          {/* Loyalty section */}
+          <div className="border-t border-stone-200 pt-3 mt-1">
+            <p className="text-[10px] uppercase tracking-[1.5px] text-stone-400 font-medium mb-2">Programa de lealtad</p>
+            <div className="flex items-center gap-3 mb-2">
+              <button type="button" onClick={() => { setIsRedeemable(!isRedeemable); setValidationErr(""); }}
+                className={`w-10 h-5 rounded-full transition-colors ${isRedeemable ? "bg-gold" : "bg-stone-300"}`}>
+                <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${isRedeemable ? "translate-x-5" : "translate-x-0.5"}`} />
+              </button>
+              <span className="text-xs text-stone-600">Canjeable con puntos</span>
+            </div>
+            {isRedeemable && (
+              <div className="ml-1 space-y-1.5">
+                <div>
+                  <label className="text-xs font-medium text-stone-500 block mb-1">Costo en puntos</label>
+                  <input type="number" min="1" value={redemptionCost} onChange={(e) => { setRedemptionCost(e.target.value); setValidationErr(""); }}
+                    placeholder="Ej: 50"
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                </div>
+                {suggestedPoints > 0 && (
+                  <p className="text-[10px] text-stone-400">
+                    Acumular este producto cuesta {suggestedPoints} puntos (REF {(parseFloat(priceRef) || 0).toFixed(2)} x 10)
+                  </p>
+                )}
+              </div>
+            )}
+            {validationErr && <p className="text-xs text-red-500 mt-1">{validationErr}</p>}
           </div>
         </div>
         <div className="px-4 py-3 border-t border-stone-200 flex gap-2">
