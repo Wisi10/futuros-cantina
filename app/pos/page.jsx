@@ -69,6 +69,7 @@ export default function POSPage() {
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [showCloseShift, setShowCloseShift] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [saleClient, setSaleClient] = useState(null); // {id, name, points}
 
   // Auth check
   useEffect(() => {
@@ -209,8 +210,16 @@ export default function POSPage() {
     );
   };
 
-  const removeFromCart = (productId) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== productId));
+  const removeFromCart = (productId, isRedemption) => {
+    setCart((prev) => prev.filter((item) => !(item.product.id === productId && !!item.isRedemption === !!isRedemption)));
+  };
+
+  const addRedemption = (product) => {
+    // Add as free item — redemption only processed at confirm
+    setCart((prev) => {
+      if (prev.some(i => i.product.id === product.id && i.isRedemption)) return prev;
+      return [...prev, { product: { ...product, price_ref: 0 }, qty: 1, isRedemption: true, redemptionProductId: product.id, redemptionCost: product.redemption_cost_points }];
+    });
   };
 
   // Totals
@@ -321,6 +330,8 @@ export default function POSPage() {
         reference: ref || null,
         exchange_rate_bs: rate?.eur || null,
         created_by: user?.name || "Cantina",
+        client_id: saleClient?.id || null,
+        client_name: saleClient?.name || null,
       });
       if (!result) { setProcessing(false); return; }
 
@@ -330,6 +341,19 @@ export default function POSPage() {
           await supabase.rpc("award_loyalty_points", { sale_id_param: result.sale.id });
         }
       } catch (e) { console.error("[LOYALTY] award error:", e); }
+
+      // Loyalty: process redemptions in cart (non-blocking)
+      const redemptionItems = cart.filter(i => i.isRedemption);
+      const redemptionIds = [];
+      for (const item of redemptionItems) {
+        try {
+          const { data } = await supabase.rpc("redeem_loyalty_reward", {
+            client_id_param: saleClient?.id, product_id_param: item.redemptionProductId,
+            sale_id_param: result.sale.id, redeemed_by_param: user?.name || "Staff",
+          });
+          if (data?.[0]?.redemption_id) redemptionIds.push(data[0].redemption_id);
+        } catch (e) { console.error("[LOYALTY] redeem error:", e); }
+      }
 
       setLastSaleRecord(result.sale);
       setLastSaleTime(Date.now());
@@ -452,6 +476,14 @@ export default function POSPage() {
         await supabase.rpc("reverse_loyalty_points", { sale_id_param: saleId });
       } catch (e) { console.error("[LOYALTY] reverse error:", e); }
 
+      // 4c. Loyalty: reverse redemptions if any (non-blocking)
+      try {
+        const { data: rdms } = await supabase.from("loyalty_redemptions").select("id").eq("related_sale_id", saleId);
+        for (const rdm of (rdms || [])) {
+          await supabase.rpc("reverse_loyalty_redemption", { redemption_id_param: rdm.id });
+        }
+      } catch (e) { console.error("[LOYALTY] reverse redemption error:", e); }
+
       // 5. Record void movement
       for (const item of items) {
         await supabase.from("stock_movements").insert({
@@ -502,6 +534,7 @@ export default function POSPage() {
   const handleNewSale = () => {
     setLastSale(null);
     setScreen("pos");
+    setSaleClient(null);
   };
 
   if (!user) return null;
@@ -570,6 +603,8 @@ export default function POSPage() {
                     if (!activeShift) { setShowOpenShift(true); return; }
                     setScreen("payment");
                   }}
+                  saleClient={saleClient}
+                  onAddRedemption={addRedemption}
                 />
               </>
             )}
@@ -706,7 +741,8 @@ export default function POSPage() {
       )}
 
       {showClientModal && (
-        <ClientModal rate={rate} onClose={() => setShowClientModal(false)} />
+        <ClientModal rate={rate} user={user} onClose={() => setShowClientModal(false)}
+          onAssociateClient={(client) => setSaleClient(client)} />
       )}
     </div>
   );
