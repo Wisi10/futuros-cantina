@@ -324,6 +324,13 @@ export default function POSPage() {
       });
       if (!result) { setProcessing(false); return; }
 
+      // Loyalty: award points (non-blocking)
+      try {
+        if (result.sale?.client_id) {
+          await supabase.rpc("award_loyalty_points", { sale_id_param: result.sale.id });
+        }
+      } catch (e) { console.error("[LOYALTY] award error:", e); }
+
       setLastSaleRecord(result.sale);
       setLastSaleTime(Date.now());
       setLastSale({
@@ -358,6 +365,13 @@ export default function POSPage() {
         created_by: user?.name || "Cantina",
       });
       if (!result) { setProcessing(false); return; }
+
+      // Loyalty: award points on credit sales too (non-blocking)
+      try {
+        if (result.sale?.client_id) {
+          await supabase.rpc("award_loyalty_points", { sale_id_param: result.sale.id });
+        }
+      } catch (e) { console.error("[LOYALTY] award error:", e); }
 
       const { error: creditError } = await supabase.from("cantina_credits").insert({
         client_id: clientId || "manual",
@@ -432,6 +446,11 @@ export default function POSPage() {
         voided_at: new Date().toISOString(),
         voided_reason: `Anulada por ${user?.name || "Staff"} dentro de ventana de 5min`,
       }).eq("id", saleId);
+
+      // 4b. Loyalty: reverse points (non-blocking)
+      try {
+        await supabase.rpc("reverse_loyalty_points", { sale_id_param: saleId });
+      } catch (e) { console.error("[LOYALTY] reverse error:", e); }
 
       // 5. Record void movement
       for (const item of items) {
