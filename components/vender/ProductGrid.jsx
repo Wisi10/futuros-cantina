@@ -1,19 +1,22 @@
 "use client";
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { formatBs } from "@/lib/utils";
+import { formatBs, ProductImage } from "@/lib/utils";
 
 export default function ProductGrid({ products, cart, rate, onAdd }) {
   const [view, setView] = useState("categories");
   const [activeCategory, setActiveCategory] = useState(null);
   const [search, setSearch] = useState("");
 
-  // Build categories from products — emoji from first product in each category
+  // Build categories from products — prefer first product with photo per category
   const categoryData = {};
   products.forEach((p) => {
     const cat = p.category || "Otro";
     if (!categoryData[cat]) {
-      categoryData[cat] = { count: 0, emoji: p.emoji || "🍽️" };
+      categoryData[cat] = { count: 0, emoji: p.emoji || "🍽️", photo_url: p.photo_url || null };
+    }
+    if (!categoryData[cat].photo_url && p.photo_url) {
+      categoryData[cat].photo_url = p.photo_url;
     }
     categoryData[cat].count++;
   });
@@ -66,7 +69,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
                 className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
                 style={{ padding: "28px 16px", minHeight: 140 }}
               >
-                <span className="text-4xl leading-none">{data.emoji}</span>
+                <ProductImage product={{ photo_url: data.photo_url, emoji: data.emoji }} size={40} className="rounded-lg" />
                 <span className="text-[15px] font-bold text-[#1a1a1a]">{cat}</span>
                 <span className="text-[11px] text-[#a3a3a3]">{data.count} productos</span>
               </button>
@@ -89,9 +92,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
   }
 
   // ── Product Grid ──
-  const headerEmoji = activeCategory
-    ? (categoryData[activeCategory]?.emoji || "🍽️")
-    : "🔍";
+  const headerCat = activeCategory ? categoryData[activeCategory] : null;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -104,7 +105,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
           ← Categorias
         </button>
         <div className="flex items-center gap-2 text-sm text-stone-600 shrink-0">
-          <span>{headerEmoji}</span>
+          {headerCat ? <ProductImage product={{ photo_url: headerCat.photo_url, emoji: headerCat.emoji }} size={20} /> : <span>🔍</span>}
           <span className="font-bold">{activeCategory || "Todos"}</span>
           <span className="text-stone-400">({filtered.length})</span>
         </div>
@@ -129,8 +130,6 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
             const outOfStock = stock <= 0;
             const lowStock = stock > 0 && stock <= alertThreshold;
             const inCart = cartMap[product.id] || 0;
-            const emoji = product.emoji || "🍽️";
-
             return (
               <button
                 key={product.id}
@@ -149,7 +148,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
                   </div>
                 )}
 
-                <div className="text-[28px] leading-none mb-1">{emoji}</div>
+                <div className="mb-1"><ProductImage product={product} size={36} className="rounded-lg" /></div>
 
                 <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-1.5 line-clamp-2 w-full">
                   {product.name}

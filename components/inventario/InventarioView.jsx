@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { uploadProductPhoto } from "@/lib/utils";
+import { uploadProductPhoto, ProductImage } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 
@@ -289,7 +289,7 @@ export default function InventarioView({ user }) {
                     {filtered.map((p) => (
                       <tr key={p.id} className={`border-t border-stone-100 ${rowBg(p)}`}>
                         <td className="px-3 py-2 font-medium text-stone-800">
-                          <span className="mr-1.5">{p.emoji || "🍽️"}</span>{p.name}
+                          <span className="mr-1.5 inline-flex"><ProductImage product={p} size={20} /></span>{p.name}
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
                         <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>

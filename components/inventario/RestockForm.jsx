@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Loader2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ProductImage } from "@/lib/utils";
 
 function emptyRow() {
   return { productId: "", qty: "", costRef: "", costUsd: "" };

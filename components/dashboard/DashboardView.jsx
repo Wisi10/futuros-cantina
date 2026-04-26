@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Maximize2, Minimize2, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF, formatBs, METHOD_LABELS } from "@/lib/utils";
+import { formatREF, formatBs, METHOD_LABELS, ProductImage } from "@/lib/utils";
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
 

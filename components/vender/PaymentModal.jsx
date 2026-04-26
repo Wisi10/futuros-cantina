@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Loader2, Search, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, PAYMENT_METHODS } from "@/lib/utils";
+import { formatBs, PAYMENT_METHODS, ProductImage } from "@/lib/utils";
 
 export default function PaymentModal({ cart, rate, processing, onConfirm, onConfirmCredit, onBack }) {
   const [method, setMethod] = useState("");
@@ -98,9 +98,9 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
           <p className="text-xs text-stone-500 font-medium mb-2">Resumen de venta</p>
           <div className="space-y-1 mb-3">
             {cart.map((item) => (
-              <div key={item.product.id} className="flex justify-between text-sm">
-                <span className="text-stone-600">
-                  {item.product.emoji || "🍽️"} {item.qty}x {item.product.name}
+              <div key={item.product.id} className="flex items-center justify-between text-sm gap-2">
+                <span className="text-stone-600 flex items-center gap-1.5">
+                  <ProductImage product={item.product} size={20} /> {item.qty}x {item.product.name}
                 </span>
                 <span className="font-medium">REF {(Number(item.product.price_ref) * item.qty).toFixed(2)}</span>
               </div>

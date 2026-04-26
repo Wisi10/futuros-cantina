@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { X, Save } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ProductImage } from "@/lib/utils";
 
 const REASONS = [
   "Merma",
@@ -56,7 +57,7 @@ export default function StockAdjustModal({ product, user, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div className="bg-white rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
-          <h3 className="font-bold text-sm">Ajuste manual — {product.emoji || "🍽️"} {product.name}</h3>
+          <h3 className="font-bold text-sm flex items-center gap-1.5">Ajuste manual — <ProductImage product={product} size={20} /> {product.name}</h3>
           <button onClick={onClose} className="p-1 hover:bg-stone-200 rounded"><X size={16} /></button>
         </div>
         <div className="p-4 space-y-3">

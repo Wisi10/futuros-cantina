@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, CreditCard, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { calcBs } from "@/lib/utils";
+import { calcBs, ProductImage } from "@/lib/utils";
 import SideNav from "@/components/nav/SideNav";
 import RateChip from "@/components/shared/RateChip";
 import ProductGrid from "@/components/vender/ProductGrid";
@@ -617,8 +617,8 @@ export default function POSPage() {
             </h3>
             <div className="bg-stone-50 rounded-xl p-3 mb-4 space-y-1">
               {cart.map((item) => (
-                <div key={item.product.id} className="flex justify-between text-sm">
-                  <span className="text-stone-600">{item.qty}x {item.product.name}</span>
+                <div key={item.product.id} className="flex items-center justify-between text-sm gap-2">
+                  <span className="text-stone-600 flex items-center gap-1.5"><ProductImage product={item.product} size={20} /> {item.qty}x {item.product.name}</span>
                   <span className="font-medium">REF {(Number(item.product.price_ref) * item.qty).toFixed(2)}</span>
                 </div>
               ))}

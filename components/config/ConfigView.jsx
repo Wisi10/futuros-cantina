@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings, Save, RefreshCw, History, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ProductImage } from "@/lib/utils";
 
 export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
@@ -174,7 +175,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                   </td>
                   <td className="px-3 py-2 text-right">{Number(p.price_ref).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-center text-lg">{p.emoji || "🍽️"}</td>
+                  <td className="px-3 py-2 text-center"><ProductImage product={p} size={24} /></td>
                   <td className="px-3 py-2 text-right">
                     <button onClick={() => setEditingProduct(p)}
                       className="text-xs text-brand hover:underline">Editar</button>

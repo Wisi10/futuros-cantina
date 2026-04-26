@@ -1,6 +1,6 @@
 "use client";
 import { Minus, Plus, Trash2, ShoppingCart } from "lucide-react";
-import { formatBs } from "@/lib/utils";
+import { formatBs, ProductImage } from "@/lib/utils";
 
 export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheckout }) {
   const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
@@ -33,9 +33,10 @@ export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheck
             return (
               <div key={item.product.id} className="bg-stone-50 rounded-lg p-2.5">
                 <div className="flex items-start justify-between mb-1.5">
-                  <p className="text-xs font-medium text-stone-700 leading-tight flex-1 pr-1">
-                    {item.product.emoji || "🍽️"} {item.product.name}
-                  </p>
+                  <div className="flex items-center gap-1.5 flex-1 pr-1">
+                    <ProductImage product={item.product} size={20} />
+                    <p className="text-xs font-medium text-stone-700 leading-tight">{item.product.name}</p>
+                  </div>
                   <button
                     onClick={() => onRemove(item.product.id)}
                     className="p-1 text-stone-300 hover:text-red-500 transition-colors"
