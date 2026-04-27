@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Minus, Plus, Trash2, ShoppingCart, Gift, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, ProductImage } from "@/lib/utils";
@@ -127,6 +127,14 @@ export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheck
   const [mobileOpen, setMobileOpen] = useState(false);
   const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  // Body scroll lock when bottom sheet is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [mobileOpen]);
 
   return (
     <>
