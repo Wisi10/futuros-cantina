@@ -540,24 +540,20 @@ export default function POSPage() {
   if (!user) return null;
 
   return (
-    <div className="h-screen flex bg-brand-cream-light overflow-hidden">
+    <div className="h-screen flex flex-col md:flex-row bg-brand-cream-light overflow-hidden">
       <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={user.cantinaRole || "staff"} />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">
         {/* Header */}
-        <header className="bg-white border-b border-stone-200 px-4 py-2.5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-stone-200 px-3 md:px-4 py-2 md:py-2.5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 md:gap-3">
             <RateChip rate={rate} />
-            <button
-              onClick={() => setShowClientModal(true)}
-              className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors"
-            >
-              <User size={14} /> Cliente
+            <button onClick={() => setShowClientModal(true)}
+              className="flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors">
+              <User size={14} /> <span className="hidden sm:inline">Cliente</span>
             </button>
-            <button
-              onClick={() => setShowCredits(true)}
-              className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative"
-            >
+            <button onClick={() => setShowCredits(true)}
+              className="hidden md:flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative">
               <CreditCard size={14} /> Creditos
               {pendingCreditsCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
@@ -566,12 +562,12 @@ export default function POSPage() {
               )}
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <ShiftPill
               shift={activeShift}
               onClick={() => activeShift ? setShowCloseShift(true) : setShowOpenShift(true)}
             />
-            <span className="text-xs text-stone-400">{user.name}</span>
+            <span className="hidden md:inline text-xs text-stone-400">{user.name}</span>
             <button onClick={handleLogout}
               className="p-2 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors">
               <LogOut size={18} />
