@@ -1,21 +1,16 @@
 {
   "name": "Futuros Cantina",
-  "short_name": "Cantina",
-  "description": "POS Cantina - Futuros Sports Complex",
+  "short_name": "Futuros Cantina",
+  "description": "Punto de venta cantina Futuros",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f1eb",
+  "orientation": "portrait",
+  "background_color": "#0F0F0F",
   "theme_color": "#4d1a2a",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
