@@ -74,7 +74,7 @@ export default function ShiftsView({ user }) {
 
                 {isExpanded && (
                   <div className="border-t border-stone-100 px-4 py-3 bg-stone-50 space-y-3">
-                    <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                       <div>
                         <p className="text-[10px] uppercase tracking-[1.5px] text-stone-400 mb-1">Efectivo inicial</p>
                         <p style={mono}>Bs {parseFloat(s.opening_cash_bs || 0).toLocaleString("es-VE")} / ${parseFloat(s.opening_cash_usd || 0).toFixed(2)}</p>

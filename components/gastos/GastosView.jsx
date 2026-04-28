@@ -128,7 +128,7 @@ export default function GastosView({ user, rate }) {
       <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
         <h2 className="font-bold text-sm text-stone-700">Nuevo gasto</h2>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-stone-500 block mb-1">Categoria *</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
@@ -144,7 +144,7 @@ export default function GastosView({ user, rate }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-stone-500 block mb-1">Monto *</label>
             <div className="flex gap-1">
@@ -215,7 +215,7 @@ export default function GastosView({ user, rate }) {
         ) : expenses.length === 0 ? (
           <p className="p-4 text-sm text-stone-400 text-center">Sin gastos en este periodo</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
                 <th className="text-left px-3 py-2 font-medium">Fecha</th>
@@ -247,7 +247,7 @@ export default function GastosView({ user, rate }) {
                 <td colSpan={2}></td>
               </tr>
             </tfoot>
-          </table>
+          </table></div>
         )}
       </div>
 

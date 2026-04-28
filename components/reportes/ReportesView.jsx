@@ -478,7 +478,7 @@ export default function ReportesView({ user, rate }) {
               <div className="px-4 py-3 border-b border-stone-100">
                 <h2 className="font-bold text-sm text-stone-700">Top 10 productos del periodo</h2>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                 <thead>
                   <tr className="bg-stone-50 text-stone-500 text-xs">
                     <th className="text-left px-3 py-2 font-medium w-8">#</th>
@@ -507,7 +507,7 @@ export default function ReportesView({ user, rate }) {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
@@ -517,7 +517,7 @@ export default function ReportesView({ user, rate }) {
               <div className="px-4 py-3 border-b border-stone-100">
                 <h2 className="font-bold text-sm text-stone-700">P&L por producto</h2>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                 <thead>
                   <tr className="bg-stone-50 text-stone-500 text-xs">
                     <th className="text-left px-3 py-2 font-medium">Producto</th>
@@ -544,7 +544,7 @@ export default function ReportesView({ user, rate }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
@@ -556,7 +556,7 @@ export default function ReportesView({ user, rate }) {
                 <p className="text-[10px] text-stone-400 mt-0.5">{slowMovers.length} productos sin ventas en los ultimos 14 dias</p>
               </div>
               <div className="max-h-64 overflow-y-auto">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                   <thead className="sticky top-0 bg-stone-50">
                     <tr className="text-stone-500 text-xs">
                       <th className="text-left px-3 py-2 font-medium">Producto</th>
@@ -584,7 +584,7 @@ export default function ReportesView({ user, rate }) {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -625,7 +625,7 @@ export default function ReportesView({ user, rate }) {
                 <button onClick={() => setShowCreditsModal(true)}
                   className="text-xs text-brand hover:underline">Ver todos</button>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                 <thead>
                   <tr className="bg-stone-50 text-stone-500 text-xs">
                     <th className="text-left px-3 py-2 font-medium">Cliente</th>
@@ -652,7 +652,7 @@ export default function ReportesView({ user, rate }) {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
@@ -662,7 +662,7 @@ export default function ReportesView({ user, rate }) {
               <div className="px-4 py-3 border-b border-stone-100">
                 <h2 className="font-bold text-sm text-stone-700">Historial de ventas</h2>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                 <thead>
                   <tr className="bg-stone-50 text-stone-500 text-xs">
                     <th className="text-left px-3 py-2 font-medium">Hora</th>
@@ -693,7 +693,7 @@ export default function ReportesView({ user, rate }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 

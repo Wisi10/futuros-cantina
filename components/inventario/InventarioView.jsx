@@ -273,7 +273,7 @@ export default function InventarioView({ user }) {
 
               {/* Product table */}
               <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                   <thead>
                     <tr className="bg-stone-50 text-stone-500 text-xs">
                       <th className="text-left px-3 py-2 font-medium">Producto</th>
@@ -325,7 +325,7 @@ export default function InventarioView({ user }) {
                       <td colSpan={2}></td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               </div>
 
               {/* Supplier section — only when "Todos" and no kpiFilter */}
@@ -374,7 +374,7 @@ export default function InventarioView({ user }) {
 
                             {expanded && (
                               <div className="px-4 pb-3 bg-stone-50">
-                                <table className="w-full text-xs">
+                                <div className="overflow-x-auto"><table className="w-full text-xs min-w-[400px]">
                                   <thead>
                                     <tr className="text-stone-400">
                                       <th className="text-left py-1 font-medium">Fecha</th>
@@ -397,7 +397,7 @@ export default function InventarioView({ user }) {
                                         </tr>
                                       ))}
                                   </tbody>
-                                </table>
+                                </table></div>
                               </div>
                             )}
                           </div>

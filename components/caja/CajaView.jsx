@@ -143,7 +143,8 @@ export default function CajaView({ user, rate }) {
               <div className="px-4 py-3 border-b border-stone-100">
                 <h3 className="text-sm font-bold text-stone-700">Desglose por metodo de pago</h3>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[400px]">
                 <thead>
                   <tr className="text-xs text-stone-400 border-b border-stone-100">
                     <th className="text-left px-4 py-2 font-medium">Metodo</th>
@@ -171,6 +172,7 @@ export default function CajaView({ user, rate }) {
                     ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 

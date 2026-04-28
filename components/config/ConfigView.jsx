@@ -145,7 +145,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
         {loading ? (
           <p className="p-4 text-sm text-stone-400 animate-pulse">Cargando...</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
                 <th className="text-left px-3 py-2 font-medium">Producto</th>
@@ -191,7 +191,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 
@@ -250,7 +250,7 @@ function EditProductModal({ product, onClose, onSave }) {
             <input type="text" value={name} onChange={(e) => setName(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-stone-500 block mb-1">Precio REF</label>
               <input type="number" step="0.01" value={priceRef} onChange={(e) => setPriceRef(e.target.value)}
@@ -262,7 +262,7 @@ function EditProductModal({ product, onClose, onSave }) {
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-medium text-stone-500 block mb-1">Emoji</label>
               <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)}
