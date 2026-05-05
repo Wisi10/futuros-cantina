@@ -22,6 +22,7 @@ import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
+import PremiosView from "@/components/premios/PremiosView";
 
 export default function POSPage() {
   const router = useRouter();
@@ -210,8 +211,15 @@ export default function POSPage() {
     );
   };
 
-  const removeFromCart = (productId, isRedemption) => {
-    setCart((prev) => prev.filter((item) => !(item.product.id === productId && !!item.isRedemption === !!isRedemption)));
+  const removeFromCart = (productId, kind = "regular") => {
+    // kind: 'regular' | 'redemption' | 'promo'
+    setCart((prev) => prev.filter((item) => {
+      if (item.product.id !== productId) return true;
+      if (kind === "redemption") return !item.isRedemption;
+      if (kind === "promo")      return !item.isPromo;
+      // 'regular': remove only non-special variant (keep promos/redemptions)
+      return item.isRedemption || item.isPromo;
+    }));
   };
 
   const addRedemption = (product) => {
@@ -219,6 +227,14 @@ export default function POSPage() {
     setCart((prev) => {
       if (prev.some(i => i.product.id === product.id && i.isRedemption)) return prev;
       return [...prev, { product: { ...product, price_ref: 0 }, qty: 1, isRedemption: true, redemptionProductId: product.id, redemptionCost: product.redemption_cost_points }];
+    });
+  };
+
+  const addPromoItem = (product, promoId) => {
+    // Add as free item — weekly promo redemption processed at confirm
+    setCart((prev) => {
+      if (prev.some(i => i.product.id === product.id && i.isPromo)) return prev;
+      return [...prev, { product: { ...product, price_ref: 0 }, qty: 1, isPromo: true, promoId }];
     });
   };
 
@@ -234,7 +250,10 @@ export default function POSPage() {
 
   // Shared sale logic
   const executeSale = async (saleData) => {
-    for (const item of cart) {
+    // isPromo items have stock managed by redeem_weekly_promo RPC — skip here
+    const stockBearingItems = cart.filter((i) => !i.isPromo);
+
+    for (const item of stockBearingItems) {
       const { data: current } = await supabase
         .from("products")
         .select("stock_quantity")
@@ -252,6 +271,7 @@ export default function POSPage() {
       qty: item.qty,
       price_ref: parseFloat(item.product.price_ref),
       cost_ref: parseFloat(item.product.cost_ref || 0),
+      ...(item.isPromo ? { is_promo: true, promo_id: item.promoId } : {}),
     }));
 
     const { data: sale, error: saleError } = await supabase
@@ -268,7 +288,7 @@ export default function POSPage() {
       .single();
     if (saleError) throw saleError;
 
-    const movements = cart.map((item) => ({
+    const movements = stockBearingItems.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
       movement_type: "sale",
@@ -281,7 +301,7 @@ export default function POSPage() {
     const { error: movError } = await supabase.from("stock_movements").insert(movements);
     if (movError) throw movError;
 
-    for (const item of cart) {
+    for (const item of stockBearingItems) {
       const { error: stockError } = await supabase
         .from("products")
         .update({ stock_quantity: (item.product.stock_quantity ?? 0) - item.qty })
@@ -353,6 +373,19 @@ export default function POSPage() {
           });
           if (data?.[0]?.redemption_id) redemptionIds.push(data[0].redemption_id);
         } catch (e) { console.error("[LOYALTY] redeem error:", e); }
+      }
+
+      // Weekly promos: process promo items in cart (non-blocking)
+      const promoItems = cart.filter(i => i.isPromo);
+      for (const item of promoItems) {
+        try {
+          await supabase.rpc("redeem_weekly_promo", {
+            promo_id_param:    item.promoId,
+            client_id_param:   saleClient?.id,
+            sale_id_param:     result.sale.id,
+            redeemed_by_param: user?.name || "Staff",
+          });
+        } catch (e) { console.error("[PROMO] redeem error:", e); }
       }
 
       setLastSaleRecord(result.sale);
@@ -442,8 +475,9 @@ export default function POSPage() {
       const saleId = lastSaleRecord.id;
       const items = lastSaleRecord.items || [];
 
-      // 1. Restore stock
+      // 1. Restore stock (skip promo items — handled separately if reverse RPC exists)
       for (const item of items) {
+        if (item.is_promo) continue; // promo stock managed by redeem_weekly_promo RPC
         const { data: product } = await supabase
           .from("products")
           .select("stock_quantity")
@@ -640,6 +674,12 @@ export default function POSPage() {
           <DashboardView user={user} rate={rate} />
         )}
 
+        {activeTab === "premios" && (
+          <div className="flex-1 overflow-hidden">
+            <PremiosView user={user} rate={rate} />
+          </div>
+        )}
+
         {activeTab === "config" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
@@ -655,6 +695,7 @@ export default function POSPage() {
           processing={processing}
           saleClient={saleClient}
           onAssociateClient={(client) => setSaleClient(client)}
+          onAddPromo={addPromoItem}
           onConfirm={handlePaymentConfirm}
           onConfirmCredit={handleCreditConfirm}
           onBack={() => setScreen("pos")}

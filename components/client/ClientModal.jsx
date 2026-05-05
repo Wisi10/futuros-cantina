@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Search, ArrowLeft, Cake, User, Gift } from "lucide-react";
+import { X, Search, ArrowLeft, Cake, User, Gift, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, ProductImage } from "@/lib/utils";
+import PromoProgressCard from "@/components/premios/PromoProgressCard";
 
-export default function ClientModal({ rate, user, onClose, onAssociateClient }) {
+export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
   const [view, setView] = useState("list"); // "list" | "profile" | "rewards" | "redeemSuccess"
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
@@ -19,8 +20,17 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient }) 
   const [lastRedeemed, setLastRedeemed] = useState(null);
   const timerRef = useRef(null);
 
+  // Weekly promos state
+  const [weeklyPromos, setWeeklyPromos] = useState([]);
+  const [loadingWeeklyPromos, setLoadingWeeklyPromos] = useState(false);
+  const [redeemingPromoId, setRedeemingPromoId] = useState(null);
+
   useEffect(() => {
     if (!supabase) return;
+    if (initialClientId) {
+      setLoadingBookings(false);
+      return; // skip bookings load — go straight to profile
+    }
     (async () => {
       try {
         const { data } = await supabase.rpc("get_bookings_today");
@@ -28,7 +38,7 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient }) 
       } catch { setBookings([]); }
       setLoadingBookings(false);
     })();
-  }, []);
+  }, [initialClientId]);
 
   const doSearch = useCallback(async (q) => {
     if (!supabase || !q || q.length < 2) { setSearchResults([]); setSearching(false); return; }
@@ -47,7 +57,20 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient }) 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [searchQuery, doSearch]);
 
-  const openProfile = async (clientId) => {
+  const loadWeeklyPromos = useCallback(async (clientId) => {
+    if (!clientId || !supabase) return;
+    setLoadingWeeklyPromos(true);
+    try {
+      const { data } = await supabase.rpc("get_client_promo_progress", { client_id_param: clientId });
+      setWeeklyPromos(data || []);
+    } catch (e) {
+      console.error("[CLIENT MODAL] promos error:", e);
+      setWeeklyPromos([]);
+    }
+    setLoadingWeeklyPromos(false);
+  }, []);
+
+  const openProfile = useCallback(async (clientId) => {
     if (!clientId || !supabase) return;
     setLoadingProfile(true);
     setView("profile");
@@ -56,6 +79,36 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient }) 
       setProfile(data?.[0] || null);
     } catch { setProfile(null); }
     setLoadingProfile(false);
+    loadWeeklyPromos(clientId);
+  }, [loadWeeklyPromos]);
+
+  // Auto-open profile if initialClientId provided
+  useEffect(() => {
+    if (initialClientId) openProfile(initialClientId);
+  }, [initialClientId, openProfile]);
+
+  const handleRedeemWeeklyPromo = async (promo) => {
+    if (!profile?.id || redeemingPromoId) return;
+    if (!window.confirm(`Entregar ${(promo.product_name || "").trim()} a ${(profile.full_name || "").trim()}?`)) return;
+    setRedeemingPromoId(promo.promo_id);
+    try {
+      const { data, error } = await supabase.rpc("redeem_weekly_promo", {
+        promo_id_param:    promo.promo_id,
+        client_id_param:   profile.id,
+        sale_id_param:     null,
+        redeemed_by_param: user?.name || "Staff",
+      });
+      if (error) throw error;
+      const result = data?.[0];
+      if (!result?.success) {
+        alert("No se pudo canjear: " + (result?.message || "Error"));
+      } else {
+        await loadWeeklyPromos(profile.id);
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setRedeemingPromoId(null);
   };
 
   const openRewards = async () => {
@@ -214,9 +267,35 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient }) 
                     )}
                   </div>
 
+                  {/* Weekly promos progress */}
+                  {(loadingWeeklyPromos || weeklyPromos.length > 0) && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Trophy size={14} className="text-stone-500" />
+                        <p className="text-[10px] uppercase tracking-[1.5px] text-stone-500 font-medium">
+                          Promos esta semana
+                        </p>
+                      </div>
+                      {loadingWeeklyPromos ? (
+                        <p className="text-xs text-stone-400 animate-pulse text-center py-2">Cargando promos...</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {weeklyPromos.map((p) => (
+                            <PromoProgressCard
+                              key={p.promo_id}
+                              promo={p}
+                              onRedeem={p.status === "available" ? () => handleRedeemWeeklyPromo(p) : undefined}
+                              redeeming={redeemingPromoId === p.promo_id}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Associate to sale */}
                   {onAssociateClient && (
-                    <button onClick={() => { onAssociateClient({ id: profile.id, name: profile.full_name, points: Number(profile.loyalty_points || 0) }); onClose(); }}
+                    <button onClick={() => { onAssociateClient({ id: profile.id, name: profile.full_name, cedula: profile.cedula || null, points: Number(profile.loyalty_points || 0) }); onClose(); }}
                       className="w-full py-2.5 border-2 border-brand rounded-xl text-sm font-medium text-brand hover:bg-brand/5 transition-colors">
                       Asociar a venta actual
                     </button>

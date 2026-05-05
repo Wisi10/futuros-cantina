@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Loader2, Search, AlertCircle, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, PAYMENT_METHODS, ProductImage } from "@/lib/utils";
+import PromoRewardBanner from "@/components/premios/PromoRewardBanner";
 
-export default function PaymentModal({ cart, rate, processing, saleClient, onAssociateClient, onConfirm, onConfirmCredit, onBack }) {
+export default function PaymentModal({ cart, rate, processing, saleClient, onAssociateClient, onAddPromo, onConfirm, onConfirmCredit, onBack }) {
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
 
@@ -156,6 +157,9 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
         </button>
         <h2 className="font-bold text-lg text-stone-800">Metodo de pago</h2>
       </div>
+
+      {/* Weekly promo reward banner — solo si hay cliente con premio disponible */}
+      <PromoRewardBanner saleClient={saleClient} cart={cart} onAddPromo={onAddPromo} />
 
       {/* Loyalty client picker — al tope del modal */}
       <div className="bg-white border-b border-stone-200 px-4 py-3">
