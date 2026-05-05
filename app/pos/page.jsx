@@ -535,6 +535,7 @@ export default function POSPage() {
     setLastSale(null);
     setScreen("pos");
     setSaleClient(null);
+    setActiveTab("vender");
   };
 
   if (!user) return null;
@@ -652,6 +653,8 @@ export default function POSPage() {
           cart={cart}
           rate={rate}
           processing={processing}
+          saleClient={saleClient}
+          onAssociateClient={(client) => setSaleClient(client)}
           onConfirm={handlePaymentConfirm}
           onConfirmCredit={handleCreditConfirm}
           onBack={() => setScreen("pos")}

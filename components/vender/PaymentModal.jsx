@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Loader2, Search, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Search, AlertCircle, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, PAYMENT_METHODS, ProductImage } from "@/lib/utils";
 
-export default function PaymentModal({ cart, rate, processing, onConfirm, onConfirmCredit, onBack }) {
+export default function PaymentModal({ cart, rate, processing, saleClient, onAssociateClient, onConfirm, onConfirmCredit, onBack }) {
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
 
@@ -18,6 +18,13 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
   const [dueDate, setDueDate] = useState("");
   const [manualClientName, setManualClientName] = useState("");
   const [useManualClient, setUseManualClient] = useState(false);
+
+  // Loyalty client picker (separado del credit search — para asociar saleClient y acumular puntos)
+  const [loyaltyPickerOpen, setLoyaltyPickerOpen] = useState(false);
+  const [loyaltySearch, setLoyaltySearch] = useState("");
+  const [loyaltyResults, setLoyaltyResults] = useState([]);
+  const [loyaltySearching, setLoyaltySearching] = useState(false);
+  const [loyaltyAttaching, setLoyaltyAttaching] = useState(false);
 
   const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
   const hasTasa = !!rate;
@@ -71,6 +78,64 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
     return () => clearTimeout(timer);
   }, [clientSearch, isCredit, searchClients]);
 
+  // Loyalty picker: reusa search_clients RPC (mismo patron que ClientModal)
+  const searchLoyaltyClients = useCallback(async (query) => {
+    if (!query || query.length < 2 || !supabase) {
+      setLoyaltyResults([]);
+      setLoyaltySearching(false);
+      return;
+    }
+    setLoyaltySearching(true);
+    try {
+      const { data } = await supabase.rpc("search_clients", { query });
+      setLoyaltyResults(data || []);
+    } catch (e) {
+      console.error("[LOYALTY PICKER] search error:", e);
+      setLoyaltyResults([]);
+    }
+    setLoyaltySearching(false);
+  }, []);
+
+  useEffect(() => {
+    if (!loyaltyPickerOpen) return;
+    const timer = setTimeout(() => searchLoyaltyClients(loyaltySearch), 300);
+    return () => clearTimeout(timer);
+  }, [loyaltySearch, loyaltyPickerOpen, searchLoyaltyClients]);
+
+  const attachLoyaltyClient = async (c) => {
+    if (loyaltyAttaching || !onAssociateClient) return;
+    setLoyaltyAttaching(true);
+    try {
+      const { data } = await supabase.rpc("get_client_profile", { client_id_param: c.id });
+      const profile = data?.[0];
+      onAssociateClient({
+        id: c.id,
+        name: profile?.full_name || c.full_name || "Cliente",
+        cedula: profile?.cedula || c.cedula || null,
+        points: Number(profile?.loyalty_points || 0),
+      });
+    } catch (e) {
+      console.error("[LOYALTY PICKER] attach error:", e);
+      onAssociateClient({
+        id: c.id,
+        name: c.full_name || "Cliente",
+        cedula: c.cedula || null,
+        points: 0,
+      });
+    }
+    setLoyaltyPickerOpen(false);
+    setLoyaltySearch("");
+    setLoyaltyResults([]);
+    setLoyaltyAttaching(false);
+  };
+
+  const detachLoyaltyClient = () => {
+    if (onAssociateClient) onAssociateClient(null);
+    setLoyaltyPickerOpen(false);
+    setLoyaltySearch("");
+    setLoyaltyResults([]);
+  };
+
   const handleConfirm = () => {
     if (isCredit) {
       const clientId = selectedClient?.id || null;
@@ -90,6 +155,63 @@ export default function PaymentModal({ cart, rate, processing, onConfirm, onConf
           <ArrowLeft size={20} />
         </button>
         <h2 className="font-bold text-lg text-stone-800">Metodo de pago</h2>
+      </div>
+
+      {/* Loyalty client picker — al tope del modal */}
+      <div className="bg-white border-b border-stone-200 px-4 py-3">
+        <div className="max-w-lg mx-auto">
+          {saleClient ? (
+            <div className="flex items-start justify-between gap-3 bg-gold/5 border border-gold/20 rounded-lg p-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] uppercase tracking-wider text-gold font-medium">Cliente asociado</p>
+                <p className="text-sm font-bold text-stone-800 truncate">{saleClient.name}</p>
+                <p className="text-[11px] text-stone-500">{saleClient.cedula ? `CI: ${saleClient.cedula}` : "Sin cedula"}</p>
+                <p className="text-xs text-gold font-medium mt-0.5">{Number(saleClient.points || 0).toLocaleString()} pts</p>
+              </div>
+              <div className="flex flex-col gap-1 shrink-0">
+                <button onClick={() => { onAssociateClient(null); setLoyaltyPickerOpen(true); }}
+                  className="text-xs text-brand hover:underline">Cambiar</button>
+                <button onClick={detachLoyaltyClient}
+                  className="text-xs text-stone-400 hover:text-red-500">Quitar</button>
+              </div>
+            </div>
+          ) : !loyaltyPickerOpen ? (
+            <button onClick={() => setLoyaltyPickerOpen(true)} disabled={processing}
+              className="w-full py-2.5 rounded-lg border-2 border-dashed border-stone-300 text-stone-500 text-sm font-medium hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+              <User size={14} /> Agregar cliente para puntos
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input type="text" value={loyaltySearch}
+                  onChange={(e) => setLoyaltySearch(e.target.value)}
+                  placeholder="Buscar por nombre o cedula..."
+                  className="w-full border border-stone-300 rounded-lg pl-9 pr-9 py-2 text-sm focus:border-brand focus:outline-none"
+                  autoFocus />
+                {loyaltySearching && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-stone-400" />}
+              </div>
+              {loyaltySearch.length >= 2 && !loyaltySearching && loyaltyResults.length === 0 && (
+                <p className="text-xs text-stone-400 text-center py-2">
+                  Sin resultados — el cliente debe estar registrado en futuros-demo primero
+                </p>
+              )}
+              {loyaltyResults.length > 0 && (
+                <div className="border border-stone-200 rounded-lg overflow-hidden max-h-48 overflow-auto">
+                  {loyaltyResults.map((c) => (
+                    <button key={c.id} onClick={() => attachLoyaltyClient(c)} disabled={loyaltyAttaching}
+                      className="w-full text-left px-3 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 disabled:opacity-50">
+                      <p className="text-sm font-medium text-stone-700">{c.full_name || "?"}</p>
+                      {c.cedula && <p className="text-[11px] text-stone-400">CI: {c.cedula}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => { setLoyaltyPickerOpen(false); setLoyaltySearch(""); setLoyaltyResults([]); }}
+                className="text-xs text-stone-400 hover:text-stone-600">Cancelar</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto p-4 max-w-lg mx-auto w-full">
