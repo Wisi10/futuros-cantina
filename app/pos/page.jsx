@@ -671,7 +671,7 @@ export default function POSPage() {
         )}
 
         {activeTab === "dashboard" && (
-          <DashboardView user={user} rate={rate} />
+          <DashboardView user={user} rate={rate} products={products} />
         )}
 
         {activeTab === "premios" && (

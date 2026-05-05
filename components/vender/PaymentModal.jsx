@@ -38,18 +38,20 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
       : (!selectedMethod?.needsRef || reference.trim())
   );
 
-  // Search clients with debounce
+  // Search clients with debounce — uses search_clients RPC (SECURITY DEFINER, Sprint 3)
   const searchClients = useCallback(async (query) => {
     if (!query || query.length < 2 || !supabase) {
       setClients([]);
       return;
     }
     setSearching(true);
-    const { data } = await supabase
-      .from("clients")
-      .select("id, first_name, last_name, cedula, phone")
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,cedula.ilike.%${query}%`)
-      .limit(10);
+    let data = [];
+    try {
+      const res = await supabase.rpc("search_clients", { query });
+      data = res.data || [];
+    } catch (e) {
+      console.error("[CREDIT SEARCH] error:", e);
+    }
     if (data) {
       setClients(data);
       // Load debts for these clients
@@ -141,7 +143,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
     if (isCredit) {
       const clientId = selectedClient?.id || null;
       const clientName = selectedClient
-        ? `${selectedClient.first_name} ${selectedClient.last_name}`.trim()
+        ? (selectedClient.full_name || "").trim().replace(/\s+/g, " ")
         : manualClientName.trim();
       onConfirmCredit({ clientId, clientName, notes: creditNotes, dueDate: dueDate || null });
     } else {
@@ -325,7 +327,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
                         className="w-full text-left px-3 py-2.5 hover:bg-stone-50 border-b border-stone-100 last:border-0 flex items-center justify-between"
                       >
                         <div>
-                          <p className="text-sm font-medium text-stone-700">{c.first_name} {c.last_name}</p>
+                          <p className="text-sm font-medium text-stone-700">{(c.full_name || "?").trim().replace(/\s+/g, " ")}</p>
                           {c.cedula && <p className="text-xs text-stone-400">CI: {c.cedula}</p>}
                         </div>
                         {clientDebts[c.id] > 0 && (
@@ -342,7 +344,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
                 {selectedClient && (
                   <div className="bg-brand/5 border border-brand/20 rounded-lg p-3 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-brand">{selectedClient.first_name} {selectedClient.last_name}</p>
+                      <p className="text-sm font-medium text-brand">{(selectedClient.full_name || "?").trim().replace(/\s+/g, " ")}</p>
                       {selectedClient.cedula && <p className="text-xs text-stone-500">CI: {selectedClient.cedula}</p>}
                       {clientDebts[selectedClient.id] > 0 && (
                         <p className="text-xs text-red-600 mt-0.5">Saldo pendiente: REF {clientDebts[selectedClient.id].toFixed(2)}</p>

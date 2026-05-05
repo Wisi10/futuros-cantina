@@ -1,12 +1,18 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Maximize2, Minimize2, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, METHOD_LABELS, ProductImage } from "@/lib/utils";
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
-export default function DashboardView({ user, rate }) {
+export default function DashboardView({ user, rate, products }) {
+  const productsById = useMemo(() => {
+    const map = {};
+    for (const p of products || []) map[p.id] = p;
+    return map;
+  }, [products]);
+
   const [sales, setSales] = useState([]);
   const [shift, setShift] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
@@ -46,17 +52,17 @@ export default function DashboardView({ user, rate }) {
     byMethod[m] = (byMethod[m] || 0) + parseFloat(s.total_ref || 0);
   });
 
-  // Top products
-  const productMap = {};
+  // Top products — key by product_id when available, fallback to name
+  const aggMap = {};
   sales.forEach(s => {
     (s.items || []).forEach(item => {
-      const key = item.name || item.product_id;
-      if (!productMap[key]) productMap[key] = { name: key, qty: 0, rev: 0 };
-      productMap[key].qty += item.qty || 0;
-      productMap[key].rev += (item.price_ref || 0) * (item.qty || 0);
+      const key = item.product_id || item.name;
+      if (!aggMap[key]) aggMap[key] = { id: item.product_id || null, name: item.name || "?", qty: 0, rev: 0 };
+      aggMap[key].qty += item.qty || 0;
+      aggMap[key].rev += (item.price_ref || 0) * (item.qty || 0);
     });
   });
-  const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 6);
+  const topProducts = Object.values(aggMap).sort((a, b) => b.qty - a.qty).slice(0, 6);
 
   // Last 5 sales
   const recentSales = sales.slice(0, 5);
@@ -196,18 +202,22 @@ export default function DashboardView({ user, rate }) {
               <p className="text-xs text-stone-300">—</p>
             ) : (
               <div className="space-y-2">
-                {topProducts.map((p, i) => (
-                  <div key={p.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-5 h-5 rounded-full bg-stone-100 flex items-center justify-center text-[10px] font-bold text-stone-500 shrink-0">{i + 1}</span>
-                      <span className="text-stone-700 truncate">{p.name}</span>
+                {topProducts.map((p, i) => {
+                  const productData = p.id ? productsById[p.id] : null;
+                  return (
+                    <div key={p.id || p.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-stone-100 flex items-center justify-center text-[10px] font-bold text-stone-500 shrink-0">{i + 1}</span>
+                        <ProductImage product={productData || { name: p.name }} size={24} className="rounded" />
+                        <span className="text-stone-700 truncate">{p.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className="text-stone-400" style={mono}>{p.qty}u</span>
+                        <span className="font-medium" style={mono}>{formatREF(p.rev)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-stone-400" style={mono}>{p.qty}u</span>
-                      <span className="font-medium" style={mono}>{formatREF(p.rev)}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

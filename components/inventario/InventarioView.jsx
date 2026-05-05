@@ -414,7 +414,12 @@ export default function InventarioView({ user }) {
 
       {subTab === "entrada" && (
         <div className="flex-1 overflow-auto px-6 pb-6">
-          <RestockForm products={products} user={user} onRestocked={loadProducts} />
+          <RestockForm
+            products={products}
+            user={user}
+            onRestocked={loadProducts}
+            onProductCreated={async () => { await loadProducts(); }}
+          />
         </div>
       )}
 
