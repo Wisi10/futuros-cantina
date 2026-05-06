@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { formatBs, PAYMENT_METHODS, ProductImage } from "@/lib/utils";
 import PromoRewardBanner from "@/components/premios/PromoRewardBanner";
 
-export default function PaymentModal({ cart, rate, processing, saleClient, onAssociateClient, onAddPromo, onConfirm, onConfirmCredit, onBack }) {
+export default function PaymentModal({ cart, rate, processing, saleClient, userRole, onAssociateClient, onAddPromo, onConfirm, onConfirmCredit, onBack }) {
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
 
@@ -32,9 +32,12 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
   const isCredit = method === "credit";
 
   const selectedMethod = PAYMENT_METHODS.find((m) => m.id === method);
+  const isCortesia = method === "cortesia";
   const canConfirm = method && !processing && (
     isCredit
       ? (selectedClient || (useManualClient && manualClientName.trim()))
+      : isCortesia
+      ? !!saleClient?.id
       : (!selectedMethod?.needsRef || reference.trim())
   );
 
@@ -247,7 +250,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
 
         {/* Payment methods */}
         <div className="grid grid-cols-2 gap-3 mb-4">
-          {PAYMENT_METHODS.map((m) => {
+          {PAYMENT_METHODS.filter((m) => !m.adminOnly).map((m) => {
             const active = method === m.id;
             return (
               <button
@@ -278,7 +281,45 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
             <span className="text-2xl">📋</span>
             Credito
           </button>
+
+          {/* Cortesia (admin only, requires saleClient) */}
+          {userRole === "admin" && (
+            <button
+              onClick={() => {
+                if (!saleClient?.id) {
+                  alert("Asocia un cliente antes de dar cortesia.");
+                  return;
+                }
+                setMethod("cortesia"); setReference(""); setSelectedClient(null); setUseManualClient(false);
+              }}
+              disabled={processing}
+              className={`flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 font-medium text-sm transition-all active:scale-[0.97] col-span-2 ${
+                method === "cortesia"
+                  ? "border-gold bg-gold/10 text-gold"
+                  : "border-gold/40 bg-white text-stone-600 hover:border-gold/60"
+              }`}
+            >
+              <span className="text-2xl">🎁</span>
+              Cortesia
+              <span className="text-[10px] text-stone-400">
+                {saleClient?.id ? `Para ${(saleClient.name || "").trim().replace(/\s+/g, " ")}` : "(asocia cliente primero)"}
+              </span>
+            </button>
+          )}
         </div>
+
+        {/* Cortesia confirmation hint */}
+        {method === "cortesia" && saleClient?.id && (
+          <div className="bg-gold/5 border border-gold/30 rounded-xl p-3 mb-4 text-sm">
+            <p className="text-stone-700 font-medium">
+              Vas a regalar REF {totalRef.toFixed(2)} a {(saleClient.name || "").trim().replace(/\s+/g, " ")}.
+            </p>
+            <p className="text-xs text-stone-500 mt-1">
+              No entra dinero a la caja. La venta queda registrada como cortesia.
+              No se otorgan puntos de loyalty.
+            </p>
+          </div>
+        )}
 
         {/* Reference field for regular methods */}
         {selectedMethod?.needsRef && (
@@ -417,6 +458,8 @@ export default function PaymentModal({ cart, rate, processing, saleClient, onAss
               <><Loader2 size={18} className="animate-spin" /> Procesando...</>
             ) : isCredit ? (
               "Confirmar Credito"
+            ) : isCortesia ? (
+              "Confirmar Cortesia"
             ) : (
               "Confirmar Venta"
             )}

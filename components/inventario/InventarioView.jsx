@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { uploadProductPhoto, ProductImage } from "@/lib/utils";
+import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 import CreateProductModal from "./CreateProductModal";
@@ -291,12 +291,15 @@ export default function InventarioView({ user }) {
                       <th className="text-right px-3 py-2 font-medium">Stock</th>
                       <th className="text-right px-3 py-2 font-medium">Alerta</th>
                       <th className="text-right px-3 py-2 font-medium">Costo REF</th>
+                      <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Margen</th>
                       <th className="text-center px-3 py-2 font-medium">Estado</th>
                       <th className="text-right px-3 py-2 font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((p) => (
+                    {filtered.map((p) => {
+                      const profit = calculateProfitability(p.price_ref, p.cost_ref);
+                      return (
                       <tr key={p.id} className={`border-t border-stone-100 ${rowBg(p)}`}>
                         <td className="px-3 py-2 font-medium text-stone-800">
                           <span className="mr-1.5 inline-flex"><ProductImage product={p} size={20} /></span>{p.name}
@@ -305,6 +308,7 @@ export default function InventarioView({ user }) {
                         <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>
                         <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 5}</td>
                         <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
+                        <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                         <td className="px-3 py-2 text-center">{stockBadge(p)}</td>
                         <td className="px-3 py-2 text-right">
                           <button
@@ -315,10 +319,11 @@ export default function InventarioView({ user }) {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-3 py-8 text-center text-stone-400 text-xs">
+                        <td colSpan={8} className="px-3 py-8 text-center text-stone-400 text-xs">
                           No hay productos con este filtro
                         </td>
                       </tr>
@@ -332,7 +337,7 @@ export default function InventarioView({ user }) {
                       <td className="px-3 py-2 text-right text-sm font-bold text-brand" colSpan={1}>
                         REF {totalValue.toFixed(2)}
                       </td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table></div>

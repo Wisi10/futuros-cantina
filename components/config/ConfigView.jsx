@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings, Save, RefreshCw, History, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { ProductImage } from "@/lib/utils";
+import { ProductImage, calculateProfitability } from "@/lib/utils";
 
 export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
@@ -153,13 +153,16 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                 <th className="text-center px-3 py-2 font-medium">Activo</th>
                 <th className="text-right px-3 py-2 font-medium">Precio REF</th>
                 <th className="text-right px-3 py-2 font-medium">Costo REF</th>
+                <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Margen</th>
                 <th className="text-center px-3 py-2 font-medium">Emoji</th>
                 <th className="text-center px-3 py-2 font-medium">Canjeable</th>
                 <th className="text-right px-3 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
+              {products.map((p) => {
+                const profit = calculateProfitability(p.price_ref, p.cost_ref);
+                return (
                 <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                   <td className="px-3 py-2 font-medium text-stone-800">{p.name}</td>
                   <td className="px-3 py-2 text-center">
@@ -176,6 +179,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                   </td>
                   <td className="px-3 py-2 text-right">{Number(p.price_ref).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
+                  <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                   <td className="px-3 py-2 text-center"><ProductImage product={p} size={24} /></td>
                   <td className="px-3 py-2 text-center text-xs">
                     {p.is_redeemable ? (
@@ -189,7 +193,8 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                       className="text-xs text-brand hover:underline">Editar</button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table></div>
         )}

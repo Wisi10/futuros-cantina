@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download } from "lucide-react";
+import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download, Gift } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, METHOD_LABELS } from "@/lib/utils";
+import { formatBs, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
 const METHOD_ICONS = {
@@ -11,6 +11,8 @@ const METHOD_ICONS = {
   cash_usd: "💲",
   zelle: "🏦",
   credit: "📋",
+  cortesia: "🎁",
+  cripto: "🪙",
 };
 
 export default function CajaView({ user, rate }) {
@@ -44,7 +46,11 @@ export default function CajaView({ user, rate }) {
   const totalCount = sales.length;
   const creditSales = sales.filter((s) => s.payment_status === "credit");
   const creditTotal = creditSales.reduce((sum, s) => sum + parseFloat(s.total_ref || 0), 0);
-  const paidTotal = totalRef - creditTotal;
+  // Cortesias: sales with non-cash methods (cortesia) — NOT counted as cash collected
+  const cortesiaTotal = sales
+    .filter((s) => NON_CASH_METHODS.includes(s.payment_method))
+    .reduce((sum, s) => sum + parseFloat(s.total_ref || 0), 0);
+  const paidTotal = totalRef - creditTotal - cortesiaTotal;
 
   // Payment method breakdown
   const methodBreakdown = {};
@@ -106,7 +112,7 @@ export default function CajaView({ user, rate }) {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <KPICard
               icon={<DollarSign size={20} />}
               label="Total ventas"
@@ -130,10 +136,17 @@ export default function CajaView({ user, rate }) {
             />
             <KPICard
               icon={<Banknote size={20} />}
-              label="Efectivo"
+              label="Cobrado"
               value={`REF ${paidTotal.toFixed(2)}`}
-              sub="cobrado"
+              sub="excluye cortesias"
               color="text-green-600"
+            />
+            <KPICard
+              icon={<Gift size={20} />}
+              label="Cortesias"
+              value={`REF ${cortesiaTotal.toFixed(2)}`}
+              sub="no afecta caja"
+              color="text-gold"
             />
           </div>
 

@@ -343,6 +343,18 @@ export default function POSPage() {
 
   // Confirm regular sale
   const confirmSale = async (method, ref) => {
+    // Defense in depth: cortesia is admin-only and requires saleClient
+    if (method === "cortesia") {
+      if (user?.cantinaRole !== "admin") {
+        alert("Solo admin puede dar cortesias.");
+        return;
+      }
+      if (!saleClient?.id) {
+        alert("Asocia un cliente antes de dar cortesia.");
+        return;
+      }
+    }
+
     setProcessing(true);
     try {
       const result = await executeSale({
@@ -356,9 +368,9 @@ export default function POSPage() {
       });
       if (!result) { setProcessing(false); return; }
 
-      // Loyalty: award points (non-blocking)
+      // Loyalty: award points (non-blocking) — skip on cortesia (gratis = no consumo real)
       try {
-        if (result.sale?.client_id) {
+        if (result.sale?.client_id && method !== "cortesia") {
           await supabase.rpc("award_loyalty_points", { sale_id_param: result.sale.id });
         }
       } catch (e) { console.error("[LOYALTY] award error:", e); }
@@ -701,6 +713,7 @@ export default function POSPage() {
           rate={rate}
           processing={processing}
           saleClient={saleClient}
+          userRole={user?.cantinaRole || "staff"}
           onAssociateClient={(client) => setSaleClient(client)}
           onAddPromo={addPromoItem}
           onConfirm={handlePaymentConfirm}
