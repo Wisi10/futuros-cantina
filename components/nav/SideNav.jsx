@@ -1,10 +1,11 @@
 "use client";
-import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings, Clock, Monitor, Gift } from "lucide-react";
+import { ShoppingCart, Package, Wallet, Receipt, BarChart3, Settings, Clock, Monitor, Gift, Star } from "lucide-react";
 
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
   { id: "dashboard", label: "En Vivo", icon: Monitor },
+  { id: "puntos", label: "Puntos", icon: Star },
   { id: "premios", label: "Premios", icon: Gift },
   { id: "caja", label: "Caja", icon: Wallet, adminOnly: true },
   { id: "gastos", label: "Gastos", icon: Receipt, adminOnly: true },
@@ -44,7 +45,7 @@ export default function SideNav({ activeTab, onTabChange, userRole }) {
 
       {/* Mobile: bottom navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-brand z-30 flex items-center justify-around px-1 py-1 safe-bottom">
-        {visibleTabs.slice(0, 5).map((tab) => {
+        {visibleTabs.slice(0, 6).map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
           return (

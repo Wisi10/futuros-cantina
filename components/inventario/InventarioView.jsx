@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload } from "lucide-react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductPhoto, ProductImage } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
+import CreateProductModal from "./CreateProductModal";
 
 export default function InventarioView({ user }) {
   const [subTab, setSubTab] = useState("stock");
@@ -18,6 +19,7 @@ export default function InventarioView({ user }) {
   const [expandedSupplier, setExpandedSupplier] = useState(null);
   const [uploading, setUploading] = useState(null); // product id being uploaded
   const [photoSearch, setPhotoSearch] = useState("");
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
@@ -132,10 +134,18 @@ export default function InventarioView({ user }) {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-6 pt-6 pb-3 shrink-0">
-        <h1 className="font-bold text-brand text-lg flex items-center gap-2 mb-4">
-          <Package size={20} /> Inventario
-        </h1>
-        <div className="flex gap-2">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <h1 className="font-bold text-brand text-lg flex items-center gap-2">
+            <Package size={20} /> Inventario
+          </h1>
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors flex items-center gap-1.5"
+          >
+            <Plus size={14} /> Crear producto
+          </button>
+        </div>
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setSubTab("stock")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -418,7 +428,6 @@ export default function InventarioView({ user }) {
             products={products}
             user={user}
             onRestocked={loadProducts}
-            onProductCreated={async () => { await loadProducts(); }}
           />
         </div>
       )}
@@ -488,6 +497,15 @@ export default function InventarioView({ user }) {
           user={user}
           onClose={() => setAdjusting(null)}
           onSaved={() => { setAdjusting(null); loadProducts(); }}
+        />
+      )}
+
+      {/* Create product modal */}
+      {createModalOpen && (
+        <CreateProductModal
+          user={user}
+          onClose={() => setCreateModalOpen(false)}
+          onCreated={async () => { await loadProducts(); }}
         />
       )}
     </div>

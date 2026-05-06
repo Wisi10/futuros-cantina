@@ -1,28 +1,19 @@
 "use client";
-import { useState, Fragment } from "react";
-import { Plus, Trash2, Loader2, Upload, X } from "lucide-react";
+import { useState } from "react";
+import { Plus, Trash2, Loader2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { ProductImage, generateId } from "@/lib/utils";
-
-const PRODUCT_CATEGORIES = ["Bebida", "Comida", "Snack", "Otro"];
+import { ProductImage } from "@/lib/utils";
 
 function emptyRow() {
   return { productId: "", qty: "", costRef: "", costUsd: "" };
 }
 
-function emptyNewProduct() {
-  return { name: "", category: "Otro", priceRef: "", emoji: "" };
-}
-
-export default function RestockForm({ products, user, onRestocked, onProductCreated }) {
+export default function RestockForm({ products, user, onRestocked }) {
   const [rows, setRows] = useState([emptyRow()]);
   const [supplier, setSupplier] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [creatingForRow, setCreatingForRow] = useState(null);
-  const [newProduct, setNewProduct] = useState(emptyNewProduct());
-  const [creating, setCreating] = useState(false);
 
   const updateRow = (i, field, value) => {
     setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
@@ -33,69 +24,6 @@ export default function RestockForm({ products, user, onRestocked, onProductCrea
   const removeRow = (i) => {
     if (rows.length <= 1) return;
     setRows((prev) => prev.filter((_, idx) => idx !== i));
-  };
-
-  const startCreating = (rowIndex) => {
-    setCreatingForRow(rowIndex);
-    setNewProduct(emptyNewProduct());
-  };
-
-  const cancelCreating = () => {
-    setCreatingForRow(null);
-    setNewProduct(emptyNewProduct());
-  };
-
-  const handleCreateProduct = async (rowIndex) => {
-    const name = newProduct.name.trim();
-    const priceRef = Number(newProduct.priceRef);
-    if (!name || !priceRef || priceRef <= 0) return;
-    setCreating(true);
-    try {
-      // Duplicate check (case-insensitive exact match)
-      const { data: existing } = await supabase
-        .from("products")
-        .select("id, name")
-        .ilike("name", name)
-        .limit(1);
-      if (existing && existing.length > 0) {
-        alert(`Ya existe un producto con nombre "${existing[0].name}". Usa el existente o cambia el nombre.`);
-        setCreating(false);
-        return;
-      }
-      // Next sort_order
-      const { data: maxRow } = await supabase
-        .from("products")
-        .select("sort_order")
-        .order("sort_order", { ascending: false })
-        .limit(1);
-      const nextOrder = Number(maxRow?.[0]?.sort_order || 0) + 1;
-      // Insert
-      const newId = generateId();
-      const { error } = await supabase.from("products").insert({
-        id: newId,
-        name,
-        category: newProduct.category || "Otro",
-        price_ref: priceRef,
-        cost_ref: 0,
-        emoji: newProduct.emoji.trim() || null,
-        is_cantina: true,
-        active: true,
-        sort_order: nextOrder,
-        stock_quantity: 0,
-      });
-      if (error) throw error;
-      // Reload parent products list, then auto-select via callback
-      if (onProductCreated) {
-        await onProductCreated(newId);
-      }
-      // Auto-select in current row
-      updateRow(rowIndex, "productId", newId);
-      setCreatingForRow(null);
-      setNewProduct(emptyNewProduct());
-    } catch (err) {
-      alert("Error creando producto: " + err.message);
-    }
-    setCreating(false);
   };
 
   const validRows = rows.filter((r) => r.productId && Number(r.qty) > 0);
@@ -198,18 +126,11 @@ export default function RestockForm({ products, user, onRestocked, onProductCrea
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <Fragment key={i}>
-                <tr className="border-t border-stone-100">
+                <tr key={i} className="border-t border-stone-100">
                   <td className="px-3 py-2">
                     <select
                       value={row.productId}
-                      onChange={(e) => {
-                        if (e.target.value === "__create__") {
-                          startCreating(i);
-                        } else {
-                          updateRow(i, "productId", e.target.value);
-                        }
-                      }}
+                      onChange={(e) => updateRow(i, "productId", e.target.value)}
                       className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                     >
                       <option value="">Seleccionar...</option>
@@ -218,7 +139,6 @@ export default function RestockForm({ products, user, onRestocked, onProductCrea
                           {p.emoji || "🍽️"} {p.name} (stock: {Number(p.stock_quantity || 0)})
                         </option>
                       ))}
-                      <option value="__create__">+ Crear producto nuevo</option>
                     </select>
                   </td>
                   <td className="px-3 py-2">
@@ -261,67 +181,6 @@ export default function RestockForm({ products, user, onRestocked, onProductCrea
                     </button>
                   </td>
                 </tr>
-                {creatingForRow === i && (
-                  <tr className="border-t border-stone-100 bg-brand-cream-light/40">
-                    <td colSpan={5} className="px-3 py-3">
-                      <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider text-brand font-bold">Crear producto nuevo</p>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                          <input
-                            type="text"
-                            value={newProduct.name}
-                            onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="Nombre del producto"
-                            maxLength={60}
-                            className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-                            autoFocus
-                          />
-                          <select
-                            value={newProduct.category}
-                            onChange={(e) => setNewProduct((p) => ({ ...p, category: e.target.value }))}
-                            className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none bg-white"
-                          >
-                            {PRODUCT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            value={newProduct.priceRef}
-                            onChange={(e) => setNewProduct((p) => ({ ...p, priceRef: e.target.value }))}
-                            placeholder="Precio venta REF"
-                            className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-                          />
-                          <input
-                            type="text"
-                            value={newProduct.emoji}
-                            onChange={(e) => setNewProduct((p) => ({ ...p, emoji: e.target.value }))}
-                            placeholder="🍺 (emoji opcional)"
-                            maxLength={4}
-                            className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-                          />
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={cancelCreating}
-                            disabled={creating}
-                            className="px-3 py-1.5 text-xs text-stone-500 hover:bg-stone-100 rounded-lg flex items-center gap-1 disabled:opacity-50"
-                          >
-                            <X size={12} /> Cancelar
-                          </button>
-                          <button
-                            onClick={() => handleCreateProduct(i)}
-                            disabled={creating || !newProduct.name.trim() || !Number(newProduct.priceRef)}
-                            className="px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-bold disabled:opacity-30 hover:bg-brand-dark flex items-center gap-1"
-                          >
-                            {creating ? <><Loader2 size={12} className="animate-spin" /> Creando...</> : "Crear y seleccionar"}
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
               ))}
             </tbody>
           </table>

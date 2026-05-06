@@ -23,6 +23,7 @@ import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
 import PremiosView from "@/components/premios/PremiosView";
+import PuntosView from "@/components/puntos/PuntosView";
 
 export default function POSPage() {
   const router = useRouter();
@@ -677,6 +678,12 @@ export default function POSPage() {
         {activeTab === "premios" && (
           <div className="flex-1 overflow-hidden">
             <PremiosView user={user} rate={rate} />
+          </div>
+        )}
+
+        {activeTab === "puntos" && (
+          <div className="flex-1 overflow-hidden">
+            <PuntosView user={user} rate={rate} />
           </div>
         )}
 
