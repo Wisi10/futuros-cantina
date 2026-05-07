@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF, formatBs, calcBs, generateId } from "@/lib/utils";
+import { formatREF, formatBs, calcBs } from "@/lib/utils";
 
 const METHODS = [
   { id: "transferencia", label: "Transferencia" },
@@ -12,8 +12,17 @@ const METHODS = [
   { id: "zelle", label: "Zelle" },
 ];
 
-export default function SettleEventModal({ event, totalRef, rate, user, onClose, onSettled }) {
-  const [amount, setAmount] = useState(totalRef ? totalRef.toFixed(2) : "0");
+export default function RegisterIntercompanyPaymentModal({
+  event,
+  owedRef,
+  paidRef,
+  rate,
+  user,
+  onClose,
+  onRegistered,
+}) {
+  const remaining = Math.max(Number(owedRef || 0) - Number(paidRef || 0), 0);
+  const [amount, setAmount] = useState(remaining > 0 ? remaining.toFixed(2) : "0");
   const [paymentMethod, setPaymentMethod] = useState("transferencia");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -21,6 +30,7 @@ export default function SettleEventModal({ event, totalRef, rate, user, onClose,
 
   const amountNum = parseFloat(amount) || 0;
   const amountBsPreview = calcBs(amountNum, rate?.eur);
+  const wouldBeSettled = paidRef + amountNum >= owedRef && owedRef > 0;
 
   async function handleSubmit() {
     if (submitting) return;
@@ -28,36 +38,29 @@ export default function SettleEventModal({ event, totalRef, rate, user, onClose,
       setError("El monto debe ser mayor a 0.");
       return;
     }
+    if (amountNum > remaining + 0.01) {
+      const ok = window.confirm(
+        `El monto (${formatREF(amountNum)}) excede el saldo pendiente (${formatREF(remaining)}). Continuar?`
+      );
+      if (!ok) return;
+    }
     setSubmitting(true);
     setError(null);
-    const id = "ict_" + generateId();
     try {
-      const { error: insErr } = await supabase
-        .from("intercompany_transfers")
-        .insert({
-          id,
-          amount_ref: amountNum,
-          amount_bs: amountBsPreview,
-          exchange_rate: rate?.eur || null,
-          payment_method: paymentMethod,
-          notes: notes || null,
-          created_by: user?.name || "Cantina",
-        });
-      if (insErr) throw insErr;
-
-      const { error: updErr } = await supabase
-        .from("events")
-        .update({
-          is_settled: true,
-          settled_at: new Date().toISOString(),
-          settlement_id: id,
-        })
-        .eq("id", event.id);
-      if (updErr) {
-        throw new Error(`Transferencia creada (${id}) pero el evento no se actualizo: ${updErr.message}. Reportar al admin.`);
+      const { data, error: rpcErr } = await supabase.rpc("register_event_payment", {
+        p_event_id: event.id,
+        p_amount_ref: amountNum,
+        p_payment_method: paymentMethod,
+        p_exchange_rate: rate?.eur || null,
+        p_created_by: user?.name || "Cantina",
+        p_notes: notes || null,
+      });
+      if (rpcErr) throw rpcErr;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result?.success) {
+        throw new Error(result?.message || "Error registrando abono.");
       }
-
-      await onSettled();
+      await onRegistered();
     } catch (e) {
       setError(e.message || "Error inesperado.");
       setSubmitting(false);
@@ -69,8 +72,10 @@ export default function SettleEventModal({ event, totalRef, rate, user, onClose,
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
         <div className="flex items-start justify-between p-5 border-b border-stone-200">
           <div>
-            <div className="text-xs text-stone-500 mb-0.5">Marcar evento saldado</div>
-            <div className="text-base font-bold text-stone-800">Registrar transferencia</div>
+            <div className="text-xs text-stone-500 mb-0.5">Registrar abono a cantina</div>
+            <div className="text-base font-bold text-stone-800">
+              Saldo pendiente: {formatREF(remaining)}
+            </div>
           </div>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 p-1">
             <X size={18} />
@@ -78,6 +83,17 @@ export default function SettleEventModal({ event, totalRef, rate, user, onClose,
         </div>
 
         <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-stone-50 rounded-lg p-2">
+              <div className="text-stone-500">Costo total</div>
+              <div className="font-semibold text-stone-800">{formatREF(owedRef)}</div>
+            </div>
+            <div className="bg-stone-50 rounded-lg p-2">
+              <div className="text-stone-500">Pagado antes</div>
+              <div className="font-semibold text-stone-800">{formatREF(paidRef)}</div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs text-stone-500 mb-1">Monto REF</label>
             <input
@@ -90,6 +106,9 @@ export default function SettleEventModal({ event, totalRef, rate, user, onClose,
             />
             <div className="text-xs text-stone-500 mt-1">
               {amountBsPreview != null ? `Equivale a ${formatBs(amountNum, rate?.eur)}` : "Sin tasa de cambio cargada"}
+              {wouldBeSettled && (
+                <span className="ml-2 inline-block text-green-700 font-semibold">Saldara el evento</span>
+              )}
             </div>
           </div>
 
@@ -137,7 +156,7 @@ export default function SettleEventModal({ event, totalRef, rate, user, onClose,
             disabled={submitting}
             className="flex-1 py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-dark disabled:opacity-50"
           >
-            {submitting ? "Procesando..." : "Confirmar"}
+            {submitting ? "Procesando..." : "Confirmar abono"}
           </button>
         </div>
       </div>

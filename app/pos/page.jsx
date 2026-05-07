@@ -22,7 +22,6 @@ import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
-import PremiosView from "@/components/premios/PremiosView";
 import PuntosView from "@/components/puntos/PuntosView";
 import EventosView from "@/components/eventos/EventosView";
 
@@ -214,13 +213,12 @@ export default function POSPage() {
   };
 
   const removeFromCart = (productId, kind = "regular") => {
-    // kind: 'regular' | 'redemption' | 'promo'
+    // kind: 'regular' | 'redemption'
     setCart((prev) => prev.filter((item) => {
       if (item.product.id !== productId) return true;
       if (kind === "redemption") return !item.isRedemption;
-      if (kind === "promo")      return !item.isPromo;
-      // 'regular': remove only non-special variant (keep promos/redemptions)
-      return item.isRedemption || item.isPromo;
+      // 'regular': remove only non-special variant (keep redemptions)
+      return item.isRedemption;
     }));
   };
 
@@ -229,14 +227,6 @@ export default function POSPage() {
     setCart((prev) => {
       if (prev.some(i => i.product.id === product.id && i.isRedemption)) return prev;
       return [...prev, { product: { ...product, price_ref: 0 }, qty: 1, isRedemption: true, redemptionProductId: product.id, redemptionCost: product.redemption_cost_points }];
-    });
-  };
-
-  const addPromoItem = (product, promoId) => {
-    // Add as free item — weekly promo redemption processed at confirm
-    setCart((prev) => {
-      if (prev.some(i => i.product.id === product.id && i.isPromo)) return prev;
-      return [...prev, { product: { ...product, price_ref: 0 }, qty: 1, isPromo: true, promoId }];
     });
   };
 
@@ -252,8 +242,7 @@ export default function POSPage() {
 
   // Shared sale logic
   const executeSale = async (saleData) => {
-    // isPromo items have stock managed by redeem_weekly_promo RPC — skip here
-    const stockBearingItems = cart.filter((i) => !i.isPromo);
+    const stockBearingItems = cart;
 
     for (const item of stockBearingItems) {
       const { data: current } = await supabase
@@ -273,7 +262,6 @@ export default function POSPage() {
       qty: item.qty,
       price_ref: parseFloat(item.product.price_ref),
       cost_ref: parseFloat(item.product.cost_ref || 0),
-      ...(item.isPromo ? { is_promo: true, promo_id: item.promoId } : {}),
     }));
 
     const { data: sale, error: saleError } = await supabase
@@ -389,19 +377,6 @@ export default function POSPage() {
         } catch (e) { console.error("[LOYALTY] redeem error:", e); }
       }
 
-      // Weekly promos: process promo items in cart (non-blocking)
-      const promoItems = cart.filter(i => i.isPromo);
-      for (const item of promoItems) {
-        try {
-          await supabase.rpc("redeem_weekly_promo", {
-            promo_id_param:    item.promoId,
-            client_id_param:   saleClient?.id,
-            sale_id_param:     result.sale.id,
-            redeemed_by_param: user?.name || "Staff",
-          });
-        } catch (e) { console.error("[PROMO] redeem error:", e); }
-      }
-
       setLastSaleRecord(result.sale);
       setLastSaleTime(Date.now());
       setLastSale({
@@ -489,9 +464,8 @@ export default function POSPage() {
       const saleId = lastSaleRecord.id;
       const items = lastSaleRecord.items || [];
 
-      // 1. Restore stock (skip promo items — handled separately if reverse RPC exists)
+      // 1. Restore stock for all items
       for (const item of items) {
-        if (item.is_promo) continue; // promo stock managed by redeem_weekly_promo RPC
         const { data: product } = await supabase
           .from("products")
           .select("stock_quantity")
@@ -694,12 +668,6 @@ export default function POSPage() {
           <DashboardView user={user} rate={rate} products={products} />
         )}
 
-        {activeTab === "premios" && (
-          <div className="flex-1 overflow-hidden">
-            <PremiosView user={user} rate={rate} />
-          </div>
-        )}
-
         {activeTab === "puntos" && (
           <div className="flex-1 overflow-hidden">
             <PuntosView user={user} rate={rate} />
@@ -722,7 +690,6 @@ export default function POSPage() {
           saleClient={saleClient}
           userRole={user?.cantinaRole || "staff"}
           onAssociateClient={(client) => setSaleClient(client)}
-          onAddPromo={addPromoItem}
           onConfirm={handlePaymentConfirm}
           onConfirmCredit={handleCreditConfirm}
           onBack={() => setScreen("pos")}

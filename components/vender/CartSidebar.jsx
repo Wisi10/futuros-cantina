@@ -33,11 +33,10 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
         ) : (
           cart.map((item) => {
             const isRedemption = !!item.isRedemption;
-            const isPromo      = !!item.isPromo;
-            const isFree       = isRedemption || isPromo;
+            const isFree       = isRedemption;
             const subtotalRef  = isFree ? 0 : Number(item.product.price_ref) * item.qty;
-            const kind         = isRedemption ? "redemption" : isPromo ? "promo" : "regular";
-            const keySuffix    = isRedemption ? "_rdm" : isPromo ? "_promo" : "";
+            const kind         = isRedemption ? "redemption" : "regular";
+            const keySuffix    = isRedemption ? "_rdm" : "";
             return (
               <div key={item.product.id + keySuffix} className={`rounded-lg p-2.5 ${isFree ? "bg-gold/5 border border-gold/20" : "bg-stone-50"}`}>
                 <div className="flex items-start justify-between mb-1.5">
@@ -46,7 +45,6 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
                     <div>
                       <p className="text-xs font-medium text-stone-700 leading-tight">{item.product.name}</p>
                       {isRedemption && <span className="text-[9px] text-gold font-medium">🎁 GRATIS (canje)</span>}
-                      {isPromo && <span className="text-[9px] text-gold font-medium">🎁 PROMO SEMANAL</span>}
                     </div>
                   </div>
                   <button onClick={() => onRemove(item.product.id, kind)}
