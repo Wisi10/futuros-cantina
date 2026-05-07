@@ -24,6 +24,7 @@ import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
 import PremiosView from "@/components/premios/PremiosView";
 import PuntosView from "@/components/puntos/PuntosView";
+import EventosView from "@/components/eventos/EventosView";
 
 export default function POSPage() {
   const router = useRouter();
@@ -670,6 +671,12 @@ export default function POSPage() {
         {activeTab === "gastos" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <GastosView user={user} rate={rate} />
+          </div>
+        )}
+
+        {activeTab === "eventos" && user.cantinaRole === "admin" && (
+          <div className="flex-1 overflow-hidden">
+            <EventosView user={user} rate={rate} />
           </div>
         )}
 
