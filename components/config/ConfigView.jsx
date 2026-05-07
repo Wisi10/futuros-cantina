@@ -48,7 +48,11 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       .from("products")
       .update({ is_cantina: !product.is_cantina })
       .eq("id", product.id);
-    if (!error) loadProducts();
+    if (error) {
+      alert("No se pudo guardar el cambio. Intenta de nuevo.");
+      return;
+    }
+    loadProducts();
   };
 
   const toggleActive = async (product) => {
@@ -149,7 +153,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
                 <th className="text-left px-3 py-2 font-medium">Producto</th>
-                <th className="text-center px-3 py-2 font-medium">Cantina</th>
+                <th className="text-center px-3 py-2 font-medium" title="Cuenta para deuda intercompania con el complejo">Es cantina</th>
                 <th className="text-center px-3 py-2 font-medium">Activo</th>
                 <th className="text-right px-3 py-2 font-medium">Precio REF</th>
                 <th className="text-right px-3 py-2 font-medium">Costo REF</th>

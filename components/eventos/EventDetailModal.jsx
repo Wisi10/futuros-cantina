@@ -35,10 +35,12 @@ export default function EventDetailModal({
   onClose,
   onRegisterPayment,
 }) {
-  const rows = items.map((it) => {
-    const cost = Number(productsById[it.product_id]?.cost_ref || 0);
-    return { ...it, cost, subtotal: cost * Number(it.quantity || 0) };
-  });
+  const rows = items
+    .filter((it) => productsById[it.product_id]?.is_cantina === true)
+    .map((it) => {
+      const cost = Number(productsById[it.product_id]?.cost_ref || 0);
+      return { ...it, cost, subtotal: cost * Number(it.quantity || 0) };
+    });
   const owedRef = rows.reduce((s, r) => s + r.subtotal, 0);
 
   const [payments, setPayments] = useState([]);
@@ -103,7 +105,7 @@ export default function EventDetailModal({
             <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">Insumos cantina</h4>
           </div>
           {rows.length === 0 ? (
-            <div className="px-5 pb-4 text-center text-stone-400 text-sm">Este evento no tiene items cargados.</div>
+            <div className="px-5 pb-4 text-center text-stone-400 text-sm">Este evento no tiene items de cantina</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-stone-50 text-stone-500 text-xs uppercase">

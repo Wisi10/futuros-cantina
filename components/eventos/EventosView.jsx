@@ -97,7 +97,7 @@ export default function EventosView({ user, rate }) {
       if (productIds.length) {
         const { data } = await supabase
           .from("products")
-          .select("id, name, cost_ref")
+          .select("id, name, cost_ref, is_cantina")
           .in("id", productIds);
         products = data || [];
       }
