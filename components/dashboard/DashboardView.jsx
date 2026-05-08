@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Maximize2, Minimize2, RefreshCw } from "lucide-react";
+import { Maximize2, Minimize2, RefreshCw, Download } from "lucide-react";
+import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, METHOD_LABELS, ProductImage } from "@/lib/utils";
 
@@ -69,6 +70,32 @@ export default function DashboardView({ user, rate, products }) {
 
   const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString("es-VE", { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit" }) : "";
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const el = document.getElementById("dashboard-export-area");
+      if (!el) return;
+      const canvas = await html2canvas(el, {
+        backgroundColor: "#f5f1eb",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement("a");
+      const ymd = new Date().toLocaleDateString("en-CA", { timeZone: "America/Caracas" });
+      link.download = `en-vivo-${ymd}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (e) {
+      console.error("[DashboardView] export error:", e);
+      alert("No se pudo exportar la imagen.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -84,7 +111,7 @@ export default function DashboardView({ user, rate, products }) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-brand-cream-light">
-      {/* Header */}
+      {/* Header (excluded from export) */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-bold text-stone-800">Dashboard en Vivo</h2>
@@ -94,6 +121,9 @@ export default function DashboardView({ user, rate, products }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={handleExport} disabled={exporting} className="px-2.5 py-2 rounded-lg hover:bg-stone-200 text-stone-500 transition-colors flex items-center gap-1 text-xs font-medium disabled:opacity-50" title="Exportar como imagen">
+            <Download size={14} /> {exporting ? "Exportando..." : "Exportar"}
+          </button>
           <button onClick={loadData} className="p-2 rounded-lg hover:bg-stone-200 text-stone-400 transition-colors" title="Refrescar ahora">
             <RefreshCw size={16} />
           </button>
@@ -102,6 +132,8 @@ export default function DashboardView({ user, rate, products }) {
           </button>
         </div>
       </div>
+
+      <div id="dashboard-export-area">
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -222,6 +254,7 @@ export default function DashboardView({ user, rate, products }) {
             )}
           </div>
         </div>
+      </div>
       </div>
 
       <style>{`@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>

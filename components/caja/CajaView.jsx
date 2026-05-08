@@ -223,6 +223,9 @@ export default function CajaView({ user, rate }) {
                         <span className="text-xs text-stone-400 w-12 shrink-0">{time}</span>
                         <span className="text-xs text-stone-600 flex-1 truncate">
                           {items.map((i) => `${i.name} x${i.qty}`).join(", ")}
+                          {sale.client_name && (
+                            <span className="text-stone-400"> · {sale.client_name}</span>
+                          )}
                         </span>
                         <span className="text-xs font-bold text-brand whitespace-nowrap">
                           REF {parseFloat(sale.total_ref).toFixed(2)}

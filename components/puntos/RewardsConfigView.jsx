@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Edit2, Power, Lock, Gift, Loader2, Check, X } from "lucide-react";
+import { Plus, Edit2, Power, Gift, Loader2, Check, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { ProductImage } from "@/lib/utils";
+import { ProductImage, calculateRewardGenerosity } from "@/lib/utils";
 import RewardTimelineChart from "./RewardTimelineChart";
 import MarkRedeemableModal from "./MarkRedeemableModal";
 
-export default function RewardsConfigView({ user }) {
+export default function RewardsConfigView({ user, saleClient }) {
   const [rewards, setRewards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showMarkModal, setShowMarkModal] = useState(false);
@@ -15,13 +15,14 @@ export default function RewardsConfigView({ user }) {
   const [savingId, setSavingId] = useState(null);
 
   const isAdmin = user?.cantinaRole === "admin";
+  const clientPoints = Number(saleClient?.points || 0);
 
   const load = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
     const { data } = await supabase
       .from("products")
-      .select("id, name, photo_url, emoji, is_redeemable, redemption_cost_points, active, stock_quantity, is_cantina")
+      .select("id, name, photo_url, emoji, is_redeemable, redemption_cost_points, active, stock_quantity, is_cantina, price_ref")
       .eq("is_redeemable", true)
       .eq("active", true)
       .order("redemption_cost_points", { ascending: true });
@@ -29,7 +30,7 @@ export default function RewardsConfigView({ user }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
+  useEffect(() => { load(); }, [load]);
 
   const startEdit = (r) => {
     setEditingId(r.id);
@@ -77,24 +78,10 @@ export default function RewardsConfigView({ user }) {
     setSavingId(null);
   };
 
-  if (!isAdmin) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-3">
-          <Lock size={28} className="text-stone-400" />
-        </div>
-        <h2 className="text-base font-bold text-stone-700 mb-1">Solo admin puede configurar premios</h2>
-        <p className="text-sm text-stone-500 max-w-xs">
-          Pide a Sam o Yusmelly. El subtab Ranking si puedes verlo.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="h-full overflow-auto p-4 md:p-6 space-y-4">
-        <RewardTimelineChart rewards={rewards} />
+      <div className="p-4 md:p-6 space-y-4">
+        <RewardTimelineChart rewards={rewards} clientPoints={saleClient ? clientPoints : null} />
 
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
@@ -103,12 +90,14 @@ export default function RewardsConfigView({ user }) {
             </h2>
             <p className="text-xs text-stone-400">Productos canjeables con puntos de loyalty</p>
           </div>
-          <button
-            onClick={() => setShowMarkModal(true)}
-            className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors flex items-center gap-1.5"
-          >
-            <Plus size={14} /> Marcar producto como premio
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowMarkModal(true)}
+              className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors flex items-center gap-1.5"
+            >
+              <Plus size={14} /> Marcar producto como premio
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -126,13 +115,32 @@ export default function RewardsConfigView({ user }) {
               const lowStock = stock <= 0;
               const isEditing = editingId === r.id;
               const isSaving = savingId === r.id;
+              const cost = Number(r.redemption_cost_points || 0);
+              const canRedeem = saleClient && cost > 0 && clientPoints >= cost;
+              const cantRedeem = saleClient && cost > 0 && clientPoints < cost;
+              const missingPts = cantRedeem ? cost - clientPoints : 0;
+              const generosity = calculateRewardGenerosity(r.price_ref, cost);
+
+              const rowClass = canRedeem
+                ? "bg-green-50 border-green-600"
+                : cantRedeem
+                  ? "bg-white border-stone-200 opacity-60"
+                  : "bg-white border-stone-200";
+
               return (
-                <div key={r.id} className="bg-white rounded-xl border border-stone-200 p-3">
+                <div key={r.id} className={`rounded-xl border p-3 ${rowClass}`}>
                   <div className="flex items-center gap-3">
                     <ProductImage product={r} size={40} className="rounded" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-stone-800 truncate">{(r.name || "").trim()}</p>
-                      <div className="flex items-center gap-2 text-xs text-stone-500">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-bold text-stone-800 truncate">{(r.name || "").trim()}</p>
+                        {canRedeem && (
+                          <span className="inline-block bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            Canjeable
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-stone-500 flex-wrap">
                         {isEditing ? (
                           <span className="flex items-center gap-1">
                             <input
@@ -147,13 +155,18 @@ export default function RewardsConfigView({ user }) {
                             <span className="text-gold font-medium">pts</span>
                           </span>
                         ) : (
-                          <span className="text-gold font-bold">{Number(r.redemption_cost_points || 0).toLocaleString()} pts</span>
+                          <span className="text-gold font-bold">{cost.toLocaleString()} pts</span>
                         )}
                         <span className={lowStock ? "text-red-500 font-medium" : "text-stone-400"}>
                           · stock: {stock}
                         </span>
                         {!r.is_cantina && (
                           <span className="text-amber-600">· no es cantina</span>
+                        )}
+                        {cantRedeem ? (
+                          <span className="text-stone-500">· faltan {missingPts.toLocaleString()} pts</span>
+                        ) : !canRedeem && !isEditing && (
+                          <span className={`font-medium ${generosity.color}`}>· {generosity.display}</span>
                         )}
                       </div>
                     </div>
@@ -177,7 +190,7 @@ export default function RewardsConfigView({ user }) {
                             <X size={14} />
                           </button>
                         </>
-                      ) : (
+                      ) : isAdmin ? (
                         <>
                           <button
                             onClick={() => startEdit(r)}
@@ -195,7 +208,7 @@ export default function RewardsConfigView({ user }) {
                             {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Power size={14} />}
                           </button>
                         </>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>

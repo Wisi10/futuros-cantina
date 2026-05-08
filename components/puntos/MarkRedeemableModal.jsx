@@ -1,13 +1,21 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { X, Search, Loader2, Gift } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { ProductImage } from "@/lib/utils";
+import { ProductImage, CANTINA_CATEGORIES } from "@/lib/utils";
+
+const SORT_OPTIONS = [
+  { id: "price_asc", label: "Precio asc" },
+  { id: "price_desc", label: "Precio desc" },
+  { id: "stock_desc", label: "Stock" },
+];
 
 export default function MarkRedeemableModal({ user, onClose, onMarked }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("Todas");
+  const [sortKey, setSortKey] = useState("price_asc");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [pts, setPts] = useState("");
   const [saving, setSaving] = useState(false);
@@ -18,7 +26,7 @@ export default function MarkRedeemableModal({ user, onClose, onMarked }) {
     setLoading(true);
     const { data } = await supabase
       .from("products")
-      .select("id, name, photo_url, emoji, stock_quantity, is_cantina, active, is_redeemable")
+      .select("id, name, photo_url, emoji, stock_quantity, is_cantina, active, is_redeemable, price_ref, category")
       .eq("active", true)
       .eq("is_cantina", true)
       .eq("is_redeemable", false)
@@ -29,9 +37,46 @@ export default function MarkRedeemableModal({ user, onClose, onMarked }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = products.filter((p) =>
+  // Counts per category (over the search-filtered universe so chip badges
+  // reflect what the search actually shows)
+  const searchFiltered = useMemo(() => products.filter((p) =>
     !search || (p.name || "").toLowerCase().includes(search.toLowerCase())
-  );
+  ), [products, search]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = { Todas: searchFiltered.length };
+    for (const c of CANTINA_CATEGORIES) counts[c] = 0;
+    for (const p of searchFiltered) {
+      const cat = CANTINA_CATEGORIES.includes(p.category) ? p.category : "Otro";
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return counts;
+  }, [searchFiltered]);
+
+  const filtered = useMemo(() => {
+    const base = activeCategory === "Todas"
+      ? searchFiltered
+      : searchFiltered.filter((p) => (CANTINA_CATEGORIES.includes(p.category) ? p.category : "Otro") === activeCategory);
+    const cmp = (a, b) => {
+      if (sortKey === "price_asc") return Number(a.price_ref || 0) - Number(b.price_ref || 0);
+      if (sortKey === "price_desc") return Number(b.price_ref || 0) - Number(a.price_ref || 0);
+      if (sortKey === "stock_desc") return Number(b.stock_quantity || 0) - Number(a.stock_quantity || 0);
+      return 0;
+    };
+    return [...base].sort(cmp);
+  }, [searchFiltered, activeCategory, sortKey]);
+
+  const grouped = useMemo(() => {
+    if (activeCategory !== "Todas") return [{ cat: activeCategory, items: filtered }];
+    const buckets = {};
+    for (const p of filtered) {
+      const cat = CANTINA_CATEGORIES.includes(p.category) ? p.category : "Otro";
+      (buckets[cat] = buckets[cat] || []).push(p);
+    }
+    return CANTINA_CATEGORIES
+      .filter((c) => buckets[c] && buckets[c].length > 0)
+      .map((c) => ({ cat: c, items: buckets[c] }));
+  }, [filtered, activeCategory]);
 
   const handleMark = async () => {
     if (!selectedProduct || !Number(pts) || saving) return;
@@ -68,16 +113,47 @@ export default function MarkRedeemableModal({ user, onClose, onMarked }) {
 
         {!selectedProduct ? (
           <div className="px-5 pb-5 flex-1 min-h-0 flex flex-col">
-            <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar producto..."
-                className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-brand focus:outline-none"
-                autoFocus
-              />
+            <div className="flex items-center gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+                  autoFocus
+                />
+              </div>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value)}
+                className="border border-stone-300 rounded-lg px-2 py-2.5 text-xs bg-white shrink-0"
+              >
+                {SORT_OPTIONS.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {["Todas", ...CANTINA_CATEGORIES].map((cat) => {
+                const isActive = activeCategory === cat;
+                const count = categoryCounts[cat] || 0;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      isActive
+                        ? "bg-stone-900 text-white"
+                        : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                    }`}
+                  >
+                    {cat} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             {loading ? (
@@ -86,22 +162,35 @@ export default function MarkRedeemableModal({ user, onClose, onMarked }) {
               <p className="text-xs text-stone-400 text-center py-8">
                 {products.length === 0
                   ? "Todos los productos cantina ya son canjeables"
-                  : `Sin resultados para "${search}"`}
+                  : `Sin resultados`}
               </p>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-1">
-                {filtered.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProduct(p)}
-                    className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-stone-200 hover:border-brand hover:bg-stone-50 transition-colors"
-                  >
-                    <ProductImage product={p} size={32} className="rounded" />
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-sm font-medium text-stone-700 truncate">{(p.name || "").trim()}</p>
-                      <p className="text-[11px] text-stone-400">stock: {Number(p.stock_quantity || 0)}</p>
+              <div className="flex-1 overflow-y-auto space-y-3">
+                {grouped.map((group) => (
+                  <div key={group.cat}>
+                    {activeCategory === "Todas" && (
+                      <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-1.5 px-1">
+                        {group.cat}
+                      </p>
+                    )}
+                    <div className="space-y-1">
+                      {group.items.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedProduct(p)}
+                          className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-stone-200 hover:border-brand hover:bg-stone-50 transition-colors"
+                        >
+                          <ProductImage product={p} size={32} className="rounded" />
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className="text-sm font-medium text-stone-700 truncate">{(p.name || "").trim()}</p>
+                            <p className="text-[11px] text-stone-400">
+                              REF {Number(p.price_ref || 0).toFixed(2)} · stock {Number(p.stock_quantity || 0)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}

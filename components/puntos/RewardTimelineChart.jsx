@@ -1,7 +1,7 @@
 "use client";
 import { ProductImage } from "@/lib/utils";
 
-export default function RewardTimelineChart({ rewards }) {
+export default function RewardTimelineChart({ rewards, clientPoints = null }) {
   if (!rewards || rewards.length === 0) {
     return (
       <div className="bg-stone-50 border border-dashed border-stone-300 rounded-xl p-6 text-center">
@@ -39,15 +39,24 @@ export default function RewardTimelineChart({ rewards }) {
           {sorted.map((r) => {
             const pts = Number(r.redemption_cost_points || 0);
             const pct = (pts / range) * 100;
+            const canRedeem = clientPoints != null && pts > 0 && clientPoints >= pts;
+            const ringClass = canRedeem
+              ? "ring-4 ring-green-500 shadow-lg"
+              : clientPoints != null
+                ? "ring-2 ring-stone-300 opacity-60"
+                : "ring-2 ring-gold";
+            const sizePx = canRedeem ? 44 : 36;
+            const stickClass = canRedeem ? "bg-green-500" : clientPoints != null ? "bg-stone-300" : "bg-gold";
+            const labelClass = canRedeem ? "text-green-700" : clientPoints != null ? "text-stone-400" : "text-gold";
             return (
               <div
                 key={r.id}
                 className="absolute flex flex-col items-center"
                 style={{ left: `${pct}%`, transform: "translateX(-50%)" }}
               >
-                <ProductImage product={r} size={36} className="rounded-lg shadow-md ring-2 ring-gold bg-white" />
-                <div className="w-1 h-2 bg-gold mt-1" />
-                <p className="text-[11px] font-bold text-gold mt-0.5 whitespace-nowrap">{pts.toLocaleString()} pts</p>
+                <ProductImage product={r} size={sizePx} className={`rounded-lg shadow-md bg-white ${ringClass}`} />
+                <div className={`w-1 h-2 mt-1 ${stickClass}`} />
+                <p className={`text-[11px] font-bold mt-0.5 whitespace-nowrap ${labelClass}`}>{pts.toLocaleString()} pts</p>
                 <p className="text-[10px] text-stone-500 mt-0.5 max-w-[80px] text-center truncate">
                   {(r.name || "").trim()}
                 </p>

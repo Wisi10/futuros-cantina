@@ -14,7 +14,6 @@ import CreditsModal from "@/components/vender/CreditsModal";
 import ConfigView from "@/components/config/ConfigView";
 import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
-import GastosView from "@/components/gastos/GastosView";
 import ReportesView from "@/components/reportes/ReportesView";
 import DashboardView from "@/components/dashboard/DashboardView";
 import ShiftPill from "@/components/shifts/ShiftPill";
@@ -642,12 +641,6 @@ export default function POSPage() {
           </div>
         )}
 
-        {activeTab === "gastos" && user.cantinaRole === "admin" && (
-          <div className="flex-1 overflow-hidden">
-            <GastosView user={user} rate={rate} />
-          </div>
-        )}
-
         {activeTab === "eventos" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <EventosView user={user} rate={rate} onNavigate={setActiveTab} />
@@ -670,7 +663,7 @@ export default function POSPage() {
 
         {activeTab === "puntos" && (
           <div className="flex-1 overflow-hidden">
-            <PuntosView user={user} rate={rate} />
+            <PuntosView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 
