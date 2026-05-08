@@ -1,8 +1,19 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { X, AlertTriangle, ArrowRight } from "lucide-react";
+import { X, AlertTriangle, ArrowRight, CheckCircle2, RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs } from "@/lib/utils";
+
+function fmtConsumedAt(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+function isWithin24h(iso) {
+  if (!iso) return false;
+  return Date.now() - new Date(iso).getTime() < 24 * 3600 * 1000;
+}
 
 function stockState(stockQty, requiredQty) {
   if (stockQty == null) return { kind: "missing", label: "no en catalogo", chip: "bg-stone-100 text-stone-500", icon: "⚫" };
@@ -39,9 +50,12 @@ export default function EventDetailModal({
   packageName,
   rate,
   canRegisterPayment,
+  isAdmin,
   onClose,
   onRegisterPayment,
   onNavigateToInventario,
+  onMarkConsumed,
+  onReverted,
 }) {
   const rows = items
     .filter((it) => productsById[it.product_id]?.is_cantina === true)
@@ -62,6 +76,9 @@ export default function EventDetailModal({
 
   const [payments, setPayments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
+  const [consumptions, setConsumptions] = useState([]);
+  const [loadingConsumptions, setLoadingConsumptions] = useState(true);
+  const [reverting, setReverting] = useState(false);
 
   const loadPayments = useCallback(async () => {
     if (!supabase) return;
@@ -86,6 +103,42 @@ export default function EventDetailModal({
   }, [event.id]);
 
   useEffect(() => { loadPayments(); }, [loadPayments]);
+
+  const loadConsumptions = useCallback(async () => {
+    if (!supabase) return;
+    setLoadingConsumptions(true);
+    const { data } = await supabase
+      .from("event_consumptions")
+      .select("id, product_id, product_name, planned_qty, actual_qty, is_extra, created_at")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: true });
+    setConsumptions(data || []);
+    setLoadingConsumptions(false);
+  }, [event.id]);
+
+  useEffect(() => { loadConsumptions(); }, [loadConsumptions]);
+
+  const handleRevert = async () => {
+    if (reverting) return;
+    if (!window.confirm("Revertir consumo? El stock se va a restaurar.")) return;
+    setReverting(true);
+    const { data, error } = await supabase.rpc("revert_event_consumption", {
+      p_event_id: event.id,
+      p_reverted_by: event._user_name || "Cantina",
+    });
+    if (error) {
+      alert("Error: " + error.message);
+      setReverting(false);
+      return;
+    }
+    if (!data?.success) {
+      alert("Error: " + (data?.error || "no se pudo revertir"));
+      setReverting(false);
+      return;
+    }
+    setReverting(false);
+    if (onReverted) await onReverted();
+  };
 
   const paidRef = payments.reduce((s, p) => s + Number(p.amount_ref || 0), 0);
   const remaining = Math.max(owedRef - paidRef, 0);
@@ -227,6 +280,80 @@ export default function EventDetailModal({
                 ))}
               </tbody>
             </table>
+          )}
+
+          {/* Consumption */}
+          <div className="px-5 pt-5">
+            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">Consumo</h4>
+          </div>
+          {!event.is_consumed ? (
+            <div className="px-5 pb-4 flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                Pendiente de marcar consumido
+              </span>
+              <button
+                onClick={() => onMarkConsumed && onMarkConsumed()}
+                className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 bg-brand text-white text-xs font-bold rounded-lg hover:bg-brand-dark"
+              >
+                <CheckCircle2 size={14} /> Marcar evento celebrado
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="px-5 pb-2 flex items-center gap-2 flex-wrap text-sm">
+                <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  <CheckCircle2 size={12} /> Consumido el {fmtConsumedAt(event.consumed_at)} por {event.consumed_by || "—"}
+                </span>
+                {isAdmin && isWithin24h(event.consumed_at) && (
+                  <button
+                    onClick={handleRevert}
+                    disabled={reverting}
+                    className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 border-2 border-stone-200 text-stone-600 text-xs font-medium rounded-lg hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    <RotateCcw size={12} /> {reverting ? "Revirtiendo..." : "Revertir consumo"}
+                  </button>
+                )}
+              </div>
+              {loadingConsumptions ? (
+                <div className="px-5 pb-4 text-center text-stone-400 text-sm animate-pulse">Cargando consumos...</div>
+              ) : consumptions.length === 0 ? (
+                <div className="px-5 pb-4 text-center text-stone-400 text-sm">Sin items consumidos registrados.</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-stone-50 text-stone-500 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-semibold">Producto</th>
+                      <th className="text-right px-4 py-2 font-semibold">Plan</th>
+                      <th className="text-right px-4 py-2 font-semibold">Real</th>
+                      <th className="text-right px-4 py-2 font-semibold">Diferencia</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consumptions.map((c) => {
+                      const diff = Number(c.actual_qty) - Number(c.planned_qty);
+                      const diffColor = diff > 0 ? "text-amber-700" : diff < 0 ? "text-blue-700" : "text-stone-500";
+                      return (
+                        <tr key={c.id} className="border-t border-stone-100">
+                          <td className="px-4 py-2.5 text-stone-700">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span>{c.product_name}</span>
+                              {c.is_extra && (
+                                <span className="text-[10px] font-semibold bg-gold/10 text-gold px-1.5 py-0.5 rounded">EXTRA</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-stone-500">{c.planned_qty}</td>
+                          <td className="px-4 py-2.5 text-right font-medium text-stone-800">{c.actual_qty}</td>
+                          <td className={`px-4 py-2.5 text-right ${diffColor}`}>
+                            {diff > 0 ? `+${diff}` : diff}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </>
           )}
         </div>
 

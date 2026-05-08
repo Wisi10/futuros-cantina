@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs } from "@/lib/utils";
 import EventDetailModal from "./EventDetailModal";
 import RegisterIntercompanyPaymentModal from "./RegisterIntercompanyPaymentModal";
+import MarkEventConsumedModal from "./MarkEventConsumedModal";
 
 const MONTH_LABELS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -107,6 +108,7 @@ function IntercompanyStatusBadge({ status }) {
 export default function EventosView({ user, rate, onNavigate }) {
   const [monthFilter, setMonthFilter] = useState(currentMonthKey());
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [consumptionFilter, setConsumptionFilter] = useState("all");
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState(null);
   const [itemsByEvent, setItemsByEvent] = useState({});
@@ -114,6 +116,7 @@ export default function EventosView({ user, rate, onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [paymentModalEvent, setPaymentModalEvent] = useState(null);
+  const [consumeModalEvent, setConsumeModalEvent] = useState(null);
 
   const monthOptions = useMemo(buildMonthOptions, []);
   const isAdmin = user?.cantinaRole === "admin";
@@ -173,10 +176,21 @@ export default function EventosView({ user, rate, onNavigate }) {
     [rows]
   );
 
+  const today = todayCaracas();
+
+  const matchesConsumption = (r) => {
+    if (consumptionFilter === "all") return true;
+    if (consumptionFilter === "consumed") return r.is_consumed === true;
+    if (consumptionFilter === "pending_consume") return !r.is_consumed && (r.event_date || "") <= today;
+    if (consumptionFilter === "upcoming") return (r.event_date || "") > today;
+    return true;
+  };
+
   const filteredDebtRows = useMemo(() => {
-    if (statusFilter === "all") return sortedRows;
-    return sortedRows.filter((r) => r.intercompany_status === statusFilter);
-  }, [sortedRows, statusFilter]);
+    let base = sortedRows;
+    if (statusFilter !== "all") base = base.filter((r) => r.intercompany_status === statusFilter);
+    return base.filter(matchesConsumption);
+  }, [sortedRows, statusFilter, consumptionFilter, today]);
 
   const sectionOneRows = sortedRows;
 
@@ -200,6 +214,7 @@ export default function EventosView({ user, rate, onNavigate }) {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
                 {sectionOneRows.map((r) => {
                   const accent = isThisWeek(r.event_date) ? "border-l-4 border-l-gold" : "";
+                  const pendingConsume = !r.is_consumed && (r.event_date || "") < today;
                   return (
                     <div key={r.event_id} className={`border border-stone-200 rounded-xl p-3 bg-stone-50/40 ${accent}`}>
                       <div className="flex items-start gap-3">
@@ -208,6 +223,11 @@ export default function EventosView({ user, rate, onNavigate }) {
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <div className="flex flex-wrap gap-1 items-center">
                               <HoyManianaBadge iso={r.event_date} />
+                              {pendingConsume && (
+                                <span className="inline-block bg-red-100 text-red-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                  Pendiente consumir
+                                </span>
+                              )}
                               <ComboStatusBadge status={r.combo_payment_status} />
                             </div>
                           </div>
@@ -276,7 +296,7 @@ export default function EventosView({ user, rate, onNavigate }) {
               ))}
             </select>
             <span className="text-xs text-stone-400 mx-1">|</span>
-            <span className="text-xs text-stone-500">Estado</span>
+            <span className="text-xs text-stone-500">Pago</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -286,6 +306,18 @@ export default function EventosView({ user, rate, onNavigate }) {
               <option value="partial">Parciales</option>
               <option value="settled">Saldados</option>
               <option value="all">Todos</option>
+            </select>
+            <span className="text-xs text-stone-400 mx-1">|</span>
+            <span className="text-xs text-stone-500">Consumo</span>
+            <select
+              value={consumptionFilter}
+              onChange={(e) => setConsumptionFilter(e.target.value)}
+              className="text-sm border border-stone-200 rounded-lg px-2 py-1.5 bg-white"
+            >
+              <option value="all">Todos</option>
+              <option value="pending_consume">Pendiente consumir</option>
+              <option value="upcoming">Proximos</option>
+              <option value="consumed">Consumidos</option>
             </select>
           </div>
 
@@ -345,6 +377,10 @@ export default function EventosView({ user, rate, onNavigate }) {
             event_date: selectedEvent.event_date,
             is_settled: selectedEvent.is_settled,
             settled_at: null,
+            is_consumed: selectedEvent.is_consumed,
+            consumed_at: selectedEvent.consumed_at,
+            consumed_by: selectedEvent.consumed_by,
+            _user_name: user?.name || "Cantina",
           }}
           items={itemsByEvent[selectedEvent.event_id] || []}
           productsById={productsById}
@@ -352,8 +388,17 @@ export default function EventosView({ user, rate, onNavigate }) {
           packageName={selectedEvent.package_name || ""}
           rate={rate}
           canRegisterPayment={isAdmin}
+          isAdmin={isAdmin}
           onNavigateToInventario={onNavigate ? () => onNavigate("inventario") : undefined}
           onClose={() => setSelectedEvent(null)}
+          onMarkConsumed={() => {
+            setConsumeModalEvent(selectedEvent);
+            setSelectedEvent(null);
+          }}
+          onReverted={async () => {
+            setSelectedEvent(null);
+            await loadAll();
+          }}
           onRegisterPayment={async ({ owedRef }) => {
             const isCloseOut = !owedRef || owedRef <= 0;
             if (isCloseOut) {
@@ -398,6 +443,20 @@ export default function EventosView({ user, rate, onNavigate }) {
           onClose={() => setPaymentModalEvent(null)}
           onRegistered={async () => {
             setPaymentModalEvent(null);
+            await loadAll();
+          }}
+        />
+      )}
+
+      {consumeModalEvent && (
+        <MarkEventConsumedModal
+          event={{ id: consumeModalEvent.event_id }}
+          items={itemsByEvent[consumeModalEvent.event_id] || []}
+          productsById={productsById}
+          user={user}
+          onClose={() => setConsumeModalEvent(null)}
+          onConfirmed={async () => {
+            setConsumeModalEvent(null);
             await loadAll();
           }}
         />
