@@ -1,8 +1,15 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { X, AlertTriangle } from "lucide-react";
+import { X, AlertTriangle, ArrowRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs } from "@/lib/utils";
+
+function stockState(stockQty, requiredQty) {
+  if (stockQty == null) return { kind: "missing", label: "no en catalogo", chip: "bg-stone-100 text-stone-500", icon: "⚫" };
+  if (stockQty < requiredQty) return { kind: "red", label: `${stockQty} disp.`, chip: "bg-red-100 text-red-700", icon: "🔴" };
+  if (stockQty < requiredQty * 2) return { kind: "yellow", label: `${stockQty} disp.`, chip: "bg-amber-100 text-amber-700", icon: "🟡" };
+  return { kind: "green", label: `${stockQty} disp.`, chip: "bg-green-100 text-green-700", icon: "✅" };
+}
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -34,14 +41,24 @@ export default function EventDetailModal({
   canRegisterPayment,
   onClose,
   onRegisterPayment,
+  onNavigateToInventario,
 }) {
   const rows = items
     .filter((it) => productsById[it.product_id]?.is_cantina === true)
     .map((it) => {
-      const cost = Number(productsById[it.product_id]?.cost_ref || 0);
-      return { ...it, cost, subtotal: cost * Number(it.quantity || 0) };
+      const product = productsById[it.product_id];
+      const cost = Number(product?.cost_ref || 0);
+      const stockQty = product ? Number(product.stock_quantity || 0) : null;
+      const required = Number(it.quantity || 0);
+      const stock = stockState(stockQty, required);
+      return { ...it, cost, subtotal: cost * required, stockQty, stock };
     });
   const owedRef = rows.reduce((s, r) => s + r.subtotal, 0);
+
+  const stockAlerts = rows.filter((r) => r.stock.kind === "red" || r.stock.kind === "yellow" || r.stock.kind === "missing");
+  const insufficientItems = rows.filter((r) => r.stock.kind === "red");
+  const justItems = rows.filter((r) => r.stock.kind === "yellow");
+  const orphanItems = rows.filter((r) => r.stock.kind === "missing");
 
   const [payments, setPayments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
@@ -100,6 +117,42 @@ export default function EventDetailModal({
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {/* Stock alerts banner */}
+          {stockAlerts.length > 0 && (
+            <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-amber-700 mt-0.5 shrink-0" />
+                <div className="flex-1 text-xs text-amber-900 space-y-1">
+                  <div className="font-semibold">Atencion stock:</div>
+                  {insufficientItems.length > 0 && (
+                    <div>
+                      {insufficientItems.length} producto{insufficientItems.length !== 1 ? "s" : ""} con stock insuficiente:{" "}
+                      {insufficientItems.map((r) => `${r.product_name} (faltan ${Math.max(0, Number(r.quantity || 0) - Number(r.stockQty || 0))})`).join(", ")}
+                    </div>
+                  )}
+                  {justItems.length > 0 && (
+                    <div>
+                      {justItems.length} producto{justItems.length !== 1 ? "s" : ""} justo: {justItems.map((r) => r.product_name).join(", ")}
+                    </div>
+                  )}
+                  {orphanItems.length > 0 && (
+                    <div>
+                      {orphanItems.length} producto{orphanItems.length !== 1 ? "s" : ""} sin catalogo: {orphanItems.map((r) => r.product_name).join(", ")}
+                    </div>
+                  )}
+                </div>
+                {onNavigateToInventario && (
+                  <button
+                    onClick={() => { onNavigateToInventario(); onClose(); }}
+                    className="inline-flex items-center gap-1 text-xs text-amber-800 hover:text-amber-900 font-semibold whitespace-nowrap"
+                  >
+                    Ir a Inventario <ArrowRight size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Items */}
           <div className="px-5 pt-4">
             <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">Insumos cantina</h4>
@@ -114,11 +167,12 @@ export default function EventDetailModal({
                   <th className="text-right px-4 py-2 font-semibold">Cant</th>
                   <th className="text-right px-4 py-2 font-semibold">Costo unit</th>
                   <th className="text-right px-4 py-2 font-semibold">Subtotal</th>
+                  <th className="text-center px-4 py-2 font-semibold">Stock</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className={`border-t border-stone-100 ${r.cost === 0 ? "bg-amber-50" : ""}`}>
+                  <tr key={r.id} className={`border-t border-stone-100 ${r.cost === 0 ? "bg-amber-50/40" : ""}`}>
                     <td className="px-4 py-2.5 text-stone-700">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span>{r.product_name || "—"}</span>
@@ -132,6 +186,12 @@ export default function EventDetailModal({
                     <td className="px-4 py-2.5 text-right text-stone-700">{r.quantity}</td>
                     <td className="px-4 py-2.5 text-right text-stone-600">{formatREF(r.cost)}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-stone-800">{formatREF(r.subtotal)}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${r.stock.chip}`}>
+                        <span>{r.stock.icon}</span>
+                        <span>{r.stock.label}</span>
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -203,10 +263,14 @@ export default function EventDetailModal({
             {canRegisterPayment && (
               <button
                 onClick={() => onRegisterPayment({ owedRef, paidRef })}
-                disabled={isSettled || owedRef <= 0}
+                disabled={isSettled}
                 className="flex-1 py-2.5 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isSettled ? "Ya saldado" : "Registrar abono"}
+                {isSettled
+                  ? "Ya saldado"
+                  : owedRef <= 0
+                    ? "Cerrar evento"
+                    : "Registrar abono"}
               </button>
             )}
           </div>

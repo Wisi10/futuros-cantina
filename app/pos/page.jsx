@@ -650,7 +650,7 @@ export default function POSPage() {
 
         {activeTab === "eventos" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
-            <EventosView user={user} rate={rate} />
+            <EventosView user={user} rate={rate} onNavigate={setActiveTab} />
           </div>
         )}
 

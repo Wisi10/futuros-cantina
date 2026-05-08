@@ -38,6 +38,52 @@ function fmtDate(iso) {
   return `${d}/${m}/${y}`;
 }
 
+const MONTH_SHORT = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+
+function todayCaracas() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Caracas" });
+}
+
+function daysBetween(isoFrom, isoTo) {
+  const a = new Date(isoFrom + "T12:00:00").getTime();
+  const b = new Date(isoTo + "T12:00:00").getTime();
+  return Math.round((b - a) / 86400000);
+}
+
+function DateBlock({ iso, accent = "text-gold" }) {
+  if (!iso) return <div className="text-xs text-stone-400">—</div>;
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  const monthIdx = parseInt(m, 10) - 1;
+  return (
+    <div className="flex flex-col items-center justify-center bg-white border border-stone-200 rounded-lg px-2 py-1 shrink-0 w-14">
+      <div className="text-2xl font-bold leading-none text-stone-800">{d}</div>
+      <div className={`text-[10px] font-bold tracking-wider mt-0.5 ${accent}`}>
+        {MONTH_SHORT[monthIdx] || ""}
+      </div>
+      <div className="text-[9px] text-stone-400 leading-none mt-0.5">{y}</div>
+    </div>
+  );
+}
+
+function HoyManianaBadge({ iso }) {
+  if (!iso) return null;
+  const today = todayCaracas();
+  const delta = daysBetween(today, iso.slice(0, 10));
+  if (delta === 0) {
+    return <span className="inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Hoy</span>;
+  }
+  if (delta === 1) {
+    return <span className="inline-block bg-orange-100 text-orange-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Maniana</span>;
+  }
+  return null;
+}
+
+function isThisWeek(iso) {
+  if (!iso) return false;
+  const delta = daysBetween(todayCaracas(), iso.slice(0, 10));
+  return delta >= 0 && delta <= 7;
+}
+
 function ComboStatusBadge({ status }) {
   if (status === "paid") {
     return <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">Pagado</span>;
@@ -58,7 +104,7 @@ function IntercompanyStatusBadge({ status }) {
   return <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded-full">Pendiente</span>;
 }
 
-export default function EventosView({ user, rate }) {
+export default function EventosView({ user, rate, onNavigate }) {
   const [monthFilter, setMonthFilter] = useState(currentMonthKey());
   const [statusFilter, setStatusFilter] = useState("pending");
   const [rows, setRows] = useState([]);
@@ -97,7 +143,7 @@ export default function EventosView({ user, rate }) {
       if (productIds.length) {
         const { data } = await supabase
           .from("products")
-          .select("id, name, cost_ref, is_cantina")
+          .select("id, name, cost_ref, is_cantina, stock_quantity")
           .in("id", productIds);
         products = data || [];
       }
@@ -120,15 +166,19 @@ export default function EventosView({ user, rate }) {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const filteredDebtRows = useMemo(() => {
-    if (statusFilter === "all") return rows;
-    if (statusFilter === "pending") return rows.filter((r) => r.intercompany_status === "pending");
-    if (statusFilter === "partial") return rows.filter((r) => r.intercompany_status === "partial");
-    if (statusFilter === "settled") return rows.filter((r) => r.intercompany_status === "settled");
-    return rows;
-  }, [rows, statusFilter]);
+  // Ensure ASC by event_date for both sections (RPC already returns ASC,
+  // but enforce client-side for safety).
+  const sortedRows = useMemo(
+    () => [...rows].sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")),
+    [rows]
+  );
 
-  const sectionOneRows = rows;
+  const filteredDebtRows = useMemo(() => {
+    if (statusFilter === "all") return sortedRows;
+    return sortedRows.filter((r) => r.intercompany_status === statusFilter);
+  }, [sortedRows, statusFilter]);
+
+  const sectionOneRows = sortedRows;
 
   return (
     <div className="h-full overflow-y-auto bg-brand-cream-light">
@@ -148,18 +198,32 @@ export default function EventosView({ user, rate }) {
               <div className="p-6 text-center text-stone-400 text-sm">Sin eventos este mes</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
-                {sectionOneRows.map((r) => (
-                  <div key={r.event_id} className="border border-stone-200 rounded-xl p-3 bg-stone-50/40">
-                    <div className="flex items-start justify-between mb-1">
-                      <div className="text-xs text-stone-500">{fmtDate(r.event_date)}</div>
-                      <ComboStatusBadge status={r.combo_payment_status} />
+                {sectionOneRows.map((r) => {
+                  const accent = isThisWeek(r.event_date) ? "border-l-4 border-l-gold" : "";
+                  return (
+                    <div key={r.event_id} className={`border border-stone-200 rounded-xl p-3 bg-stone-50/40 ${accent}`}>
+                      <div className="flex items-start gap-3">
+                        <DateBlock iso={r.event_date} accent="text-gold" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <div className="flex flex-wrap gap-1 items-center">
+                              <HoyManianaBadge iso={r.event_date} />
+                              <ComboStatusBadge status={r.combo_payment_status} />
+                            </div>
+                          </div>
+                          <div className="font-semibold text-sm text-stone-800 truncate">
+                            {r.client_name} <span className="text-stone-400 font-normal">·</span> <span className="text-stone-600 capitalize font-normal">{r.package_name || "—"}</span>
+                          </div>
+                          <div className="mt-1 text-sm text-stone-700">
+                            <span className="font-bold text-brand">{formatREF(r.combo_total_ref)}</span>
+                            <span className="text-stone-400 mx-1">·</span>
+                            <span className="text-xs text-stone-500">Pagado {formatREF(r.combo_paid_ref)}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="font-semibold text-sm text-stone-800 truncate">{r.client_name}</div>
-                    <div className="text-xs text-stone-500 capitalize truncate">{r.package_name || "—"}</div>
-                    <div className="mt-2 text-base font-bold text-brand">{formatREF(r.combo_total_ref)}</div>
-                    <div className="text-[11px] text-stone-500">Pagado: {formatREF(r.combo_paid_ref)}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -288,8 +352,36 @@ export default function EventosView({ user, rate }) {
           packageName={selectedEvent.package_name || ""}
           rate={rate}
           canRegisterPayment={isAdmin}
+          onNavigateToInventario={onNavigate ? () => onNavigate("inventario") : undefined}
           onClose={() => setSelectedEvent(null)}
-          onRegisterPayment={() => {
+          onRegisterPayment={async ({ owedRef }) => {
+            const isCloseOut = !owedRef || owedRef <= 0;
+            if (isCloseOut) {
+              const ok = window.confirm(
+                "Este evento no tiene insumos de cantina. Cerrar y marcar como saldado?"
+              );
+              if (!ok) return;
+              const { data, error } = await supabase.rpc("register_event_payment", {
+                p_event_id: selectedEvent.event_id,
+                p_amount_ref: 0,
+                p_payment_method: "transferencia",
+                p_exchange_rate: rate?.eur || null,
+                p_created_by: user?.name || "Cantina",
+                p_notes: "Close-out evento sin deuda",
+              });
+              if (error) {
+                alert("Error: " + error.message);
+                return;
+              }
+              const result = Array.isArray(data) ? data[0] : data;
+              if (!result?.success) {
+                alert("Error: " + (result?.message || "no se pudo cerrar"));
+                return;
+              }
+              setSelectedEvent(null);
+              await loadAll();
+              return;
+            }
             setPaymentModalEvent(selectedEvent);
             setSelectedEvent(null);
           }}
