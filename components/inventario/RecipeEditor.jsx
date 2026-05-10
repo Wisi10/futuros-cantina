@@ -29,8 +29,9 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
         .eq("product_id", product.id),
       supabase
         .from("products")
-        .select("id, name, cost_ref, stock_quantity, is_cantina, has_recipe, active")
+        .select("id, name, cost_ref, stock_quantity, is_cantina, has_recipe, active, category")
         .eq("is_cantina", false)
+        .eq("category", "Materia Prima")
         .eq("active", true)
         .order("name"),
     ]);

@@ -9,7 +9,7 @@ import CreateProductModal from "./CreateProductModal";
 import RecipeEditor from "./RecipeEditor";
 
 export default function InventarioView({ user }) {
-  const [scope, setScope] = useState("productos"); // "productos" (is_cantina=true) | "materia" (is_cantina=false)
+  const [scope, setScope] = useState("productos"); // "productos" | "materia" | "eventos"
   const [subTab, setSubTab] = useState("stock");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,11 +26,15 @@ export default function InventarioView({ user }) {
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase
-      .from("products")
-      .select("*")
-      .eq("is_cantina", scope === "productos")
-      .order("stock_quantity", { ascending: true });
+    let q = supabase.from("products").select("*").order("stock_quantity", { ascending: true });
+    if (scope === "productos") {
+      q = q.eq("is_cantina", true);
+    } else if (scope === "materia") {
+      q = q.eq("is_cantina", false).eq("category", "Materia Prima");
+    } else if (scope === "eventos") {
+      q = q.eq("is_cantina", false).neq("category", "Materia Prima");
+    }
+    const { data } = await q;
     if (data) setProducts(data);
     setLoading(false);
   }, [scope]);
@@ -52,6 +56,11 @@ export default function InventarioView({ user }) {
     loadProducts();
     loadRestocks();
   }, [loadProducts, loadRestocks]);
+
+  // Reset subtab if scope is eventos and user was in entrada
+  useEffect(() => {
+    if (scope === "eventos" && subTab === "entrada") setSubTab("stock");
+  }, [scope, subTab]);
 
   // Categories from products
   const categories = ["todos", ...new Set(products.map((p) => p.category || "Otro"))];
@@ -148,7 +157,7 @@ export default function InventarioView({ user }) {
             <Plus size={14} /> Crear producto
           </button>
         </div>
-        {/* Scope toggle: productos vs materia prima */}
+        {/* Scope toggle: productos / materia prima / eventos */}
         <div className="flex gap-1 mb-2 border-b border-stone-200">
           <button
             onClick={() => setScope("productos")}
@@ -166,7 +175,18 @@ export default function InventarioView({ user }) {
           >
             Materia Prima
           </button>
+          <button
+            onClick={() => setScope("eventos")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+              scope === "eventos" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            Eventos
+          </button>
         </div>
+        {scope === "eventos" && (
+          <p className="text-xs text-stone-500 mb-2">Items utilizados en eventos / combos cumpleanos. No se compran como inventario fisico.</p>
+        )}
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setSubTab("stock")}
@@ -176,14 +196,16 @@ export default function InventarioView({ user }) {
           >
             Stock actual
           </button>
-          <button
-            onClick={() => setSubTab("entrada")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              subTab === "entrada" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-            }`}
-          >
-            Registrar entrada
-          </button>
+          {scope !== "eventos" && (
+            <button
+              onClick={() => setSubTab("entrada")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                subTab === "entrada" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              }`}
+            >
+              Registrar entrada
+            </button>
+          )}
           <button
             onClick={() => setSubTab("fotos")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
