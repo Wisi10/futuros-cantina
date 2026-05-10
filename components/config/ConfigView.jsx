@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RefreshCw, History, X } from "lucide-react";
+import { Settings, Save, RefreshCw, History, X, Package } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
 
@@ -8,6 +8,9 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
   const [rateHistory, setRateHistory] = useState([]);
   const [eurInput, setEurInput] = useState("");
+  const [stockThresholdInput, setStockThresholdInput] = useState("");
+  const [stockThresholdSaved, setStockThresholdSaved] = useState(null);
+  const [savingThreshold, setSavingThreshold] = useState(false);
   const [usdInput, setUsdInput] = useState("");
   const [savingRate, setSavingRate] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -33,7 +36,39 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   useEffect(() => {
     loadProducts();
     loadRateHistory();
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "low_stock_threshold")
+        .single();
+      const v = Number(data?.value?.value) || 5;
+      setStockThresholdSaved(v);
+      setStockThresholdInput(String(v));
+    })();
   }, [loadProducts, loadRateHistory]);
+
+  const saveStockThreshold = async () => {
+    if (savingThreshold) return;
+    const n = Number(stockThresholdInput);
+    if (!Number.isFinite(n) || n < 1 || n > 100) {
+      alert("Ingresa un numero entre 1 y 100");
+      return;
+    }
+    setSavingThreshold(true);
+    const { error } = await supabase.from("app_settings").upsert({
+      key: "low_stock_threshold",
+      value: { value: n },
+      updated_by: user?.name || "Cantina",
+    }, { onConflict: "key" });
+    setSavingThreshold(false);
+    if (error) {
+      alert("Error: " + error.message);
+      return;
+    }
+    setStockThresholdSaved(n);
+    alert("Umbral guardado. Recarga la pagina para que aplique en POS.");
+  };
 
   // Pre-fill rate inputs with latest values
   useEffect(() => {
@@ -138,6 +173,38 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Stock Threshold Section */}
+      <div className="bg-white rounded-xl border border-stone-200 p-4">
+        <h2 className="font-bold text-sm text-stone-700 mb-2 flex items-center gap-2">
+          <Package size={14} /> Umbral stock bajo
+        </h2>
+        <p className="text-xs text-stone-500 mb-3">
+          Productos con stock menor o igual a este numero salen marcados como "Quedan X" en POS.
+          Override per-producto disponible en cada row.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            value={stockThresholdInput}
+            onChange={(e) => setStockThresholdInput(e.target.value)}
+            className="w-24 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          />
+          <button
+            onClick={saveStockThreshold}
+            disabled={savingThreshold || Number(stockThresholdInput) === stockThresholdSaved}
+            className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark disabled:opacity-40"
+          >
+            {savingThreshold ? "Guardando..." : "Guardar"}
+          </button>
+          {stockThresholdSaved != null && (
+            <span className="text-xs text-stone-400">Actual: {stockThresholdSaved}</span>
+          )}
+        </div>
       </div>
 
       {/* Products Section */}

@@ -22,7 +22,10 @@ import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
 import PuntosView from "@/components/puntos/PuntosView";
+import ClientesView from "@/components/clientes/ClientesView";
 import EventosView from "@/components/eventos/EventosView";
+import StockAlertToast from "@/components/vender/StockAlertToast";
+import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
 export default function POSPage() {
   const router = useRouter();
@@ -32,6 +35,8 @@ export default function POSPage() {
   // Vender state
   const [screen, setScreen] = useState("pos");
   const [products, setProducts] = useState([]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [showStockToast, setShowStockToast] = useState(false);
   const [cart, setCart] = useState(() => {
     if (typeof window !== "undefined") {
       try {
@@ -178,17 +183,47 @@ export default function POSPage() {
     loadTodayStats();
     loadPendingCreditsCount();
     loadActiveShift();
+    loadLowStockThreshold(supabase).then(setLowStockThreshold);
   }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount, loadActiveShift]);
+
+  // Show low-stock toast at most once per day (sessionStorage flag)
+  useEffect(() => {
+    if (!user || !products.length) return;
+    if (typeof window === "undefined") return;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Caracas" });
+    const flag = `low_stock_dismissed_${today}`;
+    if (sessionStorage.getItem(flag)) return;
+    const lowItems = products.filter((p) => p.is_cantina && p.active && isLowStock(p, lowStockThreshold));
+    if (lowItems.length > 0) setShowStockToast(true);
+  }, [user, products, lowStockThreshold]);
+
+  const lowStockItems = products.filter((p) => p.is_cantina && p.active && isLowStock(p, lowStockThreshold));
+
+  const dismissStockToast = () => {
+    setShowStockToast(false);
+    if (typeof window !== "undefined") {
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Caracas" });
+      sessionStorage.setItem(`low_stock_dismissed_${today}`, "1");
+    }
+  };
 
   // Check void window (5 minutes)
   const canVoid = lastSaleRecord && lastSaleTime && (Date.now() - lastSaleTime < 5 * 60 * 1000);
 
   // Cart operations
   const addToCart = (product) => {
+    const stock = Number(product.stock_quantity ?? 0);
+    if (stock <= 0) {
+      alert("Sin stock disponible");
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
-        if (existing.qty >= (product.stock_quantity ?? 0)) return prev;
+        if (existing.qty >= stock) {
+          alert(`Solo quedan ${stock} unidades de ${product.name}`);
+          return prev;
+        }
         return prev.map((item) =>
           item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item
         );
@@ -611,6 +646,7 @@ export default function POSPage() {
                   cart={cart}
                   rate={rate}
                   onAdd={addToCart}
+                  lowStockThreshold={lowStockThreshold}
                 />
                 <CartSidebar
                   cart={cart}
@@ -667,6 +703,12 @@ export default function POSPage() {
           </div>
         )}
 
+        {activeTab === "clientes" && (
+          <div className="flex-1 overflow-hidden">
+            <ClientesView user={user} rate={rate} />
+          </div>
+        )}
+
         {activeTab === "config" && user.cantinaRole === "admin" && (
           <div className="flex-1 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
@@ -686,6 +728,14 @@ export default function POSPage() {
           onConfirm={handlePaymentConfirm}
           onConfirmCredit={handleCreditConfirm}
           onBack={() => setScreen("pos")}
+        />
+      )}
+
+      {showStockToast && lowStockItems.length > 0 && (
+        <StockAlertToast
+          items={lowStockItems}
+          onDismiss={dismissStockToast}
+          onNavigate={() => setActiveTab("inventario")}
         />
       )}
 

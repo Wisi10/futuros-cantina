@@ -1,11 +1,12 @@
 "use client";
-import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Monitor, Star, Calendar } from "lucide-react";
+import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Monitor, Star, Calendar, Users } from "lucide-react";
 
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
   { id: "dashboard", label: "En Vivo", icon: Monitor },
   { id: "puntos", label: "Puntos", icon: Star },
+  { id: "clientes", label: "Clientes", icon: Users },
   { id: "caja", label: "Caja", icon: Wallet, adminOnly: true },
   { id: "eventos", label: "Eventos", icon: Calendar, adminOnly: true },
   { id: "turnos", label: "Turnos", icon: Clock, adminOnly: true },

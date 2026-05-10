@@ -2,8 +2,9 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { formatBs, ProductImage } from "@/lib/utils";
+import { effectiveThreshold } from "@/lib/stockHelpers";
 
-export default function ProductGrid({ products, cart, rate, onAdd }) {
+export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5 }) {
   const [view, setView] = useState("categories");
   const [activeCategory, setActiveCategory] = useState(null);
   const [search, setSearch] = useState("");
@@ -126,7 +127,7 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {filtered.map((product) => {
             const stock = product.stock_quantity ?? 0;
-            const alertThreshold = product.low_stock_alert ?? 5;
+            const alertThreshold = effectiveThreshold(product, lowStockThreshold);
             const outOfStock = stock <= 0;
             const lowStock = stock > 0 && stock <= alertThreshold;
             const inCart = cartMap[product.id] || 0;
@@ -167,12 +168,12 @@ export default function ProductGrid({ products, cart, rate, onAdd }) {
                 {/* Stock badge */}
                 <div className="mt-1.5">
                   {outOfStock ? (
-                    <span className="inline-block text-[9px] font-medium px-2 py-0.5 rounded-full bg-[#fef2f2] text-[#dc2626]">
-                      sin stock
+                    <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#fef2f2] text-[#dc2626]">
+                      Sin stock
                     </span>
                   ) : lowStock ? (
-                    <span className="inline-block text-[9px] font-medium px-2 py-0.5 rounded-full bg-[#fef3c7] text-[#d97706]">
-                      ⚠ stk {stock}
+                    <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#fef3c7] text-[#d97706]">
+                      Quedan {stock}
                     </span>
                   ) : (
                     <span className="inline-block text-[9px] font-medium px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#16a34a]">

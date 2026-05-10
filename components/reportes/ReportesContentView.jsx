@@ -4,6 +4,11 @@ import { BarChart3, Download, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { METHOD_LABELS, PAYMENT_METHODS, formatREF, formatBs } from "@/lib/utils";
 import CreditsModal from "@/components/vender/CreditsModal";
+import ClientProfileModal from "@/components/clientes/ClientProfileModal";
+import SalesLineChart from "./SalesLineChart";
+import TopProductsBarChart from "./TopProductsBarChart";
+import HoursHeatmap from "./HoursHeatmap";
+import TopClientsList from "./TopClientsList";
 import * as XLSX from "xlsx";
 
 // ─── Heat Map Component ────────────────────────────────────
@@ -179,6 +184,14 @@ export default function ReportesContentView({ user, rate }) {
   const [slowMoverSales, setSlowMoverSales] = useState([]);
   const [voidedCount, setVoidedCount] = useState(0);
 
+  // New charts (sprint 12)
+  const [salesByDay, setSalesByDay] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [salesHeatmap, setSalesHeatmap] = useState([]);
+  const [topClients, setTopClients] = useState([]);
+  const [chartsLoading, setChartsLoading] = useState(true);
+  const [profileClientId, setProfileClientId] = useState(null);
+
   const loadData = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
@@ -240,6 +253,29 @@ export default function ReportesContentView({ user, rate }) {
   }, [period, customFrom, customTo]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load chart data via new RPCs whenever period changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabase) return;
+      setChartsLoading(true);
+      const { from, to } = getPeriodDates(period, customFrom, customTo);
+      const [byDay, topProd, heat, topCli] = await Promise.all([
+        supabase.rpc("get_sales_by_day", { p_start: from, p_end: to }),
+        supabase.rpc("get_top_products", { p_start: from, p_end: to, p_limit: 10 }),
+        supabase.rpc("get_sales_heatmap", { p_start: from, p_end: to }),
+        supabase.rpc("get_top_clients", { p_start: from, p_end: to, p_limit: 5 }),
+      ]);
+      if (cancelled) return;
+      setSalesByDay(byDay.data || []);
+      setTopProducts(topProd.data || []);
+      setSalesHeatmap(heat.data || []);
+      setTopClients(topCli.data || []);
+      setChartsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [period, customFrom, customTo]);
 
   // KPIs
   const totalSalesRef = sales.reduce((s, v) => s + Number(v.total_ref || 0), 0);
@@ -423,6 +459,18 @@ export default function ReportesContentView({ user, rate }) {
           </div>
         )}
       </div>
+
+      {/* Charts (sprint 12) */}
+      {chartsLoading ? (
+        <p className="text-xs text-stone-400 animate-pulse py-3 text-center">Cargando graficos...</p>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SalesLineChart data={salesByDay} />
+          <TopProductsBarChart data={topProducts} />
+          <HoursHeatmap data={salesHeatmap} />
+          <TopClientsList data={topClients} onClientClick={(id) => setProfileClientId(id)} />
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-stone-400 animate-pulse py-8 text-center">Cargando reportes...</p>
@@ -704,6 +752,14 @@ export default function ReportesContentView({ user, rate }) {
 
       {showCreditsModal && (
         <CreditsModal user={user} rate={rate} onClose={() => setShowCreditsModal(false)} onUpdated={loadData} />
+      )}
+
+      {profileClientId && (
+        <ClientProfileModal
+          clientId={profileClientId}
+          user={user}
+          onClose={() => setProfileClientId(null)}
+        />
       )}
     </div>
   );
