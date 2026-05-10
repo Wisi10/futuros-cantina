@@ -6,6 +6,9 @@ import { supabase } from "@/lib/supabase";
 import { calcBs, ProductImage } from "@/lib/utils";
 import SideNav from "@/components/nav/SideNav";
 import RateChip from "@/components/shared/RateChip";
+import GlobalClientSearch from "@/components/shared/GlobalClientSearch";
+import ClientProfileModal from "@/components/clientes/ClientProfileModal";
+import { ClientProfileProvider, useClientProfile } from "@/lib/clientProfileContext";
 import ProductGrid from "@/components/vender/ProductGrid";
 import CartSidebar from "@/components/vender/CartSidebar";
 import PaymentModal from "@/components/vender/PaymentModal";
@@ -15,7 +18,6 @@ import ConfigView from "@/components/config/ConfigView";
 import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
 import ReportesView from "@/components/reportes/ReportesView";
-import DashboardView from "@/components/dashboard/DashboardView";
 import ShiftPill from "@/components/shifts/ShiftPill";
 import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
@@ -27,7 +29,21 @@ import EventosView from "@/components/eventos/EventosView";
 import StockAlertToast from "@/components/vender/StockAlertToast";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
+function GlobalProfileMount({ user, rate }) {
+  const { profileId, close } = useClientProfile();
+  if (!profileId) return null;
+  return <ClientProfileModal clientId={profileId} user={user} onClose={close} />;
+}
+
 export default function POSPage() {
+  return (
+    <ClientProfileProvider>
+      <POSPageInner />
+    </ClientProfileProvider>
+  );
+}
+
+function POSPageInner() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("vender");
@@ -145,13 +161,16 @@ export default function POSPage() {
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const { data } = await supabase
       .from("cantina_sales")
-      .select("total_ref")
+      .select("total_ref, client_name, created_at")
       .eq("sale_date", today)
-      .is("voided_at", null);
+      .is("voided_at", null)
+      .order("created_at", { ascending: false });
     if (data) {
+      const withClient = data.find((s) => s.client_name);
       setTodayStats({
         total: data.reduce((sum, s) => sum + parseFloat(s.total_ref), 0),
         count: data.length,
+        lastClient: withClient ? { name: withClient.client_name, at: withClient.created_at } : null,
       });
     }
   }, []);
@@ -618,6 +637,7 @@ export default function POSPage() {
                 </span>
               )}
             </button>
+            <GlobalClientSearch />
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <ShiftPill
@@ -634,7 +654,20 @@ export default function POSPage() {
 
         {/* Tab content */}
         {activeTab === "vender" && (
-          <div className="flex-1 flex min-h-0">
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Live strip — sutil */}
+            <div className="bg-stone-50 border-b border-stone-200 px-4 py-1.5 text-[11px] text-stone-500 flex items-center gap-3 flex-wrap shrink-0">
+              <span><span className="text-stone-400">Hoy:</span> <span className="font-semibold text-stone-700">REF {todayStats.total.toFixed(2)}</span></span>
+              <span className="text-stone-300">·</span>
+              <span>{todayStats.count} venta{todayStats.count === 1 ? "" : "s"}</span>
+              {todayStats.lastClient && (
+                <>
+                  <span className="text-stone-300">·</span>
+                  <span><span className="text-stone-400">ult:</span> {todayStats.lastClient.name}</span>
+                </>
+              )}
+            </div>
+            <div className="flex-1 flex min-h-0">
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
                 <p className="text-stone-400 text-sm animate-pulse">Cargando productos...</p>
@@ -662,6 +695,7 @@ export default function POSPage() {
                 />
               </>
             )}
+            </div>
           </div>
         )}
 
@@ -691,10 +725,6 @@ export default function POSPage() {
 
         {activeTab === "turnos" && user.cantinaRole === "admin" && (
           <ShiftsView user={user} />
-        )}
-
-        {activeTab === "dashboard" && (
-          <DashboardView user={user} rate={rate} products={products} />
         )}
 
         {activeTab === "puntos" && (
@@ -821,6 +851,8 @@ export default function POSPage() {
         <ClientModal rate={rate} user={user} onClose={() => setShowClientModal(false)}
           onAssociateClient={(client) => setSaleClient(client)} />
       )}
+
+      <GlobalProfileMount user={user} rate={rate} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { Star, User } from "lucide-react";
 import RankingView from "./RankingView";
 import RewardsConfigView from "./RewardsConfigView";
 import ClientModal from "@/components/client/ClientModal";
+import ClientLink from "@/components/shared/ClientLink";
 
 export default function PuntosView({ user, rate, saleClient }) {
   const [profileClientId, setProfileClientId] = useState(null);
@@ -26,7 +27,9 @@ export default function PuntosView({ user, rate, saleClient }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs text-green-700 font-medium uppercase tracking-wider">Cliente activo</p>
-              <p className="text-sm font-bold text-green-900 truncate">{saleClient.name}</p>
+              <p className="text-sm font-bold text-green-900 truncate">
+                {saleClient.id ? <ClientLink clientId={saleClient.id} name={saleClient.name} className="text-green-900 hover:text-green-950" /> : saleClient.name}
+              </p>
               <p className="text-xs text-green-700">{Number(saleClient.points || 0).toLocaleString()} pts disponibles</p>
             </div>
           </div>

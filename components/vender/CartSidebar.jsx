@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Minus, Plus, Trash2, ShoppingCart, Gift, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, ProductImage } from "@/lib/utils";
+import ClientLink from "@/components/shared/ClientLink";
 
 function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption, totalRef }) {
   const hasTasa = !!rate;
@@ -148,7 +149,7 @@ export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheck
             <ShoppingCart size={16} /> Orden actual
             {itemCount > 0 && <span className="ml-auto bg-brand/10 text-brand text-xs px-2 py-0.5 rounded-full">{itemCount}</span>}
           </h2>
-          {saleClient && <p className="text-[10px] text-gold mt-1 font-medium">👤 {saleClient.name} · {(saleClient.points || 0).toLocaleString()} pts</p>}
+          {saleClient && <p className="text-[10px] text-gold mt-1 font-medium">👤 {saleClient.id ? <ClientLink clientId={saleClient.id} name={saleClient.name} className="text-gold hover:text-gold" /> : saleClient.name} · {(saleClient.points || 0).toLocaleString()} pts</p>}
         </div>
         <CartContent cart={cart} rate={rate} onUpdateQty={onUpdateQty} onRemove={onRemove}
           onCheckout={onCheckout} saleClient={saleClient} onAddRedemption={onAddRedemption} totalRef={totalRef} />
@@ -180,7 +181,7 @@ export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheck
                   <ShoppingCart size={16} /> Orden actual
                   {itemCount > 0 && <span className="ml-auto bg-brand/10 text-brand text-xs px-2 py-0.5 rounded-full">{itemCount}</span>}
                 </h2>
-                {saleClient && <p className="text-[10px] text-gold font-medium ml-2">👤 {saleClient.name}</p>}
+                {saleClient && <p className="text-[10px] text-gold font-medium ml-2">👤 {saleClient.id ? <ClientLink clientId={saleClient.id} name={saleClient.name} className="text-gold hover:text-gold" /> : saleClient.name}</p>}
                 <button onClick={() => setMobileOpen(false)} className="p-1.5 hover:bg-stone-100 rounded-lg ml-2">
                   <X size={18} className="text-stone-400" />
                 </button>

@@ -43,7 +43,7 @@ export default function ClientesView({ user, rate }) {
       p_search: debouncedSearch || null,
       p_filter: filter,
       p_sort: sort,
-      p_limit: 200,
+      p_limit: 5000,
       p_offset: 0,
     });
     setRows(data || []);

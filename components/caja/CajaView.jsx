@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download, Gift } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
+import ClientLink from "@/components/shared/ClientLink";
 import * as XLSX from "xlsx";
 
 const METHOD_ICONS = {
@@ -224,7 +225,7 @@ export default function CajaView({ user, rate }) {
                         <span className="text-xs text-stone-600 flex-1 truncate">
                           {items.map((i) => `${i.name} x${i.qty}`).join(", ")}
                           {sale.client_name && (
-                            <span className="text-stone-400"> · {sale.client_name}</span>
+                            <ClientLink clientId={sale.client_id} name={sale.client_name} className="ml-1 !text-stone-500" muted />
                           )}
                         </span>
                         <span className="text-xs font-bold text-brand whitespace-nowrap">

@@ -14,9 +14,7 @@ export default function RewardTimelineChart({ rewards, clientPoints = null }) {
   const sorted = [...rewards].sort(
     (a, b) => Number(a.redemption_cost_points || 0) - Number(b.redemption_cost_points || 0)
   );
-  const maxPts = Number(sorted[sorted.length - 1].redemption_cost_points || 0);
-  const minPts = Number(sorted[0].redemption_cost_points || 0);
-  const range = Math.max(1, maxPts - 0); // start always at 0
+  const total = sorted.length;
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-4 md:p-6">
@@ -36,9 +34,9 @@ export default function RewardTimelineChart({ rewards, clientPoints = null }) {
             <p className="text-[10px] text-stone-400 mt-2">0</p>
           </div>
 
-          {sorted.map((r) => {
+          {sorted.map((r, idx) => {
             const pts = Number(r.redemption_cost_points || 0);
-            const pct = (pts / range) * 100;
+            const pct = ((idx + 1) / (total + 1)) * 100;
             const canRedeem = clientPoints != null && pts > 0 && clientPoints >= pts;
             const ringClass = canRedeem
               ? "ring-4 ring-green-500 shadow-lg"

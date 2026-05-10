@@ -1,13 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Search, ArrowLeft, Cake, User, Gift } from "lucide-react";
+import { X, Search, ArrowLeft, User, Gift } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, ProductImage } from "@/lib/utils";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
   const [view, setView] = useState("list"); // "list" | "profile" | "rewards" | "redeemSuccess"
-  const [bookings, setBookings] = useState([]);
-  const [loadingBookings, setLoadingBookings] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -18,21 +16,6 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
   const [redeeming, setRedeeming] = useState(null);
   const [lastRedeemed, setLastRedeemed] = useState(null);
   const timerRef = useRef(null);
-
-  useEffect(() => {
-    if (!supabase) return;
-    if (initialClientId) {
-      setLoadingBookings(false);
-      return; // skip bookings load — go straight to profile
-    }
-    (async () => {
-      try {
-        const { data } = await supabase.rpc("get_bookings_today");
-        setBookings(data || []);
-      } catch { setBookings([]); }
-      setLoadingBookings(false);
-    })();
-  }, [initialClientId]);
 
   const doSearch = useCallback(async (q) => {
     if (!supabase || !q || q.length < 2) { setSearchResults([]); setSearching(false); return; }
@@ -137,38 +120,6 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
           {/* ═══ VIEW: LIST ═══ */}
           {view === "list" && (
             <>
-              <p className="text-[10px] uppercase tracking-[1.5px] text-stone-400 font-medium mb-2">Reservas de hoy</p>
-              {loadingBookings ? (
-                <p className="text-xs text-stone-400 animate-pulse py-4 text-center">Cargando...</p>
-              ) : bookings.length === 0 ? (
-                <p className="text-xs text-stone-400 text-center py-4">Sin reservas para hoy</p>
-              ) : (
-                <div className="space-y-1.5 mb-4">
-                  {bookings.map(b => {
-                    const isCumple = b.activity_type === "cumpleanos";
-                    const hasClient = !!b.client_id;
-                    return (
-                      <button key={b.id} onClick={() => hasClient && openProfile(b.client_id)} disabled={!hasClient}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors ${hasClient ? "border-stone-200 hover:border-brand hover:bg-stone-50 cursor-pointer" : "border-stone-100 opacity-60 cursor-default"}`}>
-                        <div className="flex items-center gap-2">
-                          {isCumple ? <Cake size={16} className="text-pink-500 shrink-0" /> : <User size={16} className="text-stone-400 shrink-0" />}
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-stone-800 truncate">{b.client_name || "Sin cliente"}</p>
-                            <p className="text-[11px] text-stone-400">{fmtHour(b.start_hour)} · {b.court_name || "—"} · {isCumple ? "Cumpleanos" : "Partida"}</p>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="flex items-center gap-3 my-3">
-                <div className="flex-1 h-px bg-stone-200" />
-                <span className="text-[10px] text-stone-400 uppercase tracking-wider">O buscar otro cliente</span>
-                <div className="flex-1 h-px bg-stone-200" />
-              </div>
-
               <div className="relative mb-3">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}

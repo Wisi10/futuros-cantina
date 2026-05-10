@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Loader2, Search, AlertCircle, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, PAYMENT_METHODS, ProductImage } from "@/lib/utils";
+import ClientLink from "@/components/shared/ClientLink";
 
 export default function PaymentModal({ cart, rate, processing, saleClient, userRole, onAssociateClient, onConfirm, onConfirmCredit, onBack }) {
   const [method, setMethod] = useState("");
@@ -169,7 +170,9 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
             <div className="flex items-start justify-between gap-3 bg-gold/5 border border-gold/20 rounded-lg p-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] uppercase tracking-wider text-gold font-medium">Cliente asociado</p>
-                <p className="text-sm font-bold text-stone-800 truncate">{saleClient.name}</p>
+                <p className="text-sm font-bold text-stone-800 truncate">
+                  {saleClient.id ? <ClientLink clientId={saleClient.id} name={saleClient.name} /> : saleClient.name}
+                </p>
                 <p className="text-[11px] text-stone-500">{saleClient.cedula ? `CI: ${saleClient.cedula}` : "Sin cedula"}</p>
                 <p className="text-xs text-gold font-medium mt-0.5">{Number(saleClient.points || 0).toLocaleString()} pts</p>
               </div>

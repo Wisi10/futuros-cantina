@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, PAYMENT_METHODS } from "@/lib/utils";
+import ClientLink from "@/components/shared/ClientLink";
 
 export default function CreditsModal({ user, rate, onClose, onUpdated }) {
   const [credits, setCredits] = useState([]);
@@ -187,7 +188,9 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                 return (
                   <div key={c.id} className={`${ageBg(days)} rounded-lg p-3 flex items-center justify-between`}>
                     <div>
-                      <p className="text-sm font-medium text-stone-800">{c.client_name}</p>
+                      <p className="text-sm font-medium text-stone-800">
+                        <ClientLink clientId={c.client_id} name={c.client_name} />
+                      </p>
                       <p className="text-xs text-stone-500 mt-0.5">
                         Original: REF {Number(c.original_amount_ref).toFixed(2)}
                         {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: REF ${Number(c.paid_amount_ref).toFixed(2)}`}
