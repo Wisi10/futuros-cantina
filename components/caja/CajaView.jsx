@@ -25,6 +25,8 @@ export default function CajaView({ user, rate }) {
   const isToday = selectedDate === new Date().toISOString().split("T")[0];
   const isAdmin = user?.role === "admin";
 
+  const [salePayments, setSalePayments] = useState([]); // sprint 7B
+
   const loadSales = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
@@ -35,6 +37,17 @@ export default function CajaView({ user, rate }) {
       .is("voided_at", null)
       .order("created_at", { ascending: false });
     setSales(data || []);
+
+    const ids = (data || []).map((s) => s.id);
+    if (ids.length > 0) {
+      const { data: sp } = await supabase
+        .from("cantina_sale_payments")
+        .select("sale_id, payment_method, amount_ref, is_change")
+        .in("sale_id", ids);
+      setSalePayments(sp || []);
+    } else {
+      setSalePayments([]);
+    }
     setLoading(false);
   }, [selectedDate]);
 
@@ -53,14 +66,20 @@ export default function CajaView({ user, rate }) {
     .reduce((sum, s) => sum + parseFloat(s.total_ref || 0), 0);
   const paidTotal = totalRef - creditTotal - cortesiaTotal;
 
-  // Payment method breakdown
+  // Payment method breakdown — read from cantina_sale_payments (sprint 7B)
   const methodBreakdown = {};
-  sales.forEach((s) => {
-    const method = s.payment_status === "credit" ? "credit" : (s.payment_method || "otro");
-    if (!methodBreakdown[method]) methodBreakdown[method] = { count: 0, total: 0 };
-    methodBreakdown[method].count++;
-    methodBreakdown[method].total += parseFloat(s.total_ref || 0);
-  });
+  // Credits as their own bucket
+  if (creditSales.length > 0) {
+    methodBreakdown["credit"] = { count: creditSales.length, total: creditTotal };
+  }
+  // Aggregate sale_payments by method (sums positive ingresos and negative changes)
+  for (const p of salePayments) {
+    const m = p.payment_method || "otro";
+    if (!methodBreakdown[m]) methodBreakdown[m] = { count: 0, total: 0 };
+    methodBreakdown[m].total += parseFloat(p.amount_ref || 0);
+    // Count only non-change payments to avoid inflating txn count
+    if (!p.is_change) methodBreakdown[m].count += 1;
+  }
 
   const exportExcel = () => {
     const rows = sales.map((s) => ({

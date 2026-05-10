@@ -184,6 +184,8 @@ export default function ReportesContentView({ user, rate }) {
   const [slowMoverSales, setSlowMoverSales] = useState([]);
   const [voidedCount, setVoidedCount] = useState(0);
 
+  const [methodPayments, setMethodPayments] = useState([]);
+
   // New charts (sprint 12)
   const [salesByDay, setSalesByDay] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
@@ -231,6 +233,18 @@ export default function ReportesContentView({ user, rate }) {
     setSlowMoverSales(slowRes.data || []);
     setAllTimeSales(oldestRes.data || []);
     setVoidedCount(voidedRes.count || 0);
+
+    // Sale payments for period (sprint 7B)
+    const periodSaleIds = (salesRes.data || []).map((s) => s.id);
+    if (periodSaleIds.length > 0) {
+      const { data: spData } = await supabase
+        .from("cantina_sale_payments")
+        .select("sale_id, payment_method, amount_ref, is_change")
+        .in("sale_id", periodSaleIds);
+      setMethodPayments(spData || []);
+    } else {
+      setMethodPayments([]);
+    }
     setLoading(false);
 
     // Heat map: last 30 days (independent of period selector)
@@ -364,12 +378,15 @@ export default function ReportesContentView({ user, rate }) {
     .map(([name, d]) => ({ name, ...d, margin: d.revenue - d.cost, pct: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue) * 100 : 0 }))
     .sort((a, b) => b.pct - a.pct);
 
-  // Sales by payment method
+  // Sales by payment method (sprint 7B: read from cantina_sale_payments)
   const methodTotals = {};
-  sales.forEach((s) => {
-    const key = s.payment_status === "credit" ? "credit" : (s.payment_method || "otro");
-    methodTotals[key] = (methodTotals[key] || 0) + Number(s.total_ref || 0);
-  });
+  // Credits aggregated separately (no payment_method -> not in sale_payments)
+  const creditAgg = sales.filter((s) => s.payment_status === "credit").reduce((s, v) => s + Number(v.total_ref || 0), 0);
+  if (creditAgg > 0) methodTotals.credit = creditAgg;
+  for (const p of methodPayments || []) {
+    const m = p.payment_method || "otro";
+    methodTotals[m] = (methodTotals[m] || 0) + Number(p.amount_ref || 0);
+  }
 
   // Excel export
   const exportExcel = async () => {

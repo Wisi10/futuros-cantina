@@ -6,6 +6,7 @@ import { formatREF, formatBs, METHOD_LABELS } from "@/lib/utils";
 
 export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
   const [sales, setSales] = useState([]);
+  const [salePayments, setSalePayments] = useState([]);
   const [countedBs, setCountedBs] = useState("");
   const [countedUsd, setCountedUsd] = useState("");
   const [notes, setNotes] = useState("");
@@ -14,25 +15,43 @@ export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
 
   useEffect(() => {
     if (!shift?.id) return;
-    supabase
-      .from("cantina_sales")
-      .select("total_ref, payment_method, payment_status")
-      .eq("shift_id", shift.id)
-      .then(({ data }) => setSales(data || []));
+    (async () => {
+      const { data: salesData } = await supabase
+        .from("cantina_sales")
+        .select("id, total_ref, payment_method, payment_status, voided_at")
+        .eq("shift_id", shift.id)
+        .is("voided_at", null);
+      const list = salesData || [];
+      setSales(list);
+      const ids = list.map((s) => s.id);
+      if (ids.length > 0) {
+        const { data: sp } = await supabase
+          .from("cantina_sale_payments")
+          .select("sale_id, payment_method, amount_ref, is_change")
+          .in("sale_id", ids);
+        setSalePayments(sp || []);
+      } else {
+        setSalePayments([]);
+      }
+    })();
   }, [shift?.id]);
 
   const openTime = new Date(shift.opened_at).toLocaleTimeString("es-VE", { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit" });
   const totalSalesRef = sales.reduce((s, v) => s + parseFloat(v.total_ref || 0), 0);
   const salesCount = sales.length;
 
-  // Breakdown by method
+  // Breakdown by method (from cantina_sale_payments). Credits stay aggregated separately.
   const byMethod = {};
-  sales.forEach(s => {
-    const m = s.payment_method || (s.payment_status === "credit" ? "credit" : "otro");
-    byMethod[m] = (byMethod[m] || 0) + parseFloat(s.total_ref || 0);
-  });
+  for (const p of salePayments) {
+    const m = p.payment_method || "otro";
+    byMethod[m] = (byMethod[m] || 0) + parseFloat(p.amount_ref || 0);
+  }
+  // Add credits aggregate
+  const creditTotal = sales.filter((s) => s.payment_status === "credit").reduce((s, v) => s + parseFloat(v.total_ref || 0), 0);
+  if (creditTotal > 0) byMethod.credit = (byMethod.credit || 0) + creditTotal;
 
-  // Expected cash
+  // Expected cash drawer = opening + cash_bs + cash_usd contributions
+  // amount_ref is negative for change-out rows, so SUM naturally subtracts vueltos
   const cashBsSales = (byMethod.cash_bs || 0) * (rate?.eur || 0);
   const cashUsdSales = byMethod.cash_usd || 0;
   const expectedBs = parseFloat(shift.opening_cash_bs || 0) + cashBsSales;

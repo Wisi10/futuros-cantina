@@ -15,6 +15,7 @@ export default function DashboardView({ user, rate, products, embedded = false }
   }, [products]);
 
   const [sales, setSales] = useState([]);
+  const [salePayments, setSalePayments] = useState([]);
   const [shift, setShift] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -30,9 +31,20 @@ export default function DashboardView({ user, rate, products, embedded = false }
       supabase.from("cantina_sales").select("*").eq("sale_date", today).is("voided_at", null).order("created_at", { ascending: false }),
       supabase.from("shifts").select("*").eq("status", "open").limit(1).single(),
     ]);
-    setSales(salesRes.data || []);
+    const list = salesRes.data || [];
+    setSales(list);
     setShift(shiftRes.data || null);
     setLastRefresh(new Date());
+    const ids = list.map((s) => s.id);
+    if (ids.length > 0) {
+      const { data: sp } = await supabase
+        .from("cantina_sale_payments")
+        .select("sale_id, payment_method, amount_ref, is_change")
+        .in("sale_id", ids);
+      setSalePayments(sp || []);
+    } else {
+      setSalePayments([]);
+    }
   }, [today]);
 
   useEffect(() => {
@@ -46,12 +58,14 @@ export default function DashboardView({ user, rate, products, embedded = false }
   const totalBs = rate?.eur ? totalRef * rate.eur : 0;
   const salesCount = sales.length;
 
-  // By method
+  // By method (sprint 7B: lee de cantina_sale_payments + agrega creditos)
   const byMethod = {};
-  sales.forEach(s => {
-    const m = s.payment_method || (s.payment_status === "credit" ? "credit" : "otro");
-    byMethod[m] = (byMethod[m] || 0) + parseFloat(s.total_ref || 0);
-  });
+  for (const p of salePayments) {
+    const m = p.payment_method || "otro";
+    byMethod[m] = (byMethod[m] || 0) + parseFloat(p.amount_ref || 0);
+  }
+  const credTotal = sales.filter((s) => s.payment_status === "credit").reduce((s, v) => s + parseFloat(v.total_ref || 0), 0);
+  if (credTotal > 0) byMethod.credit = (byMethod.credit || 0) + credTotal;
 
   // Top products — key by product_id when available, fallback to name
   const aggMap = {};

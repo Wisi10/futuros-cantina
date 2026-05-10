@@ -453,8 +453,9 @@ function POSPageInner() {
   };
 
   // Confirmation flow — PaymentModal calls these, which set pending + show confirm
-  const handlePaymentConfirm = (method, ref) => {
-    setPendingPayment({ type: "sale", method, ref });
+  const handlePaymentConfirm = (saleData) => {
+    // saleData = { payments: [{method, amount_ref, reference}], change?: {...}, legacy_method }
+    setPendingPayment({ type: "sale", saleData });
     setShowConfirm(true);
   };
 
@@ -473,17 +474,22 @@ function POSPageInner() {
     setShowConfirm(false);
 
     if (pendingPayment.type === "sale") {
-      await confirmSale(pendingPayment.method, pendingPayment.ref);
+      await confirmSale(pendingPayment.saleData);
     } else {
       await confirmCreditSale(pendingPayment);
     }
     setPendingPayment(null);
   };
 
-  // Confirm regular sale
-  const confirmSale = async (method, ref) => {
+  // Confirm regular sale (saleData = { payments: [], change?: {kind, amount, method?, client_id?}, legacy_method })
+  const confirmSale = async (saleData) => {
+    const payments = saleData?.payments || [];
+    const change = saleData?.change || null;
+    const legacyMethod = saleData?.legacy_method || null;
+    const isCortesiaSale = legacyMethod === "cortesia";
+
     // Defense in depth: cortesia is admin-only and requires saleClient
-    if (method === "cortesia") {
+    if (isCortesiaSale) {
       if (user?.cantinaRole !== "admin") {
         alert("Solo admin puede dar cortesias.");
         return;
@@ -494,12 +500,15 @@ function POSPageInner() {
       }
     }
 
+    // Reference for legacy field: first payment with reference, or null
+    const firstRef = payments.find((p) => p.reference)?.reference || null;
+
     setProcessing(true);
     try {
       const result = await executeSale({
         payment_status: "paid",
-        payment_method: method,
-        reference: ref || null,
+        payment_method: legacyMethod, // 'mixed' | single method | 'cortesia'
+        reference: firstRef,
         exchange_rate_bs: rate?.eur || null,
         created_by: user?.name || "Cantina",
         client_id: saleClient?.id || null,
@@ -507,9 +516,55 @@ function POSPageInner() {
       });
       if (!result) { setProcessing(false); return; }
 
-      // Loyalty: award points (non-blocking) — skip on cortesia (gratis = no consumo real)
+      // Insert sale_payments rows
+      const paymentRows = payments.map((p) => ({
+        id: "csp_" + Math.random().toString(36).slice(2, 14),
+        sale_id: result.sale.id,
+        payment_method: p.method,
+        amount_ref: p.amount_ref,
+        amount_bs: p.method === "cash_bs" && rate?.eur ? Number(p.amount_ref) * rate.eur : null,
+        exchange_rate: rate?.eur || null,
+        reference: p.reference || null,
+        is_change: false,
+      }));
+
+      // If overpay returned as cash, append a negative-amount row marking the change-out
+      if (change && change.kind === "cash" && change.amount > 0) {
+        paymentRows.push({
+          id: "csp_chg_" + Math.random().toString(36).slice(2, 14),
+          sale_id: result.sale.id,
+          payment_method: change.method,
+          amount_ref: -Math.abs(change.amount),
+          amount_bs: change.method === "cash_bs" && rate?.eur ? -Math.abs(change.amount) * rate.eur : null,
+          exchange_rate: rate?.eur || null,
+          reference: null,
+          is_change: true,
+          notes: "Vuelto al cliente",
+        });
+      }
+      if (paymentRows.length > 0) {
+        const { error: pErr } = await supabase.from("cantina_sale_payments").insert(paymentRows);
+        if (pErr) {
+          console.error("[SALE_PAYMENTS] insert error:", pErr);
+          alert("Inconsistencia: venta creada pero pagos no se grabaron. Revisa con admin. Detalle: " + pErr.message);
+        }
+      }
+
+      // If overpay returned as client account credit, INSERT client_credits
+      if (change && change.kind === "credit" && change.amount > 0 && change.client_id) {
+        const { error: ccErr } = await supabase.from("client_credits").insert({
+          id: "cc_" + Math.random().toString(36).slice(2, 14),
+          client_id: change.client_id,
+          amount_ref: change.amount,
+          concept: `Sobrepago en venta cantina ${result.sale.id}`,
+          created_by: user?.name || "Cantina",
+        });
+        if (ccErr) console.error("[CLIENT_CREDIT] insert error:", ccErr);
+      }
+
+      // Loyalty: award points (non-blocking) — skip on cortesia
       try {
-        if (result.sale?.client_id && method !== "cortesia") {
+        if (result.sale?.client_id && !isCortesiaSale) {
           await supabase.rpc("award_loyalty_points", { sale_id_param: result.sale.id });
         }
       } catch (e) { console.error("[LOYALTY] award error:", e); }
@@ -534,8 +589,10 @@ function POSPageInner() {
         totalRef,
         totalBs,
         rate: rate?.eur || null,
-        paymentMethod: method,
-        reference: ref,
+        paymentMethod: legacyMethod,
+        reference: firstRef,
+        payments,
+        change,
       });
       setCart([]);
       setScreen("success");
@@ -650,6 +707,18 @@ function POSPageInner() {
       if (lastSaleRecord.payment_status === "credit") {
         await supabase.from("cantina_credits").delete().eq("sale_id", saleId);
       }
+
+      // 3b. If sale had overpay -> client_credits row from sobrepago, delete it
+      // (cantina_sale_payments rows are removed by FK CASCADE when cantina_sales is deleted —
+      //  but we soft-delete via voided_at, so explicit DELETE for the credit record by concept match)
+      try {
+        await supabase.from("client_credits")
+          .delete()
+          .eq("concept", `Sobrepago en venta cantina ${saleId}`);
+      } catch (e) { console.error("[VOID] client_credits revert error:", e); }
+
+      // 3c. Delete cantina_sale_payments (soft-deleted parent so FK cascade not triggered)
+      await supabase.from("cantina_sale_payments").delete().eq("sale_id", saleId);
 
       // 4. Soft-delete: mark as voided (preserves audit trail)
       await supabase.from("cantina_sales").update({
