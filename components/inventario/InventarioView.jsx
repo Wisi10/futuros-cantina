@@ -6,13 +6,16 @@ import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 import CreateProductModal from "./CreateProductModal";
+import RecipeEditor from "./RecipeEditor";
 
 export default function InventarioView({ user }) {
+  const [scope, setScope] = useState("productos"); // "productos" (is_cantina=true) | "materia" (is_cantina=false)
   const [subTab, setSubTab] = useState("stock");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [adjusting, setAdjusting] = useState(null);
+  const [recipeEditing, setRecipeEditing] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState("todos");
   const [kpiFilter, setKpiFilter] = useState(null); // "sin_stock" | "stock_bajo" | null
   const [restocks, setRestocks] = useState([]);
@@ -26,11 +29,11 @@ export default function InventarioView({ user }) {
     const { data } = await supabase
       .from("products")
       .select("*")
-      .eq("is_cantina", true)
+      .eq("is_cantina", scope === "productos")
       .order("stock_quantity", { ascending: true });
     if (data) setProducts(data);
     setLoading(false);
-  }, []);
+  }, [scope]);
 
   const loadRestocks = useCallback(async () => {
     if (!supabase) return;
@@ -143,6 +146,25 @@ export default function InventarioView({ user }) {
             className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors flex items-center gap-1.5"
           >
             <Plus size={14} /> Crear producto
+          </button>
+        </div>
+        {/* Scope toggle: productos vs materia prima */}
+        <div className="flex gap-1 mb-2 border-b border-stone-200">
+          <button
+            onClick={() => setScope("productos")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+              scope === "productos" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            Productos
+          </button>
+          <button
+            onClick={() => setScope("materia")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+              scope === "materia" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            Materia Prima
           </button>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -311,12 +333,23 @@ export default function InventarioView({ user }) {
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                         <td className="px-3 py-2 text-center">{stockBadge(p)}</td>
                         <td className="px-3 py-2 text-right">
-                          <button
-                            onClick={() => setAdjusting(p)}
-                            className="text-xs text-brand hover:underline"
-                          >
-                            Ajustar
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {scope === "productos" && (
+                              <button
+                                onClick={() => setRecipeEditing(p)}
+                                className={`text-xs hover:underline ${p.has_recipe ? "text-amber-700 font-semibold" : "text-stone-500"}`}
+                                title={p.has_recipe ? "Tiene receta" : "Sin receta"}
+                              >
+                                {p.has_recipe ? "Receta" : "+ Receta"}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setAdjusting(p)}
+                              className="text-xs text-brand hover:underline"
+                            >
+                              Ajustar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       );
@@ -502,6 +535,16 @@ export default function InventarioView({ user }) {
           user={user}
           onClose={() => setAdjusting(null)}
           onSaved={() => { setAdjusting(null); loadProducts(); }}
+        />
+      )}
+
+      {/* Recipe editor modal */}
+      {recipeEditing && (
+        <RecipeEditor
+          product={recipeEditing}
+          user={user}
+          onClose={() => setRecipeEditing(null)}
+          onSaved={() => { setRecipeEditing(null); loadProducts(); }}
         />
       )}
 

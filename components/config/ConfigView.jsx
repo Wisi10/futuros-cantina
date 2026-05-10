@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Settings, Save, RefreshCw, History, X, Package } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
+import CategoriesEditor from "./CategoriesEditor";
 
 export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
@@ -18,7 +19,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase.from("products").select("*").order("sort_order");
+    const { data } = await supabase.from("products").select("*").order("name", { ascending: true });
     if (data) setProducts(data);
     setLoading(false);
   }, []);
@@ -174,6 +175,8 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
           </div>
         )}
       </div>
+
+      <CategoriesEditor user={user} />
 
       {/* Stock Threshold Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">

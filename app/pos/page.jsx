@@ -27,6 +27,8 @@ import PuntosView from "@/components/puntos/PuntosView";
 import ClientesView from "@/components/clientes/ClientesView";
 import EventosView from "@/components/eventos/EventosView";
 import StockAlertToast from "@/components/vender/StockAlertToast";
+import DashboardView from "@/components/dashboard/DashboardView";
+import { ChevronDown as ChevDown } from "lucide-react";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
 function GlobalProfileMount({ user, rate }) {
@@ -53,6 +55,10 @@ function POSPageInner() {
   const [products, setProducts] = useState([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [showStockToast, setShowStockToast] = useState(false);
+  const [liveExpanded, setLiveExpanded] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth >= 768;
+  });
   const [cart, setCart] = useState(() => {
     if (typeof window !== "undefined") {
       try {
@@ -297,7 +303,52 @@ function POSPageInner() {
   const executeSale = async (saleData) => {
     const stockBearingItems = cart;
 
+    // Pre-fetch recipe + ingredient stock for any has_recipe items
+    const recipeItemIds = stockBearingItems
+      .filter((i) => i.product.has_recipe)
+      .map((i) => i.product.id);
+    let recipesByProduct = {};
+    let ingredientStockById = {};
+    if (recipeItemIds.length > 0) {
+      const { data: recRows } = await supabase
+        .from("product_recipes")
+        .select("product_id, ingredient_id, quantity, unit")
+        .in("product_id", recipeItemIds);
+      (recRows || []).forEach((r) => {
+        if (!recipesByProduct[r.product_id]) recipesByProduct[r.product_id] = [];
+        recipesByProduct[r.product_id].push(r);
+      });
+      const ingredientIds = [...new Set((recRows || []).map((r) => r.ingredient_id).filter(Boolean))];
+      if (ingredientIds.length > 0) {
+        const { data: ingRows } = await supabase
+          .from("products")
+          .select("id, name, stock_quantity, cost_ref")
+          .in("id", ingredientIds);
+        (ingRows || []).forEach((p) => { ingredientStockById[p.id] = p; });
+      }
+    }
+
+    // Stock checks: for has_recipe items check ingredients; for plain items check own stock
     for (const item of stockBearingItems) {
+      if (item.product.has_recipe) {
+        const recipe = recipesByProduct[item.product.id] || [];
+        if (recipe.length === 0) {
+          alert(`${item.product.name} esta marcado con receta pero no tiene ingredientes.`);
+          return null;
+        }
+        for (const ing of recipe) {
+          const stock = ingredientStockById[ing.ingredient_id];
+          if (!stock) continue;
+          const needed = Number(ing.quantity) * item.qty;
+          if (Number(stock.stock_quantity || 0) < needed) {
+            const ok = window.confirm(
+              `Falta materia prima para ${item.product.name}: ${stock.name} (necesita ${needed}, hay ${stock.stock_quantity}). Stock quedara negativo. Continuar?`
+            );
+            if (!ok) return null;
+          }
+        }
+        continue;
+      }
       const { data: current } = await supabase
         .from("products")
         .select("stock_quantity")
@@ -331,25 +382,71 @@ function POSPageInner() {
       .single();
     if (saleError) throw saleError;
 
-    const movements = stockBearingItems.map((item) => ({
-      product_id: item.product.id,
-      product_name: item.product.name,
-      movement_type: "sale",
-      quantity: -item.qty,
-      reference_id: sale.id,
-      cost_ref: parseFloat(item.product.cost_ref || 0),
-      notes: saleData.payment_status === "credit" ? `Credito — ${saleData.client_name}` : "Venta cantina",
-      created_by: user?.name || "Cantina",
-    }));
-    const { error: movError } = await supabase.from("stock_movements").insert(movements);
-    if (movError) throw movError;
-
+    // Build movements: sale for plain items, recipe_consumption for ingredients of has_recipe items
+    const movements = [];
+    const ingredientUpdates = []; // {ingredient_id, decrement}
     for (const item of stockBearingItems) {
+      if (item.product.has_recipe) {
+        const recipe = recipesByProduct[item.product.id] || [];
+        for (const ing of recipe) {
+          const ingrInfo = ingredientStockById[ing.ingredient_id];
+          const needed = Number(ing.quantity) * item.qty;
+          movements.push({
+            product_id: ing.ingredient_id,
+            product_name: ingrInfo?.name || "(ingrediente)",
+            movement_type: "recipe_consumption",
+            quantity: -needed,
+            reference_id: sale.id,
+            cost_ref: parseFloat(ingrInfo?.cost_ref || 0),
+            notes: `Consumo receta · ${item.product.name}`,
+            created_by: user?.name || "Cantina",
+          });
+          ingredientUpdates.push({ id: ing.ingredient_id, decrement: needed });
+        }
+      } else {
+        movements.push({
+          product_id: item.product.id,
+          product_name: item.product.name,
+          movement_type: "sale",
+          quantity: -item.qty,
+          reference_id: sale.id,
+          cost_ref: parseFloat(item.product.cost_ref || 0),
+          notes: saleData.payment_status === "credit" ? `Credito — ${saleData.client_name}` : "Venta cantina",
+          created_by: user?.name || "Cantina",
+        });
+      }
+    }
+    if (movements.length > 0) {
+      const { error: movError } = await supabase.from("stock_movements").insert(movements);
+      if (movError) throw movError;
+    }
+
+    // Decrement plain product stock (non-recipe items)
+    for (const item of stockBearingItems) {
+      if (item.product.has_recipe) continue;
       const { error: stockError } = await supabase
         .from("products")
         .update({ stock_quantity: (item.product.stock_quantity ?? 0) - item.qty })
         .eq("id", item.product.id);
       if (stockError) throw stockError;
+    }
+
+    // Decrement ingredient stocks (aggregate per ingredient if same one used multiple times)
+    const aggIngredient = {};
+    for (const u of ingredientUpdates) {
+      aggIngredient[u.id] = (aggIngredient[u.id] || 0) + u.decrement;
+    }
+    for (const ingId of Object.keys(aggIngredient)) {
+      const current = ingredientStockById[ingId];
+      const newStock = Number(current?.stock_quantity || 0) - aggIngredient[ingId];
+      const { error: ingErr } = await supabase
+        .from("products")
+        .update({ stock_quantity: newStock })
+        .eq("id", ingId);
+      if (ingErr) {
+        console.error("[RECIPE] inconsistencia: stock_movements OK pero ingredient update fallo", ingId, ingErr);
+        alert(`Inconsistencia detectada: el movimiento de stock_movements se grabo pero el ingrediente ${current?.name || ingId} no se actualizo. Revisar manual.`);
+      }
     }
 
     return { sale, items };
@@ -517,18 +614,32 @@ function POSPageInner() {
       const saleId = lastSaleRecord.id;
       const items = lastSaleRecord.items || [];
 
-      // 1. Restore stock for all items
-      for (const item of items) {
-        const { data: product } = await supabase
+      // 1a. For non-recipe items: restore product stock directly
+      // 1b. For recipe items: restore ingredient stock from stock_movements with type=recipe_consumption
+      const { data: existingMovements } = await supabase
+        .from("stock_movements")
+        .select("product_id, quantity, movement_type")
+        .eq("reference_id", saleId);
+
+      // Group restorations by product_id (sum negative quantities to know what to add back)
+      const restoreMap = {};
+      for (const m of existingMovements || []) {
+        // Only restore for sale and recipe_consumption types (qty stored as negative)
+        if (m.movement_type === "sale" || m.movement_type === "recipe_consumption") {
+          restoreMap[m.product_id] = (restoreMap[m.product_id] || 0) + Math.abs(Number(m.quantity || 0));
+        }
+      }
+      for (const productId of Object.keys(restoreMap)) {
+        const { data: prod } = await supabase
           .from("products")
           .select("stock_quantity")
-          .eq("id", item.product_id)
+          .eq("id", productId)
           .single();
-        if (product) {
+        if (prod) {
           await supabase
             .from("products")
-            .update({ stock_quantity: Number(product.stock_quantity || 0) + item.qty })
-            .eq("id", item.product_id);
+            .update({ stock_quantity: Number(prod.stock_quantity || 0) + restoreMap[productId] })
+            .eq("id", productId);
         }
       }
 
@@ -559,13 +670,13 @@ function POSPageInner() {
         }
       } catch (e) { console.error("[LOYALTY] reverse redemption error:", e); }
 
-      // 5. Record void movement
-      for (const item of items) {
+      // 5. Record void audit movements (one per restored product)
+      for (const productId of Object.keys(restoreMap)) {
         await supabase.from("stock_movements").insert({
-          product_id: item.product_id,
-          product_name: item.name,
+          product_id: productId,
+          product_name: items.find((i) => i.product_id === productId)?.name || "(restaurado)",
           movement_type: "adjustment",
-          quantity: item.qty,
+          quantity: restoreMap[productId],
           notes: `Anulacion venta #${saleId.substring(0, 8)}`,
           created_by: user?.name || "Cantina",
         });
@@ -654,7 +765,7 @@ function POSPageInner() {
 
         {/* Tab content */}
         {activeTab === "vender" && (
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
             {/* Live strip — sutil */}
             <div className="bg-stone-50 border-b border-stone-200 px-4 py-1.5 text-[11px] text-stone-500 flex items-center gap-3 flex-wrap shrink-0">
               <span><span className="text-stone-400">Hoy:</span> <span className="font-semibold text-stone-700">REF {todayStats.total.toFixed(2)}</span></span>
@@ -667,7 +778,7 @@ function POSPageInner() {
                 </>
               )}
             </div>
-            <div className="flex-1 flex min-h-0">
+            <div className="flex min-h-[60vh] shrink-0">
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
                 <p className="text-stone-400 text-sm animate-pulse">Cargando productos...</p>
@@ -695,6 +806,22 @@ function POSPageInner() {
                 />
               </>
             )}
+            </div>
+
+            {/* EN VIVO — collapsible dashboard section */}
+            <div className="border-t border-stone-200 shrink-0">
+              <button
+                onClick={() => setLiveExpanded((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-stone-50"
+              >
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-500">En Vivo</span>
+                <ChevDown size={14} className={`text-stone-400 transition-transform ${liveExpanded ? "rotate-180" : ""}`} />
+              </button>
+              {liveExpanded && (
+                <div>
+                  <DashboardView user={user} rate={rate} products={products} embedded />
+                </div>
+              )}
             </div>
           </div>
         )}
