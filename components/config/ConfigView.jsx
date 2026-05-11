@@ -4,6 +4,7 @@ import { Settings, Save, RefreshCw, History, X, Package } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
+import DescuentosCantinaEditor from "./DescuentosCantinaEditor";
 
 export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
@@ -177,6 +178,8 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       </div>
 
       <CategoriesEditor user={user} />
+
+      <DescuentosCantinaEditor user={user} />
 
       {/* Stock Threshold Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">
