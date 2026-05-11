@@ -4,16 +4,16 @@ import {
   TrendingUp, TrendingDown, Minus, Search, AlertTriangle, Package2,
   Truck, ChevronDown, BarChart3, ArrowUpRight, ArrowDownRight, Trophy, Download
 } from "lucide-react";
-import { Bar } from "react-chartjs-2";
+import { Bar, Line } from "react-chartjs-2";
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  Tooltip as ChartTooltip, Legend
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
+  PointElement, Filler, Tooltip as ChartTooltip, Legend
 } from "chart.js";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { formatREF, ProductImage } from "@/lib/utils";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, ChartTooltip, Legend);
 
 // Mini sparkline SVG — historia de precios en linea pequena
 function Sparkline({ points, width = 60, height = 18, color = "#B8963E" }) {
@@ -40,9 +40,16 @@ function Sparkline({ points, width = 60, height = 18, color = "#B8963E" }) {
 
 const SUB_TABS = [
   { id: "resumen", label: "Resumen" },
+  { id: "evolucion", label: "Evolucion" },
   { id: "productos", label: "Productos" },
   { id: "materia", label: "Materia Prima" },
   { id: "proveedores", label: "Proveedores" },
+];
+
+// Paleta de colores para multi-line chart
+const LINE_COLORS = [
+  "#B8963E", "#4D1A2A", "#16a34a", "#dc2626", "#0891b2",
+  "#7c3aed", "#ea580c", "#0f766e", "#a16207", "#be123c",
 ];
 
 const variationColor = (pct) => {
@@ -79,6 +86,7 @@ export default function CostosView({ user }) {
   const [movements, setMovements] = useState([]);
   const [restocks, setRestocks] = useState([]);
   const [sales, setSales] = useState([]);
+  const [movementsYear, setMovementsYear] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -90,8 +98,12 @@ export default function CostosView({ user }) {
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const isoCutoff = ninetyDaysAgo.toISOString();
     const dateCutoff = isoCutoff.split("T")[0];
+    // Para Evolucion: cargar 365d de movimientos restock
+    const yearAgo = new Date();
+    yearAgo.setDate(yearAgo.getDate() - 365);
+    const yearCutoff = yearAgo.toISOString();
 
-    const [productsRes, recipesRes, movementsRes, restocksRes, salesRes] = await Promise.all([
+    const [productsRes, recipesRes, movementsRes, restocksRes, salesRes, evolutionRes] = await Promise.all([
       supabase.from("products").select("*").eq("active", true).order("name"),
       supabase.from("product_recipes").select("*"),
       supabase
@@ -109,7 +121,14 @@ export default function CostosView({ user }) {
         .from("cantina_sales")
         .select("id, sale_date, items, total_ref")
         .gte("sale_date", dateCutoff),
+      supabase
+        .from("stock_movements")
+        .select("product_id, product_name, quantity, cost_ref, created_at")
+        .eq("movement_type", "restock")
+        .gte("created_at", yearCutoff)
+        .order("created_at", { ascending: true }),
     ]);
+    setMovementsYear(evolutionRes.data || []);
 
     setProducts(productsRes.data || []);
     setRecipes(recipesRes.data || []);
@@ -393,6 +412,12 @@ export default function CostosView({ user }) {
                 supplierData={supplierData}
                 revenueByProduct={revenueByProduct}
                 setSubTab={setSubTab}
+              />
+            )}
+            {subTab === "evolucion" && (
+              <EvolucionMAC
+                movementsYear={movementsYear}
+                materiaPrima={materiaPrima}
               />
             )}
             {subTab === "productos" && (
@@ -1033,6 +1058,239 @@ function ProveedorLista({ supplierData }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// EVOLUCION MAC — line chart multi-producto mes a mes
+// ═══════════════════════════════════════════════════════
+function EvolucionMAC({ movementsYear, materiaPrima }) {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [search, setSearch] = useState("");
+
+  // Indexar movimientos por producto (ya ordenados ASC por created_at en load)
+  const movementsByProduct = useMemo(() => {
+    const map = {};
+    movementsYear.forEach((m) => {
+      if (!m.product_id) return;
+      if (!map[m.product_id]) map[m.product_id] = [];
+      map[m.product_id].push(m);
+    });
+    return map;
+  }, [movementsYear]);
+
+  // Productos elegibles: solo los que tienen >=2 restocks en 12m
+  const eligibles = useMemo(() => {
+    return materiaPrima
+      .map((p) => ({ ...p, restockCount: (movementsByProduct[p.id] || []).length }))
+      .filter((p) => p.restockCount >= 2)
+      .sort((a, b) => b.restockCount - a.restockCount);
+  }, [materiaPrima, movementsByProduct]);
+
+  // Default: top 3 por # restocks
+  useEffect(() => {
+    if (selectedIds.length === 0 && eligibles.length > 0) {
+      setSelectedIds(eligibles.slice(0, 3).map((p) => p.id));
+    }
+  }, [eligibles, selectedIds.length]);
+
+  // Generar las labels de meses (12 ultimos, formato "Ene 26")
+  const monthLabels = useMemo(() => {
+    const labels = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = d.toLocaleDateString("es-VE", { month: "short", timeZone: "America/Caracas" });
+      const yr = String(d.getFullYear()).slice(-2);
+      labels.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        label: `${monthName.charAt(0).toUpperCase() + monthName.slice(1).replace(".", "")} ${yr}`,
+        endOfMonth: new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59),
+      });
+    }
+    return labels;
+  }, []);
+
+  // Calcular MAC al final de cada mes para cada producto seleccionado
+  // Replay restock movements en orden ASC, computar MAC incremental, tomar valor al cierre del mes
+  const macHistoryByProduct = useMemo(() => {
+    const map = {};
+    selectedIds.forEach((pid) => {
+      const mvts = movementsByProduct[pid] || [];
+      let stock = 0;
+      let mac = 0;
+      const monthlyMAC = {};
+      const sorted = [...mvts].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      let cursor = 0;
+      monthLabels.forEach(({ key, endOfMonth }) => {
+        while (cursor < sorted.length && new Date(sorted[cursor].created_at) <= endOfMonth) {
+          const m = sorted[cursor];
+          const qty = Number(m.quantity || 0);
+          const cost = Number(m.cost_ref || 0);
+          if (qty > 0 && cost >= 0) {
+            const newStock = stock + qty;
+            mac = newStock > 0 ? (stock * mac + qty * cost) / newStock : cost;
+            stock = newStock;
+          }
+          cursor++;
+        }
+        // Si no hubo movimientos antes de este mes, MAC es null (no data)
+        monthlyMAC[key] = stock > 0 ? mac : null;
+      });
+      map[pid] = monthlyMAC;
+    });
+    return map;
+  }, [selectedIds, movementsByProduct, monthLabels]);
+
+  // Chart data
+  const chartData = useMemo(() => {
+    const datasets = selectedIds.map((pid, i) => {
+      const product = materiaPrima.find((p) => p.id === pid);
+      const history = macHistoryByProduct[pid] || {};
+      const color = LINE_COLORS[i % LINE_COLORS.length];
+      return {
+        label: product?.name || pid,
+        data: monthLabels.map((m) => history[m.key]),
+        borderColor: color,
+        backgroundColor: color + "20",
+        tension: 0.35,
+        spanGaps: true,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      };
+    });
+    return {
+      labels: monthLabels.map((m) => m.label),
+      datasets,
+    };
+  }, [selectedIds, macHistoryByProduct, monthLabels, materiaPrima]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: { boxWidth: 10, font: { size: 11 }, padding: 12 },
+      },
+      tooltip: {
+        callbacks: {
+          label: (c) => `${c.dataset.label}: ${c.raw != null ? `REF ${Number(c.raw).toFixed(4)}` : "sin data"}`,
+        },
+      },
+    },
+    scales: {
+      x: { grid: { color: "#f5f5f4" }, ticks: { font: { size: 10 } } },
+      y: {
+        beginAtZero: false,
+        grid: { color: "#f5f5f4" },
+        ticks: { font: { size: 10 }, callback: (v) => `REF ${v}` },
+      },
+    },
+  };
+
+  const toggleProduct = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const filteredEligibles = eligibles.filter(
+    (p) => !search || (p.name || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-stone-200 p-4">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h3 className="text-sm font-bold text-stone-700">
+            Evolucion MAC mes a mes — 12 meses
+          </h3>
+          <span className="text-[11px] text-stone-400">
+            {selectedIds.length} producto{selectedIds.length !== 1 ? "s" : ""} seleccionado{selectedIds.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {selectedIds.length === 0 ? (
+          <p className="text-xs text-stone-400 text-center py-12">
+            Selecciona productos abajo para ver su evolucion.
+          </p>
+        ) : (
+          <div style={{ height: 340 }}>
+            <Line data={chartData} options={chartOptions} />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200 p-4">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+            Productos disponibles
+          </h4>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-[11px] text-stone-500 hover:text-stone-700 underline"
+            >
+              Limpiar
+            </button>
+            <button
+              onClick={() => setSelectedIds(eligibles.slice(0, 5).map((p) => p.id))}
+              className="text-[11px] text-brand hover:underline"
+            >
+              Top 5
+            </button>
+          </div>
+        </div>
+
+        <div className="relative mb-3">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full border border-stone-200 rounded-lg pl-9 pr-3 py-1.5 text-xs focus:border-brand focus:outline-none bg-white"
+          />
+        </div>
+
+        {filteredEligibles.length === 0 ? (
+          <p className="text-xs text-stone-400 text-center py-4">
+            Sin productos con suficiente historia (necesitan {">"}=2 compras en 12m).
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {filteredEligibles.map((p) => {
+              const isSelected = selectedIds.includes(p.id);
+              const colorIdx = selectedIds.indexOf(p.id);
+              const color = isSelected ? LINE_COLORS[colorIdx % LINE_COLORS.length] : null;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => toggleProduct(p.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-2 ${
+                    isSelected
+                      ? "border-transparent text-white"
+                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                  }`}
+                  style={isSelected ? { backgroundColor: color } : {}}
+                >
+                  {isSelected && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                  )}
+                  {p.name}
+                  <span className={`text-[10px] ${isSelected ? "opacity-80" : "text-stone-400"}`}>
+                    {p.restockCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
