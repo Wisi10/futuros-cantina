@@ -799,7 +799,7 @@ function POSPageInner() {
     <div className="h-screen flex flex-col md:flex-row bg-brand-cream-light overflow-hidden">
       <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={user.cantinaRole || "staff"} />
 
-      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 pb-16 md:pb-0">
         {/* Header */}
         <header className="bg-white border-b border-stone-200 px-3 md:px-4 py-2 md:py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:gap-3">
@@ -896,47 +896,49 @@ function POSPageInner() {
         )}
 
         {activeTab === "inventario" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <InventarioView user={user} />
           </div>
         )}
 
         {activeTab === "caja" && user.cantinaRole === "admin" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <CajaView user={user} rate={rate} />
           </div>
         )}
 
         {activeTab === "eventos" && user.cantinaRole === "admin" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <EventosView user={user} rate={rate} onNavigate={setActiveTab} />
           </div>
         )}
 
         {activeTab === "reportes" && user.cantinaRole === "admin" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ReportesView user={user} rate={rate} />
           </div>
         )}
 
         {activeTab === "turnos" && user.cantinaRole === "admin" && (
-          <ShiftsView user={user} />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ShiftsView user={user} />
+          </div>
         )}
 
         {activeTab === "puntos" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <PuntosView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 
         {activeTab === "clientes" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ClientesView user={user} rate={rate} />
           </div>
         )}
 
         {activeTab === "config" && user.cantinaRole === "admin" && (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
           </div>
         )}
