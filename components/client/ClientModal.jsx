@@ -1,10 +1,26 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Search, ArrowLeft, User, Gift } from "lucide-react";
+import { X, Search, ArrowLeft, User, Gift, Percent } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, ProductImage } from "@/lib/utils";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
+  const isAdmin = user?.cantinaRole === "admin";
+  const [availableDiscounts, setAvailableDiscounts] = useState([]);
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [savingDiscount, setSavingDiscount] = useState(false);
+
+  // Cargar descuentos cantina disponibles (una vez)
+  useEffect(() => {
+    if (!supabase) return;
+    supabase
+      .from("discounts")
+      .select("id, name, percentage")
+      .eq("is_cantina", true)
+      .eq("is_active", true)
+      .order("sort_order")
+      .then(({ data }) => setAvailableDiscounts(data || []));
+  }, []);
   const [view, setView] = useState("list"); // "list" | "profile" | "rewards" | "redeemSuccess"
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -174,9 +190,81 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                     )}
                   </div>
 
+                  {/* Descuento cantina */}
+                  <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[1.5px] text-stone-500 font-medium flex items-center gap-1">
+                        <Percent size={11} /> Descuento cantina
+                      </p>
+                      {isAdmin && !editingDiscount && (
+                        <button
+                          onClick={() => setEditingDiscount(true)}
+                          className="text-[11px] text-brand hover:underline"
+                        >
+                          {profile.cantina_discount_id ? "Cambiar" : "Asignar"}
+                        </button>
+                      )}
+                    </div>
+                    {editingDiscount ? (
+                      <div className="mt-2 space-y-2">
+                        <select
+                          value={profile.cantina_discount_id || ""}
+                          onChange={async (e) => {
+                            const newId = e.target.value || null;
+                            setSavingDiscount(true);
+                            const { error } = await supabase
+                              .from("clients")
+                              .update({ cantina_discount_id: newId })
+                              .eq("id", profile.id);
+                            setSavingDiscount(false);
+                            if (error) { alert("Error: " + error.message); return; }
+                            const { data: refreshed } = await supabase.rpc("get_client_profile", { client_id_param: profile.id });
+                            if (refreshed?.[0]) setProfile(refreshed[0]);
+                            setEditingDiscount(false);
+                          }}
+                          disabled={savingDiscount}
+                          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none bg-white"
+                        >
+                          <option value="">Sin descuento</option>
+                          {availableDiscounts.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.name} ({Number(d.percentage).toFixed(d.percentage % 1 === 0 ? 0 : 2)}%)
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => setEditingDiscount(false)}
+                          className="text-[11px] text-stone-500 hover:underline"
+                          disabled={savingDiscount}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : profile.cantina_discount_id ? (
+                      <p className="text-sm font-bold text-brand mt-1">
+                        {profile.cantina_discount_name} · {Number(profile.cantina_discount_pct || 0).toFixed(profile.cantina_discount_pct % 1 === 0 ? 0 : 2)}%
+                      </p>
+                    ) : (
+                      <p className="text-xs text-stone-400 mt-1">Sin descuento asignado</p>
+                    )}
+                  </div>
+
                   {/* Associate to sale */}
                   {onAssociateClient && (
-                    <button onClick={() => { onAssociateClient({ id: profile.id, name: profile.full_name, cedula: profile.cedula || null, points: Number(profile.loyalty_points || 0) }); onClose(); }}
+                    <button onClick={() => {
+                      onAssociateClient({
+                        id: profile.id,
+                        name: profile.full_name,
+                        cedula: profile.cedula || null,
+                        points: Number(profile.loyalty_points || 0),
+                        discount: profile.cantina_discount_id ? {
+                          id: profile.cantina_discount_id,
+                          name: profile.cantina_discount_name,
+                          pct: Number(profile.cantina_discount_pct || 0),
+                        } : null,
+                      });
+                      onClose();
+                    }}
                       className="w-full py-2.5 border-2 border-brand rounded-xl text-sm font-medium text-brand hover:bg-brand/5 transition-colors">
                       Asociar a venta actual
                     </button>

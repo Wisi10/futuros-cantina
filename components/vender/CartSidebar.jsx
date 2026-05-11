@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { formatBs, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 
-function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption, totalRef }) {
+function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption, totalRef, subtotalRef, discountAmount, discountPct, discountName }) {
   const hasTasa = !!rate;
   const [showRewards, setShowRewards] = useState(false);
   const [rewards, setRewards] = useState([]);
@@ -112,6 +112,18 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
         )}
 
         <div>
+          {discountAmount > 0 && (
+            <>
+              <div className="flex justify-between items-baseline text-xs text-stone-500 mb-1">
+                <span>Subtotal</span>
+                <span className="font-medium">REF {subtotalRef.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-baseline text-xs text-green-700 mb-1.5">
+                <span>Descuento {discountName ? `(${discountName})` : ""} -{discountPct}%</span>
+                <span className="font-medium">-REF {discountAmount.toFixed(2)}</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between items-baseline">
             <span className="text-xs text-stone-500">Total</span>
             <span className="text-xl font-bold text-brand">REF {totalRef.toFixed(2)}</span>
@@ -127,9 +139,15 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
   );
 }
 
-export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption }) {
+export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption, subtotalRef: subtotalProp, discountAmount: discountAmountProp, discountPct: discountPctProp }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
+  const subtotalRef = subtotalProp != null
+    ? subtotalProp
+    : cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
+  const discountAmount = Number(discountAmountProp || 0);
+  const discountPct = Number(discountPctProp || 0);
+  const totalRef = Math.max(0, subtotalRef - discountAmount);
+  const discountName = saleClient?.discount?.name || null;
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
 
   // Body scroll lock when bottom sheet is open
@@ -152,7 +170,8 @@ export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheck
           {saleClient && <p className="text-[10px] text-gold mt-1 font-medium">👤 {saleClient.id ? <ClientLink clientId={saleClient.id} name={saleClient.name} className="text-gold hover:text-gold" /> : saleClient.name} · {(saleClient.points || 0).toLocaleString()} pts</p>}
         </div>
         <CartContent cart={cart} rate={rate} onUpdateQty={onUpdateQty} onRemove={onRemove}
-          onCheckout={onCheckout} saleClient={saleClient} onAddRedemption={onAddRedemption} totalRef={totalRef} />
+          onCheckout={onCheckout} saleClient={saleClient} onAddRedemption={onAddRedemption}
+          totalRef={totalRef} subtotalRef={subtotalRef} discountAmount={discountAmount} discountPct={discountPct} discountName={discountName} />
       </div>
 
       {/* Mobile: FAB + bottom sheet */}
@@ -188,7 +207,8 @@ export default function CartSidebar({ cart, rate, onUpdateQty, onRemove, onCheck
               </div>
               <CartContent cart={cart} rate={rate} onUpdateQty={onUpdateQty} onRemove={onRemove}
                 onCheckout={() => { setMobileOpen(false); onCheckout(); }}
-                saleClient={saleClient} onAddRedemption={onAddRedemption} totalRef={totalRef} />
+                saleClient={saleClient} onAddRedemption={onAddRedemption}
+                totalRef={totalRef} subtotalRef={subtotalRef} discountAmount={discountAmount} discountPct={discountPct} discountName={discountName} />
             </div>
           </>
         )}

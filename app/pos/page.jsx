@@ -285,8 +285,11 @@ function POSPageInner() {
     });
   };
 
-  // Totals
-  const totalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
+  // Totals (con descuento cantina si el cliente lo tiene)
+  const subtotalRef = cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0);
+  const discountPct = Number(saleClient?.discount?.pct || 0);
+  const discountAmount = subtotalRef > 0 && discountPct > 0 ? subtotalRef * (discountPct / 100) : 0;
+  const totalRef = Math.max(0, subtotalRef - discountAmount);
   const totalBs = calcBs(totalRef, rate?.eur);
 
   // Local date string for sale_date
@@ -370,6 +373,9 @@ function POSPageInner() {
         items,
         total_ref: totalRef,
         total_bs: totalBs,
+        subtotal_ref: subtotalRef,
+        discount_amount_ref: discountAmount,
+        cantina_discount_id: saleClient?.discount?.id || null,
         sale_date: getLocalDate(),
         shift_id: activeShift?.id || null,
         ...saleData,
@@ -868,6 +874,9 @@ function POSPageInner() {
                   }}
                   saleClient={saleClient}
                   onAddRedemption={addRedemption}
+                  subtotalRef={subtotalRef}
+                  discountAmount={discountAmount}
+                  discountPct={discountPct}
                 />
               </>
             )}
