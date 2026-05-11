@@ -375,11 +375,15 @@ export default function EventosView({ user, rate, onNavigate }) {
           event={{
             id: selectedEvent.event_id,
             event_date: selectedEvent.event_date,
+            booking_id: selectedEvent.booking_id,
             is_settled: selectedEvent.is_settled,
             settled_at: null,
             is_consumed: selectedEvent.is_consumed,
             consumed_at: selectedEvent.consumed_at,
             consumed_by: selectedEvent.consumed_by,
+            combo_total_ref: selectedEvent.combo_total_ref,
+            combo_paid_ref: selectedEvent.combo_paid_ref,
+            combo_payment_status: selectedEvent.combo_payment_status,
             _user_name: user?.name || "Cantina",
           }}
           items={itemsByEvent[selectedEvent.event_id] || []}

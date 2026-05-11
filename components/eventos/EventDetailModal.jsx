@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { X, AlertTriangle, ArrowRight, CheckCircle2, RotateCcw, Plus, Search } from "lucide-react";
+import { X, AlertTriangle, ArrowRight, CheckCircle2, RotateCcw, Plus, Search, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, generateId } from "@/lib/utils";
 
@@ -40,6 +40,8 @@ const METHOD_LABELS = {
   cash_bs: "Efectivo Bs",
   cash_usd: "Cash USD",
   zelle: "Zelle",
+  refund: "Refund",
+  datafono: "Datafono",
 };
 
 export default function EventDetailModal({
@@ -88,6 +90,15 @@ export default function EventDetailModal({
   const [extraQty, setExtraQty] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [addingExtra, setAddingExtra] = useState(false);
+
+  // Client payments state (sprint UI 15)
+  const [clientPayments, setClientPayments] = useState([]);
+  const [loadingClientPayments, setLoadingClientPayments] = useState(true);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("pago_movil");
+  const [payRef, setPayRef] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
 
   // Combo + extras breakdown (sprint UI 14)
   const comboItems = useMemo(() => (items || []).filter((it) => !it.is_extra), [items]);
@@ -177,6 +188,78 @@ export default function EventDetailModal({
   useEffect(() => {
     if (showExtraPicker && cantinaProducts.length === 0) loadCantinaProducts();
   }, [showExtraPicker, cantinaProducts.length, loadCantinaProducts]);
+
+  // Load client payments (CLIENT -> COMPLEJO) from payments table by booking_id
+  const loadClientPayments = useCallback(async () => {
+    if (!event.booking_id) {
+      setClientPayments([]);
+      setLoadingClientPayments(false);
+      return;
+    }
+    setLoadingClientPayments(true);
+    const { data } = await supabase
+      .from("payments")
+      .select("id, amount_eur, method, reference, created_at")
+      .eq("booking_id", event.booking_id)
+      .order("created_at", { ascending: false });
+    setClientPayments(data || []);
+    setLoadingClientPayments(false);
+  }, [event.booking_id]);
+
+  useEffect(() => { loadClientPayments(); }, [loadClientPayments]);
+
+  // Totals
+  const totalCombo = useMemo(() => (items || []).reduce((s, it) => s + Number(it.price_ref || 0) * Number(it.quantity || 0), 0), [items]);
+  const totalPaidClient = useMemo(() => clientPayments.reduce((s, p) => {
+    const amt = Number(p.amount_eur || 0);
+    return p.method === "refund" ? s - amt : s + amt;
+  }, 0), [clientPayments]);
+  const remainingClient = Math.max(0, totalCombo - totalPaidClient);
+  const clientStatus = totalCombo <= 0 ? "pending"
+    : totalPaidClient >= totalCombo - 0.01 ? "paid"
+    : totalPaidClient > 0 ? "partial"
+    : "pending";
+
+  const handleAddClientPayment = async (useTotal = false) => {
+    if (savingPayment) return;
+    const amt = useTotal ? remainingClient : Number(payAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      alert("Monto invalido");
+      return;
+    }
+    if (!event.booking_id) {
+      alert("Este evento no tiene booking asociado. No se puede registrar pago.");
+      return;
+    }
+    setSavingPayment(true);
+    const { error } = await supabase.from("payments").insert({
+      id: "pay_" + Math.random().toString(36).slice(2, 12),
+      booking_id: event.booking_id,
+      amount_eur: amt,
+      method: payMethod,
+      reference: payRef.trim() || null,
+    });
+    setSavingPayment(false);
+    if (error) {
+      alert("Error: " + error.message);
+      return;
+    }
+    setShowAddPayment(false);
+    setPayAmount("");
+    setPayRef("");
+    setPayMethod("pago_movil");
+    await loadClientPayments();
+    if (onItemsChanged) await onItemsChanged();
+  };
+
+  const handleDeleteClientPayment = async (p) => {
+    if (!isAdmin) return;
+    if (!window.confirm("Borrar este pago? El cliente quedara debiendo el monto.")) return;
+    const { error } = await supabase.from("payments").delete().eq("id", p.id);
+    if (error) { alert("Error: " + error.message); return; }
+    await loadClientPayments();
+    if (onItemsChanged) await onItemsChanged();
+  };
 
   const handleRevert = async () => {
     if (reverting) return;
@@ -342,6 +425,163 @@ export default function EventDetailModal({
                     className="w-full py-2 rounded-lg bg-brand text-white text-sm font-bold hover:bg-brand-dark disabled:opacity-50"
                   >
                     {addingExtra ? "Agregando..." : "Agregar extra"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Resumen de Totales + Pagos del cliente (sprint UI 15) */}
+          <div className="px-5 pt-5">
+            <div className="bg-amber-50/40 border border-amber-300 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-stone-800">Resumen de Totales</h3>
+                {clientStatus === "paid" ? (
+                  <span className="inline-block bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Pagado</span>
+                ) : clientStatus === "partial" ? (
+                  <span className="inline-block bg-violet-100 text-violet-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Parcial</span>
+                ) : (
+                  <span className="inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Pendiente</span>
+                )}
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-stone-600">Subtotal Combo:</span>
+                  <span className="font-medium text-stone-800">{formatREF(totalCombo)}</span>
+                </div>
+                <div className="flex justify-between font-bold pt-1 border-t border-amber-200">
+                  <span className="text-stone-800">TOTAL:</span>
+                  <span className="text-right">
+                    <span className="text-stone-800 block">{formatREF(totalCombo)}</span>
+                    <span className="text-xs text-stone-500 font-normal">{formatBs(totalCombo, rate?.eur)}</span>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-stone-600">Pagado:</span>
+                  <span className="font-medium text-stone-800">{formatREF(totalPaidClient)}</span>
+                </div>
+                {remainingClient > 0.01 && (
+                  <div className="flex justify-between font-bold pt-1 border-t border-amber-200">
+                    <span className="text-red-700">RESTA:</span>
+                    <span className="text-right">
+                      <span className="text-red-700 block">{formatREF(remainingClient)}</span>
+                      <span className="text-xs text-red-500 font-normal">{formatBs(remainingClient, rate?.eur)}</span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Pagos del cliente */}
+          <div className="px-5 pt-5">
+            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">Pagos</h4>
+          </div>
+          {loadingClientPayments ? (
+            <div className="px-5 pb-4 text-center text-stone-400 text-sm animate-pulse">Cargando pagos...</div>
+          ) : clientPayments.length === 0 ? (
+            <div className="px-5 pb-2 text-center text-stone-400 text-sm">No hay pagos registrados</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-stone-500 text-xs uppercase">
+                <tr>
+                  <th className="text-left px-4 py-2 font-semibold">Fecha</th>
+                  <th className="text-left px-4 py-2 font-semibold">Metodo</th>
+                  <th className="text-right px-4 py-2 font-semibold">Monto REF</th>
+                  <th className="text-left px-4 py-2 font-semibold">Ref</th>
+                  {isAdmin && <th className="w-8"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {clientPayments.map((p) => (
+                  <tr key={p.id} className="border-t border-stone-100">
+                    <td className="px-4 py-2 text-stone-700">{fmtDate(p.created_at)}</td>
+                    <td className="px-4 py-2 text-stone-600">{METHOD_LABELS[p.method] || p.method || "—"}</td>
+                    <td className="px-4 py-2 text-right font-medium text-stone-800">
+                      {p.method === "refund" ? `- ${formatREF(p.amount_eur)}` : formatREF(p.amount_eur)}
+                    </td>
+                    <td className="px-4 py-2 text-stone-500 text-xs">{p.reference || "—"}</td>
+                    {isAdmin && (
+                      <td className="px-2 py-2 text-right">
+                        <button onClick={() => handleDeleteClientPayment(p)} className="text-stone-400 hover:text-red-500 p-1" title="Borrar pago">
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Botones de accion pagos */}
+          {event.booking_id && (
+            <div className="px-5 pt-3 pb-1">
+              {!showAddPayment ? (
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => { setShowAddPayment(true); setPayAmount(""); }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 border border-brand text-brand rounded-lg text-xs font-bold hover:bg-brand/5"
+                  >
+                    <Plus size={12} /> Agregar Pago
+                  </button>
+                  {remainingClient > 0.01 && (
+                    <button
+                      onClick={() => { setShowAddPayment(true); setPayAmount(remainingClient.toFixed(2)); }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand-dark"
+                    >
+                      $ Pagar Total ({formatREF(remainingClient)})
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="border border-stone-200 rounded-xl p-3 bg-stone-50/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Registrar pago</span>
+                    <button onClick={() => { setShowAddPayment(false); setPayAmount(""); setPayRef(""); }} className="text-xs text-stone-500 hover:text-stone-700">Cancelar</button>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-medium mb-1">Monto REF</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      autoFocus
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:border-brand"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-medium mb-1">Metodo</label>
+                    <select
+                      value={payMethod}
+                      onChange={(e) => setPayMethod(e.target.value)}
+                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    >
+                      <option value="pago_movil">Pago Movil</option>
+                      <option value="zelle">Zelle</option>
+                      <option value="cash_usd">Cash USD</option>
+                      <option value="cash_bs">Cash Bs</option>
+                      <option value="refund">Refund</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-stone-500 font-medium mb-1">Referencia (opcional)</label>
+                    <input
+                      type="text"
+                      value={payRef}
+                      onChange={(e) => setPayRef(e.target.value)}
+                      placeholder="Numero de referencia"
+                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleAddClientPayment(false)}
+                    disabled={savingPayment}
+                    className="w-full py-2 rounded-lg bg-brand text-white text-sm font-bold hover:bg-brand-dark disabled:opacity-50"
+                  >
+                    {savingPayment ? "Guardando..." : "Confirmar pago"}
                   </button>
                 </div>
               )}
