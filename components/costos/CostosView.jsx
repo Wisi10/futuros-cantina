@@ -2,17 +2,41 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import {
   TrendingUp, TrendingDown, Minus, Search, AlertTriangle, Package2,
-  Truck, ChevronDown, BarChart3, ArrowUpRight, ArrowDownRight, Trophy
+  Truck, ChevronDown, BarChart3, ArrowUpRight, ArrowDownRight, Trophy, Download
 } from "lucide-react";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   Tooltip as ChartTooltip, Legend
 } from "chart.js";
+import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { formatREF, ProductImage } from "@/lib/utils";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTooltip, Legend);
+
+// Mini sparkline SVG — historia de precios en linea pequena
+function Sparkline({ points, width = 60, height = 18, color = "#B8963E" }) {
+  if (!points || points.length < 2) return <span className="text-stone-300 text-[10px]">—</span>;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const stepX = width / (points.length - 1);
+  const path = points
+    .map((v, i) => `${i === 0 ? "M" : "L"} ${(i * stepX).toFixed(1)} ${(height - ((v - min) / range) * height).toFixed(1)}`)
+    .join(" ");
+  const last = points[points.length - 1];
+  const lastX = (points.length - 1) * stepX;
+  const lastY = height - ((last - min) / range) * height;
+  const trendUp = points[points.length - 1] > points[0];
+  const stroke = trendUp ? "#dc2626" : "#16a34a";
+  return (
+    <svg width={width} height={height} className="inline-block align-middle" aria-hidden="true">
+      <path d={path} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="1.5" fill={stroke} />
+    </svg>
+  );
+}
 
 const SUB_TABS = [
   { id: "resumen", label: "Resumen" },
@@ -54,7 +78,9 @@ export default function CostosView({ user }) {
   const [recipes, setRecipes] = useState([]);
   const [movements, setMovements] = useState([]);
   const [restocks, setRestocks] = useState([]);
+  const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -65,7 +91,7 @@ export default function CostosView({ user }) {
     const isoCutoff = ninetyDaysAgo.toISOString();
     const dateCutoff = isoCutoff.split("T")[0];
 
-    const [productsRes, recipesRes, movementsRes, restocksRes] = await Promise.all([
+    const [productsRes, recipesRes, movementsRes, restocksRes, salesRes] = await Promise.all([
       supabase.from("products").select("*").eq("active", true).order("name"),
       supabase.from("product_recipes").select("*"),
       supabase
@@ -79,12 +105,17 @@ export default function CostosView({ user }) {
         .select("id, restock_date, items, total_cost_ref, supplier")
         .gte("restock_date", dateCutoff)
         .order("restock_date", { ascending: false }),
+      supabase
+        .from("cantina_sales")
+        .select("id, sale_date, items, total_ref")
+        .gte("sale_date", dateCutoff),
     ]);
 
     setProducts(productsRes.data || []);
     setRecipes(recipesRes.data || []);
     setMovements(movementsRes.data || []);
     setRestocks(restocksRes.data || []);
+    setSales(salesRes.data || []);
     setLoading(false);
   }, []);
 
@@ -213,6 +244,29 @@ export default function CostosView({ user }) {
     return products.filter((p) => ingredientIds.has(p.id) || (!p.is_cantina && p.category === "Materia Prima"));
   }, [products, ingredientIds]);
 
+  // Revenue 90d por producto (de cantina_sales.items jsonb)
+  const revenueByProduct = useMemo(() => {
+    const map = {};
+    sales.forEach((s) => {
+      (s.items || []).forEach((it) => {
+        const pid = it.product_id;
+        if (!pid) return;
+        const qty = Number(it.qty || it.quantity || 0);
+        const price = Number(it.price_per_unit || it.price_ref || it.price || 0);
+        const rev = qty * price;
+        map[pid] = (map[pid] || 0) + rev;
+      });
+    });
+    return map;
+  }, [sales]);
+
+  // Categorias unicas para filtro
+  const categorias = useMemo(() => {
+    const set = new Set();
+    products.filter((p) => p.is_cantina).forEach((p) => set.add(p.category || "Otro"));
+    return ["todas", ...Array.from(set).sort()];
+  }, [products]);
+
   // Por proveedor
   const supplierData = useMemo(() => {
     const map = {};
@@ -232,13 +286,83 @@ export default function CostosView({ user }) {
     return Object.entries(map).sort((a, b) => b[1].total - a[1].total);
   }, [restocks]);
 
+  const handleExport = useCallback(() => {
+    setExporting(true);
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // Hoja 1: Productos con margenes
+      const prodRows = productosWithMargin.map((p) => ({
+        Producto: p.name,
+        Categoria: p.category || "",
+        "Precio REF": Number(p.price.toFixed(2)),
+        "MAC REF": Number(p.macCost.toFixed(2)),
+        "Reemplazo REF": Number(p.replacementCost.toFixed(2)),
+        "Margen MAC %": p.macMargin != null ? Number(p.macMargin.toFixed(2)) : null,
+        "Margen Reemplazo %": p.replMargin != null ? Number(p.replMargin.toFixed(2)) : null,
+        "Variacion Costo %": p.costVariation != null ? Number(p.costVariation.toFixed(2)) : null,
+        "Revenue 90d REF": Number((revenueByProduct[p.id] || 0).toFixed(2)),
+        "Tiene receta": p.recipe ? "Si" : "No",
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRows), "Productos");
+
+      // Hoja 2: Materia prima
+      const matRows = materiaPrima.map((p) => ({
+        Ingrediente: p.name,
+        Categoria: p.category || "",
+        "Stock": Number(p.stock_quantity || 0),
+        "MAC REF": Number(Number(p.cost_ref || 0).toFixed(4)),
+        "Ultimo REF": replacementCostByProduct[p.id] != null ? Number(Number(replacementCostByProduct[p.id]).toFixed(4)) : null,
+        "Variacion %": variationByProduct[p.id] != null ? Number(variationByProduct[p.id].toFixed(2)) : null,
+        "# Compras 90d": (priceHistoryByProduct[p.id] || []).length,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matRows), "Materia Prima");
+
+      // Hoja 3: Por proveedor
+      const supRows = supplierData.map(([supplier, data]) => ({
+        Proveedor: supplier,
+        "Total 90d REF": Number(data.total.toFixed(2)),
+        "# Compras": data.count,
+        "# Items distintos": Object.keys(data.items).length,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(supRows), "Proveedores");
+
+      // Hoja 4: Historial compras (long form)
+      const histRows = [];
+      movements.forEach((m) => {
+        histRows.push({
+          Fecha: new Date(m.created_at).toLocaleDateString("es-VE", { timeZone: "America/Caracas" }),
+          Producto: m.product_name,
+          Cantidad: Number(m.quantity || 0),
+          "Costo/u REF": Number(Number(m.cost_ref || 0).toFixed(4)),
+          "Total REF": Number((Number(m.quantity || 0) * Number(m.cost_ref || 0)).toFixed(2)),
+          Nota: m.notes || "",
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(histRows), "Historial Compras");
+
+      const today = new Date().toISOString().split("T")[0];
+      XLSX.writeFile(wb, `costos-${today}.xlsx`);
+    } catch (err) {
+      alert("Error exportando: " + err.message);
+    }
+    setExporting(false);
+  }, [productosWithMargin, materiaPrima, supplierData, movements, revenueByProduct, replacementCostByProduct, variationByProduct, priceHistoryByProduct]);
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="px-6 pt-6 pb-3 shrink-0">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center justify-between gap-3 mb-4">
           <h1 className="font-bold text-brand text-lg flex items-center gap-2">
             <TrendingUp size={20} /> Costos y margenes
           </h1>
+          <button
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 disabled:opacity-50 rounded-lg text-xs font-medium text-stone-700 flex items-center gap-1.5 transition-colors"
+          >
+            <Download size={14} /> {exporting ? "Exportando..." : "Excel"}
+          </button>
         </div>
 
         <div className="flex gap-1 mb-1 border-b border-stone-200">
@@ -267,12 +391,14 @@ export default function CostosView({ user }) {
                 materiaPrima={materiaPrima}
                 variationByProduct={variationByProduct}
                 supplierData={supplierData}
+                revenueByProduct={revenueByProduct}
                 setSubTab={setSubTab}
               />
             )}
             {subTab === "productos" && (
               <ProductosLista
                 productos={productosWithMargin}
+                categorias={categorias}
               />
             )}
             {subTab === "materia" && (
@@ -296,12 +422,19 @@ export default function CostosView({ user }) {
 // ═══════════════════════════════════════════════════════
 // RESUMEN — dashboard principal
 // ═══════════════════════════════════════════════════════
-function Resumen({ productosWithMargin, materiaPrima, variationByProduct, supplierData, setSubTab }) {
+function Resumen({ productosWithMargin, materiaPrima, variationByProduct, supplierData, revenueByProduct, setSubTab }) {
   // KPIs
   const productosConPrecio = productosWithMargin.filter((p) => p.macMargin != null);
-  const avgMargin = productosConPrecio.length > 0
+  // Margen ponderado por revenue (peso real). Si no hay ventas, fallback al simple average.
+  const totalRevenue = productosConPrecio.reduce((s, p) => s + (revenueByProduct[p.id] || 0), 0);
+  const weightedMargin = totalRevenue > 0
+    ? productosConPrecio.reduce((s, p) => s + ((p.macMargin || 0) * (revenueByProduct[p.id] || 0)), 0) / totalRevenue
+    : null;
+  const simpleAvgMargin = productosConPrecio.length > 0
     ? productosConPrecio.reduce((s, p) => s + (p.macMargin || 0), 0) / productosConPrecio.length
     : null;
+  const avgMargin = weightedMargin != null ? weightedMargin : simpleAvgMargin;
+  const marginIsWeighted = weightedMargin != null;
   const alertCount = productosWithMargin.filter((p) => p.costVariation != null && p.costVariation >= 15).length;
   const spend30d = supplierData.reduce((s, [, d]) => s + d.total, 0);
   const supplierCount = supplierData.length;
@@ -359,9 +492,9 @@ function Resumen({ productosWithMargin, materiaPrima, variationByProduct, suppli
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
-          label="Margen promedio"
+          label={marginIsWeighted ? "Margen ponderado" : "Margen promedio"}
           value={avgMargin != null ? `${avgMargin.toFixed(1)}%` : "—"}
-          sub={`${productosConPrecio.length} productos`}
+          sub={marginIsWeighted ? `${productosConPrecio.length} productos · pond. por ventas` : `${productosConPrecio.length} productos · sin ventas aun`}
           color={avgMargin >= 50 ? "text-green-600" : avgMargin >= 30 ? "text-amber-600" : "text-red-500"}
         />
         <KpiCard
@@ -525,15 +658,20 @@ function RankingCard({ title, icon, items, renderItem, emptyText }) {
 // ═══════════════════════════════════════════════════════
 // PRODUCTOS LISTA (sort + filter)
 // ═══════════════════════════════════════════════════════
-function ProductosLista({ productos }) {
+function ProductosLista({ productos, categorias }) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("margin_desc");
+  const [activeCategory, setActiveCategory] = useState("todas");
   const [expandedProduct, setExpandedProduct] = useState(null);
 
   const sorted = useMemo(() => {
-    const list = productos.filter((p) =>
-      !search || (p.name || "").toLowerCase().includes(search.toLowerCase())
-    );
+    let list = productos;
+    if (activeCategory !== "todas") {
+      list = list.filter((p) => (p.category || "Otro") === activeCategory);
+    }
+    if (search) {
+      list = list.filter((p) => (p.name || "").toLowerCase().includes(search.toLowerCase()));
+    }
     const cmp = (a, b) => {
       switch (sortKey) {
         case "margin_desc": return (b.macMargin || 0) - (a.macMargin || 0);
@@ -545,7 +683,7 @@ function ProductosLista({ productos }) {
       }
     };
     return [...list].sort(cmp);
-  }, [productos, search, sortKey]);
+  }, [productos, search, sortKey, activeCategory]);
 
   return (
     <div className="space-y-3">
@@ -572,6 +710,24 @@ function ProductosLista({ productos }) {
           <option value="name_asc">Alfabetico</option>
         </select>
       </div>
+
+      {categorias && categorias.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+          {categorias.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
+                activeCategory === cat
+                  ? "bg-brand text-white border-brand"
+                  : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+              }`}
+            >
+              {cat === "todas" ? "Todas" : cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       {sorted.length === 0 ? (
         <p className="text-sm text-stone-400 text-center py-8">No hay productos.</p>
@@ -717,6 +873,7 @@ function MateriaLista({ items, priceHistoryByProduct, replacementCostByProduct, 
               <th className="text-left px-3 py-2 font-medium">Ingrediente</th>
               <th className="text-right px-3 py-2 font-medium">Stock</th>
               <th className="text-right px-3 py-2 font-medium">MAC</th>
+              <th className="text-center px-3 py-2 font-medium hidden md:table-cell">Tendencia 90d</th>
               <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Ultimo</th>
               <th className="text-right px-3 py-2 font-medium">Var.</th>
               <th className="w-8"></th>
@@ -727,6 +884,8 @@ function MateriaLista({ items, priceHistoryByProduct, replacementCostByProduct, 
               const hist = priceHistoryByProduct[p.id] || [];
               const replacement = replacementCostByProduct[p.id];
               const isOpen = expanded === p.id;
+              // sparkline: precios ordenados cronologicamente
+              const sparkPoints = [...hist].reverse().map((h) => h.cost);
               return (
                 <Fragment key={p.id}>
                   <tr
@@ -736,6 +895,9 @@ function MateriaLista({ items, priceHistoryByProduct, replacementCostByProduct, 
                     <td className="px-3 py-2 font-medium text-stone-800">{p.name}</td>
                     <td className="px-3 py-2 text-right text-stone-500">{Number(p.stock_quantity || 0)}</td>
                     <td className="px-3 py-2 text-right font-bold text-stone-700">{formatREF(Number(p.cost_ref || 0))}</td>
+                    <td className="px-3 py-2 text-center hidden md:table-cell">
+                      <Sparkline points={sparkPoints} />
+                    </td>
                     <td className="px-3 py-2 text-right text-stone-500 hidden md:table-cell">{replacement != null ? formatREF(replacement) : "—"}</td>
                     <td className={`px-3 py-2 text-right font-semibold ${variationColor(p.variation)}`}>
                       <span className="inline-flex items-center gap-1 justify-end">
@@ -749,7 +911,7 @@ function MateriaLista({ items, priceHistoryByProduct, replacementCostByProduct, 
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={6} className="bg-stone-50 px-3 py-3 border-t border-stone-200">
+                      <td colSpan={7} className="bg-stone-50 px-3 py-3 border-t border-stone-200">
                         <p className="text-[10px] uppercase tracking-wider text-stone-500 mb-2">Historial de compras (90d)</p>
                         {hist.length === 0 ? (
                           <p className="text-xs text-stone-400">Sin compras en este periodo.</p>
@@ -782,7 +944,7 @@ function MateriaLista({ items, priceHistoryByProduct, replacementCostByProduct, 
               );
             })}
             {sorted.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-stone-400 text-xs">No hay ingredientes.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-stone-400 text-xs">No hay ingredientes.</td></tr>
             )}
           </tbody>
         </table>
