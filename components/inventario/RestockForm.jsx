@@ -84,12 +84,11 @@ export default function RestockForm({ products, user, onRestocked }) {
         if (movErr) throw movErr;
 
         const newStock = Number(product?.stock_quantity || 0) + item.qty;
+        // cost_ref es manejado por trigger recompute_product_mac (migration 017).
+        // Solo actualizamos stock_quantity desde el cliente.
         const { error: stockErr } = await supabase
           .from("products")
-          .update({
-            stock_quantity: newStock,
-            cost_ref: item.cost_per_unit_ref > 0 ? item.cost_per_unit_ref : (product?.cost_ref || 0),
-          })
+          .update({ stock_quantity: newStock })
           .eq("id", item.product_id);
         if (stockErr) throw stockErr;
       }

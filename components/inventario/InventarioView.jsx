@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload, Plus } from "lucide-react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 import CreateProductModal from "./CreateProductModal";
 import RecipeEditor from "./RecipeEditor";
+import DeleteProductModal from "./DeleteProductModal";
 
 export default function InventarioView({ user }) {
   const [scope, setScope] = useState("productos"); // "productos" | "materia" | "eventos"
@@ -23,10 +24,12 @@ export default function InventarioView({ user }) {
   const [uploading, setUploading] = useState(null); // product id being uploaded
   const [photoSearch, setPhotoSearch] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const isAdmin = user?.cantinaRole === "admin";
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
-    let q = supabase.from("products").select("*").order("stock_quantity", { ascending: true });
+    let q = supabase.from("products").select("*").eq("active", true).order("stock_quantity", { ascending: true });
     if (scope === "productos") {
       q = q.eq("is_cantina", true);
     } else if (scope === "materia") {
@@ -371,6 +374,15 @@ export default function InventarioView({ user }) {
                             >
                               Ajustar
                             </button>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setDeleting(p)}
+                                className="text-stone-400 hover:text-red-600 transition-colors"
+                                title="Eliminar producto"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -576,6 +588,16 @@ export default function InventarioView({ user }) {
           user={user}
           onClose={() => setCreateModalOpen(false)}
           onCreated={async () => { await loadProducts(); }}
+        />
+      )}
+
+      {/* Delete product modal */}
+      {deleting && (
+        <DeleteProductModal
+          product={deleting}
+          user={user}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => { setDeleting(null); loadProducts(); }}
         />
       )}
     </div>
