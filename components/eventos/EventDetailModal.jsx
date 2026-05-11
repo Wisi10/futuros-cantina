@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { X, AlertTriangle, ArrowRight, CheckCircle2, RotateCcw } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { X, AlertTriangle, ArrowRight, CheckCircle2, RotateCcw, Plus, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF, formatBs } from "@/lib/utils";
+import { formatREF, formatBs, generateId } from "@/lib/utils";
 
 function fmtConsumedAt(iso) {
   if (!iso) return "—";
@@ -56,6 +56,7 @@ export default function EventDetailModal({
   onNavigateToInventario,
   onMarkConsumed,
   onReverted,
+  onItemsChanged,
 }) {
   const rows = items
     .filter((it) => productsById[it.product_id]?.is_cantina === true)
@@ -79,6 +80,61 @@ export default function EventDetailModal({
   const [consumptions, setConsumptions] = useState([]);
   const [loadingConsumptions, setLoadingConsumptions] = useState(true);
   const [reverting, setReverting] = useState(false);
+
+  // Add-extra picker state
+  const [showExtraPicker, setShowExtraPicker] = useState(false);
+  const [cantinaProducts, setCantinaProducts] = useState([]);
+  const [extraSearch, setExtraSearch] = useState("");
+  const [extraQty, setExtraQty] = useState(1);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [addingExtra, setAddingExtra] = useState(false);
+
+  // Combo + extras breakdown (sprint UI 14)
+  const comboItems = useMemo(() => (items || []).filter((it) => !it.is_extra), [items]);
+  const extraItems = useMemo(() => (items || []).filter((it) => it.is_extra), [items]);
+  const comboSubtotal = useMemo(() => (items || []).reduce((s, it) => s + Number(it.price_ref || 0) * Number(it.quantity || 0), 0), [items]);
+
+  const loadCantinaProducts = useCallback(async () => {
+    const { data } = await supabase
+      .from("products")
+      .select("id, name, price_ref, stock_quantity, category")
+      .eq("is_cantina", true)
+      .eq("active", true)
+      .order("name");
+    setCantinaProducts(data || []);
+  }, []);
+
+  const handleAddExtra = async () => {
+    if (!selectedProduct || addingExtra) return;
+    const qty = Math.max(1, Math.floor(Number(extraQty) || 1));
+    setAddingExtra(true);
+    const { error } = await supabase.from("event_items").insert({
+      id: "ei_" + generateId(),
+      event_id: event.id,
+      product_id: selectedProduct.id,
+      product_name: selectedProduct.name,
+      quantity: qty,
+      price_ref: Number(selectedProduct.price_ref || 0),
+      is_extra: true,
+    });
+    setAddingExtra(false);
+    if (error) {
+      alert("Error: " + error.message);
+      return;
+    }
+    setShowExtraPicker(false);
+    setExtraSearch("");
+    setExtraQty(1);
+    setSelectedProduct(null);
+    if (onItemsChanged) await onItemsChanged();
+  };
+
+  const filteredCantina = useMemo(() => {
+    const q = extraSearch.trim().toLowerCase();
+    return cantinaProducts
+      .filter((p) => !q || p.name.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [cantinaProducts, extraSearch]);
 
   const loadPayments = useCallback(async () => {
     if (!supabase) return;
@@ -117,6 +173,10 @@ export default function EventDetailModal({
   }, [event.id]);
 
   useEffect(() => { loadConsumptions(); }, [loadConsumptions]);
+
+  useEffect(() => {
+    if (showExtraPicker && cantinaProducts.length === 0) loadCantinaProducts();
+  }, [showExtraPicker, cantinaProducts.length, loadCantinaProducts]);
 
   const handleRevert = async () => {
     if (reverting) return;
@@ -170,6 +230,124 @@ export default function EventDetailModal({
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {/* Items del combo (sprint UI 14) */}
+          <div className="px-5 pt-4 flex items-center justify-between">
+            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold">Items del combo</h4>
+            <button
+              onClick={() => setShowExtraPicker(true)}
+              className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-semibold"
+            >
+              <Plus size={12} /> Agregar extra
+            </button>
+          </div>
+          {comboItems.length === 0 && extraItems.length === 0 ? (
+            <div className="px-5 pb-3 text-center text-stone-400 text-sm">Sin items registrados.</div>
+          ) : (
+            <table className="w-full text-sm mt-2">
+              <thead className="bg-stone-50 text-stone-500 text-xs uppercase">
+                <tr>
+                  <th className="text-left px-4 py-2 font-semibold">Item</th>
+                  <th className="text-right px-4 py-2 font-semibold">Cantidad</th>
+                  <th className="text-right px-4 py-2 font-semibold">Precio Unit.</th>
+                  <th className="text-right px-4 py-2 font-semibold">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...comboItems, ...extraItems].map((it) => {
+                  const unit = Number(it.price_ref || 0);
+                  const qty = Number(it.quantity || 0);
+                  return (
+                    <tr key={it.id} className={`border-t border-stone-100 ${it.is_extra ? "bg-amber-50/40" : ""}`}>
+                      <td className="px-4 py-2 text-stone-700">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{it.product_name || "—"}</span>
+                          {it.is_extra && (
+                            <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">EXTRA</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right text-stone-700">{qty}</td>
+                      <td className="px-4 py-2 text-right text-stone-600">{formatREF(unit)}</td>
+                      <td className="px-4 py-2 text-right font-medium text-stone-800">{formatREF(unit * qty)}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t-2 border-stone-200 bg-stone-50">
+                  <td colSpan={3} className="px-4 py-2 text-right text-xs font-bold uppercase tracking-wider text-stone-500">Subtotal combo</td>
+                  <td className="px-4 py-2 text-right font-bold text-stone-800">{formatREF(comboSubtotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+
+          {/* Inline picker for extra */}
+          {showExtraPicker && (
+            <div className="mx-5 mt-3 border border-stone-200 rounded-xl p-3 bg-stone-50/40">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Agregar item extra cantina</span>
+                <button onClick={() => { setShowExtraPicker(false); setSelectedProduct(null); setExtraSearch(""); setExtraQty(1); }} className="text-xs text-stone-500 hover:text-stone-700">Cancelar</button>
+              </div>
+              {!selectedProduct ? (
+                <>
+                  <div className="relative mb-2">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Buscar producto cantina..."
+                      value={extraSearch}
+                      onChange={(e) => setExtraSearch(e.target.value)}
+                      className="w-full border border-stone-200 rounded-lg pl-7 pr-3 py-1.5 text-sm focus:outline-none focus:border-brand"
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {filteredCantina.length === 0 ? (
+                      <p className="text-xs text-stone-400 text-center py-2">Sin resultados</p>
+                    ) : filteredCantina.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedProduct(p)}
+                        className="w-full text-left px-2 py-1.5 hover:bg-white rounded text-sm flex items-center justify-between"
+                      >
+                        <span className="text-stone-700">{p.name}</span>
+                        <span className="text-[11px] text-stone-400">{formatREF(p.price_ref)} · stock {p.stock_quantity ?? "—"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="bg-white border border-stone-200 rounded-lg p-2 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-stone-800 truncate">{selectedProduct.name}</p>
+                      <p className="text-[11px] text-stone-400">{formatREF(selectedProduct.price_ref)}</p>
+                    </div>
+                    <button onClick={() => setSelectedProduct(null)} className="text-xs text-brand hover:underline">Cambiar</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-stone-500">Cantidad:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={extraQty}
+                      onChange={(e) => setExtraQty(e.target.value)}
+                      className="w-20 border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-brand"
+                    />
+                    <span className="text-xs text-stone-500">Subtotal: {formatREF(Number(selectedProduct.price_ref || 0) * Math.max(1, Number(extraQty) || 1))}</span>
+                  </div>
+                  <button
+                    onClick={handleAddExtra}
+                    disabled={addingExtra}
+                    className="w-full py-2 rounded-lg bg-brand text-white text-sm font-bold hover:bg-brand-dark disabled:opacity-50"
+                  >
+                    {addingExtra ? "Agregando..." : "Agregar extra"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Stock alerts banner */}
           {stockAlerts.length > 0 && (
             <div className="mx-5 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">

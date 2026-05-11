@@ -9,7 +9,8 @@ export default function ShiftPill({ shift, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors hover:bg-stone-50"
+      title={isOpen ? `Turno abierto desde ${openTime}` : "Sin turno abierto"}
+      className="flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors hover:bg-stone-50"
       style={{ borderColor: "rgba(0,0,0,0.08)" }}
     >
       <span
@@ -17,14 +18,11 @@ export default function ShiftPill({ shift, onClick }) {
         style={isOpen ? { animation: "pulse-dot 2s ease-in-out infinite" } : {}}
       />
       {isOpen ? (
-        <span className="text-[11px] text-stone-600">
-          Turno abierto{" "}
-          <span style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "#6B6B6B" }}>
-            {openTime}
-          </span>
+        <span style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "#6B6B6B" }}>
+          {openTime}
         </span>
       ) : (
-        <span className="text-[11px] text-stone-400">Sin turno</span>
+        <span className="text-[10px] text-stone-400">Cerrado</span>
       )}
       <style>{`@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </button>

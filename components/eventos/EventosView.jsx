@@ -399,6 +399,7 @@ export default function EventosView({ user, rate, onNavigate }) {
             setSelectedEvent(null);
             await loadAll();
           }}
+          onItemsChanged={loadAll}
           onRegisterPayment={async ({ owedRef }) => {
             const isCloseOut = !owedRef || owedRef <= 0;
             if (isCloseOut) {

@@ -28,7 +28,6 @@ import ClientesView from "@/components/clientes/ClientesView";
 import EventosView from "@/components/eventos/EventosView";
 import StockAlertToast from "@/components/vender/StockAlertToast";
 import DashboardView from "@/components/dashboard/DashboardView";
-import { ChevronDown as ChevDown } from "lucide-react";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
 function GlobalProfileMount({ user, rate }) {
@@ -55,10 +54,6 @@ function POSPageInner() {
   const [products, setProducts] = useState([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [showStockToast, setShowStockToast] = useState(false);
-  const [liveExpanded, setLiveExpanded] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.innerWidth >= 768;
-  });
   const [cart, setCart] = useState(() => {
     if (typeof window !== "undefined") {
       try {
@@ -877,20 +872,12 @@ function POSPageInner() {
             )}
             </div>
 
-            {/* EN VIVO — collapsible dashboard section */}
+            {/* EN VIVO — always expanded */}
             <div className="border-t border-stone-200 shrink-0">
-              <button
-                onClick={() => setLiveExpanded((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-stone-50"
-              >
+              <div className="px-4 py-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-stone-500">En Vivo</span>
-                <ChevDown size={14} className={`text-stone-400 transition-transform ${liveExpanded ? "rotate-180" : ""}`} />
-              </button>
-              {liveExpanded && (
-                <div>
-                  <DashboardView user={user} rate={rate} products={products} embedded />
-                </div>
-              )}
+              </div>
+              <DashboardView user={user} rate={rate} products={products} embedded />
             </div>
           </div>
         )}
