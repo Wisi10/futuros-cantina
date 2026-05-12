@@ -20,6 +20,7 @@ import CajaView from "@/components/caja/CajaView";
 import ReportesView from "@/components/reportes/ReportesView";
 import CostosView from "@/components/costos/CostosView";
 import CalendarioView from "@/components/calendario/CalendarioView";
+import AdminView from "@/components/admin/AdminView";
 import ShiftPill from "@/components/shifts/ShiftPill";
 import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
@@ -51,6 +52,7 @@ function POSPageInner() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("vender");
   const [showLiveDashboard, setShowLiveDashboard] = useState(false);
+  const [impersonatedRole, setImpersonatedRole] = useState(null);
 
   // Vender state
   const [screen, setScreen] = useState("pos");
@@ -799,11 +801,29 @@ function POSPageInner() {
 
   if (!user) return null;
 
+  // effectiveUser: admin puede previsualizar como otro rol via Admin > Ver como
+  const effectiveUser = impersonatedRole
+    ? { ...user, cantinaRole: impersonatedRole, _impersonated: true }
+    : user;
+
   return (
     <div className="h-screen flex flex-col md:flex-row bg-brand-cream-light overflow-hidden">
-      <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={user.cantinaRole || "staff"} />
+      <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={effectiveUser.cantinaRole || "staff"} />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0 pb-16 md:pb-0">
+        {/* Banner impersonation */}
+        {impersonatedRole && (
+          <div className="bg-amber-100 border-b border-amber-300 px-4 py-1.5 flex items-center justify-between text-xs text-amber-900 shrink-0">
+            <span>Previsualizando como <b>{impersonatedRole}</b> (rol real: {user.cantinaRole})</span>
+            <button
+              onClick={() => { setImpersonatedRole(null); setActiveTab("admin"); }}
+              className="font-bold underline hover:text-amber-700"
+            >
+              Volver a mi rol
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <header className="bg-white border-b border-stone-200 px-3 md:px-4 py-2 md:py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:gap-3">
@@ -902,11 +922,11 @@ function POSPageInner() {
 
         {activeTab === "inventario" && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <InventarioView user={user} />
+            <InventarioView user={effectiveUser} />
           </div>
         )}
 
-        {activeTab === "caja" && user.cantinaRole === "admin" && (
+        {activeTab === "caja" && effectiveUser.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <CajaView user={user} rate={rate} />
           </div>
@@ -918,13 +938,13 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "reportes" && user.cantinaRole === "admin" && (
+        {activeTab === "reportes" && effectiveUser.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ReportesView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "costos" && user.cantinaRole === "admin" && (
+        {activeTab === "costos" && effectiveUser.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <CostosView user={user} />
           </div>
@@ -942,21 +962,31 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "puntos" && user.cantinaRole === "admin" && (
+        {activeTab === "puntos" && effectiveUser.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <PuntosView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 
-        {activeTab === "clientes" && user.cantinaRole === "admin" && (
+        {activeTab === "clientes" && effectiveUser.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ClientesView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "config" && user.cantinaRole === "admin" && (
+        {activeTab === "config" && effectiveUser.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
+          </div>
+        )}
+
+        {activeTab === "admin" && effectiveUser.cantinaRole === "admin" && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <AdminView
+              user={user}
+              impersonatedRole={impersonatedRole}
+              onImpersonate={setImpersonatedRole}
+            />
           </div>
         )}
       </div>

@@ -23,7 +23,7 @@ export default function LoginPage() {
 
       const { data, error: dbError } = await supabase
         .from("user_profiles")
-        .select("id, name, role")
+        .select("id, name, role, cantina_role")
         .eq("pin", pin)
         .eq("is_active", true)
         .not("pin", "is", null);
@@ -34,7 +34,7 @@ export default function LoginPage() {
         return;
       }
 
-      const user = { ...data[0], cantinaRole: "staff" };
+      const user = { ...data[0], cantinaRole: data[0].cantina_role || "staff" };
       sessionStorage.setItem("cantina_user", JSON.stringify(user));
       router.push("/pos");
     } catch {

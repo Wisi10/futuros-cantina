@@ -1,5 +1,5 @@
 "use client";
-import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Star, Calendar, CalendarRange, Users, TrendingUp } from "lucide-react";
+import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Star, Calendar, CalendarRange, Users, TrendingUp, Shield } from "lucide-react";
 
 // Staff ve: vender, turnos, inventario, calendario, eventos.
 // Admin (Jose Gregorio, Yusmelly, owners) ve todo.
@@ -15,6 +15,7 @@ const TABS = [
   { id: "costos", label: "Costos", icon: TrendingUp, adminOnly: true },
   { id: "reportes", label: "Reportes", icon: BarChart3, adminOnly: true },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },
+  { id: "admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
 
 export default function SideNav({ activeTab, onTabChange, userRole }) {
