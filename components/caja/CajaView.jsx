@@ -26,6 +26,9 @@ export default function CajaView({ user, rate }) {
   const isAdmin = user?.role === "admin";
 
   const [salePayments, setSalePayments] = useState([]); // sprint 7B
+  const [productStock, setProductStock] = useState({}); // {productId: {name, stock, has_recipe}}
+  const [recipes, setRecipes] = useState({}); // {productId: [{ingredient_id, quantity, unit, ingredient_name}]}
+  const [showInventoryCheck, setShowInventoryCheck] = useState(false);
 
   const loadSales = useCallback(async () => {
     if (!supabase) return;
@@ -48,6 +51,41 @@ export default function CajaView({ user, rate }) {
     } else {
       setSalePayments([]);
     }
+
+    // Para soft inventory check: cargar stock actual + recetas de productos vendidos
+    const soldProductIds = new Set();
+    (data || []).forEach((s) => (s.items || []).forEach((it) => { if (it.product_id) soldProductIds.add(it.product_id); }));
+    if (soldProductIds.size > 0) {
+      const idList = Array.from(soldProductIds);
+      const [prodRes, recRes] = await Promise.all([
+        supabase.from("products").select("id, name, stock_quantity, has_recipe").in("id", idList),
+        supabase.from("product_recipes").select("product_id, ingredient_id, quantity, unit").in("product_id", idList),
+      ]);
+      const stockMap = {};
+      (prodRes.data || []).forEach((p) => { stockMap[p.id] = p; });
+      setProductStock(stockMap);
+
+      // Cargar nombres de ingredientes si hay recetas
+      const recipeMap = {};
+      const ingredientIds = new Set();
+      (recRes.data || []).forEach((r) => {
+        if (!recipeMap[r.product_id]) recipeMap[r.product_id] = [];
+        recipeMap[r.product_id].push(r);
+        if (r.ingredient_id) ingredientIds.add(r.ingredient_id);
+      });
+      if (ingredientIds.size > 0) {
+        const { data: ings } = await supabase.from("products").select("id, name, stock_quantity").in("id", Array.from(ingredientIds));
+        const ingMap = {};
+        (ings || []).forEach((i) => { ingMap[i.id] = i; });
+        Object.keys(recipeMap).forEach((pid) => {
+          recipeMap[pid] = recipeMap[pid].map((r) => ({ ...r, ingredient_name: ingMap[r.ingredient_id]?.name, ingredient_stock: ingMap[r.ingredient_id]?.stock_quantity }));
+        });
+      }
+      setRecipes(recipeMap);
+    } else {
+      setProductStock({}); setRecipes({});
+    }
+
     setLoading(false);
   }, [selectedDate]);
 
@@ -208,6 +246,131 @@ export default function CajaView({ user, rate }) {
               </div>
             </div>
           )}
+
+          {/* Soft inventory check */}
+          {(() => {
+            // Aggregate items sold today (direct products only, not ingredients)
+            const soldDirect = {}; // {productId: {name, qty, hasRecipe}}
+            const soldIngredients = {}; // {ingredientId: {name, qty, currentStock}}
+            sales.forEach((s) => {
+              (s.items || []).forEach((it) => {
+                const pid = it.product_id;
+                if (!pid) return;
+                const product = productStock[pid];
+                const hasRecipe = product?.has_recipe;
+                if (!soldDirect[pid]) {
+                  soldDirect[pid] = {
+                    name: it.name || product?.name || "(?)",
+                    qty: 0,
+                    hasRecipe,
+                    currentStock: product?.stock_quantity ?? null,
+                  };
+                }
+                soldDirect[pid].qty += Number(it.qty || 0);
+                // Si tiene receta, agregar consumo de ingredientes
+                if (hasRecipe && recipes[pid]) {
+                  recipes[pid].forEach((r) => {
+                    const ingId = r.ingredient_id;
+                    if (!ingId) return;
+                    const needed = Number(r.quantity || 0) * Number(it.qty || 0);
+                    if (!soldIngredients[ingId]) {
+                      soldIngredients[ingId] = {
+                        name: r.ingredient_name || "(?)",
+                        qty: 0,
+                        unit: r.unit || "",
+                        currentStock: r.ingredient_stock ?? null,
+                      };
+                    }
+                    soldIngredients[ingId].qty += needed;
+                  });
+                }
+              });
+            });
+
+            const directList = Object.values(soldDirect).filter((x) => !x.hasRecipe).sort((a, b) => b.qty - a.qty);
+            const recipeList = Object.values(soldDirect).filter((x) => x.hasRecipe).sort((a, b) => b.qty - a.qty);
+            const ingredientList = Object.values(soldIngredients).sort((a, b) => b.qty - a.qty);
+
+            if (directList.length === 0 && recipeList.length === 0) return null;
+
+            return (
+              <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+                <button
+                  onClick={() => setShowInventoryCheck(!showInventoryCheck)}
+                  className="w-full px-4 py-3 border-b border-stone-100 flex items-center justify-between hover:bg-stone-50 transition-colors"
+                >
+                  <div className="text-left">
+                    <h3 className="text-sm font-bold text-stone-700">Chequeo de inventario</h3>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      {directList.length + recipeList.length} producto{(directList.length + recipeList.length) !== 1 ? "s" : ""} vendido{(directList.length + recipeList.length) !== 1 ? "s" : ""}
+                      {ingredientList.length > 0 ? ` · ${ingredientList.length} ingrediente${ingredientList.length !== 1 ? "s" : ""} consumido${ingredientList.length !== 1 ? "s" : ""}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-xs text-stone-400">{showInventoryCheck ? "Ocultar" : "Mostrar"}</span>
+                </button>
+
+                {showInventoryCheck && (
+                  <div className="p-4 space-y-4 bg-stone-50/50">
+                    <p className="text-[11px] text-stone-500 italic">
+                      Cross-check rapido vs inventario fisico al cierre del dia. "Stock inicial" estimado = stock actual + vendido hoy.
+                    </p>
+
+                    {directList.length > 0 && (
+                      <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+                        <p className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-stone-500 bg-stone-50 border-b border-stone-200">Productos directos</p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-stone-400 text-[10px] uppercase">
+                              <th className="text-left px-3 py-1.5 font-medium">Producto</th>
+                              <th className="text-right px-3 py-1.5 font-medium">Vendido</th>
+                              <th className="text-right px-3 py-1.5 font-medium">Stock inicial</th>
+                              <th className="text-right px-3 py-1.5 font-medium">Stock actual</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {directList.map((p, i) => (
+                              <tr key={i} className="border-t border-stone-100">
+                                <td className="px-3 py-1.5 text-stone-700">{p.name}</td>
+                                <td className="px-3 py-1.5 text-right font-bold text-brand">{p.qty}</td>
+                                <td className="px-3 py-1.5 text-right text-stone-500">{p.currentStock != null ? p.currentStock + p.qty : "—"}</td>
+                                <td className="px-3 py-1.5 text-right font-medium text-stone-700">{p.currentStock != null ? p.currentStock : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {ingredientList.length > 0 && (
+                      <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+                        <p className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-stone-500 bg-stone-50 border-b border-stone-200">Ingredientes consumidos (via recetas)</p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-stone-400 text-[10px] uppercase">
+                              <th className="text-left px-3 py-1.5 font-medium">Ingrediente</th>
+                              <th className="text-right px-3 py-1.5 font-medium">Consumido</th>
+                              <th className="text-right px-3 py-1.5 font-medium">Stock actual</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ingredientList.map((ing, i) => (
+                              <tr key={i} className="border-t border-stone-100">
+                                <td className="px-3 py-1.5 text-stone-700">{ing.name}</td>
+                                <td className="px-3 py-1.5 text-right font-bold text-brand">
+                                  {Math.round(ing.qty * 100) / 100}{ing.unit ? ` ${ing.unit}` : ""}
+                                </td>
+                                <td className="px-3 py-1.5 text-right text-stone-500">{ing.currentStock != null ? ing.currentStock : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Recent sales */}
           <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">

@@ -216,7 +216,11 @@ export default function EventosView({ user, rate, onNavigate }) {
                   const accent = isThisWeek(r.event_date) ? "border-l-4 border-l-gold" : "";
                   const pendingConsume = !r.is_consumed && (r.event_date || "") < today;
                   return (
-                    <div key={r.event_id} className={`border border-stone-200 rounded-xl p-3 bg-stone-50/40 ${accent}`}>
+                    <button
+                      key={r.event_id}
+                      onClick={() => setSelectedEvent(r)}
+                      className={`border border-stone-200 rounded-xl p-3 bg-stone-50/40 text-left hover:bg-stone-50 hover:border-brand/30 transition-colors ${accent}`}
+                    >
                       <div className="flex items-start gap-3">
                         <DateBlock iso={r.event_date} accent="text-gold" />
                         <div className="flex-1 min-w-0">
@@ -241,7 +245,7 @@ export default function EventosView({ user, rate, onNavigate }) {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
