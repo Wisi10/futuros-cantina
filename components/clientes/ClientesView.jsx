@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Search, Plus, Users, Merge } from "lucide-react";
+import { Search, Plus, Users, Merge, Star } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF } from "@/lib/utils";
 import { avatarColor, avatarInitials, relativeFromNow, daysSince, formatVePhone } from "@/lib/clientHelpers";
 import ClientProfileModal from "./ClientProfileModal";
 import ClientFormModal from "./ClientFormModal";
 import MergeDuplicatesModal from "./MergeDuplicatesModal";
+import PuntosView from "@/components/puntos/PuntosView";
 
 const FILTERS = [
   { id: "all", label: "Todos" },
@@ -25,7 +26,8 @@ const SORTS = [
   { id: "most_cortesia", label: "Mas cortesias" },
 ];
 
-export default function ClientesView({ user, rate }) {
+export default function ClientesView({ user, rate, saleClient }) {
+  const [subTab, setSubTab] = useState("lista");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("recent");
@@ -84,6 +86,30 @@ export default function ClientesView({ user, rate }) {
 
   const [showRankings, setShowRankings] = useState(false);
 
+  if (subTab === "puntos") {
+    return (
+      <div className="h-full flex flex-col overflow-hidden bg-brand-cream-light">
+        <div className="px-3 md:px-6 pt-3 md:pt-6 shrink-0">
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={20} className="text-brand" />
+            <h1 className="text-lg font-bold text-brand">Clientes</h1>
+          </div>
+          <div className="flex gap-1 border-b border-stone-200">
+            <button onClick={() => setSubTab("lista")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-transparent text-stone-500 hover:text-stone-700 flex items-center gap-1.5">
+              <Users size={12} /> Lista
+            </button>
+            <button onClick={() => setSubTab("puntos")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-brand text-brand flex items-center gap-1.5">
+              <Star size={12} /> Puntos
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <PuntosView user={user} rate={rate} saleClient={saleClient} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-brand-cream-light">
       <div className="max-w-5xl mx-auto p-3 md:p-6 space-y-3">
@@ -109,6 +135,15 @@ export default function ClientesView({ user, rate }) {
               <Plus size={14} /> Nuevo cliente
             </button>
           </div>
+        </div>
+
+        <div className="flex gap-1 border-b border-stone-200">
+          <button onClick={() => setSubTab("lista")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-brand text-brand flex items-center gap-1.5">
+            <Users size={12} /> Lista
+          </button>
+          <button onClick={() => setSubTab("puntos")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-transparent text-stone-500 hover:text-stone-700 flex items-center gap-1.5">
+            <Star size={12} /> Puntos
+          </button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">

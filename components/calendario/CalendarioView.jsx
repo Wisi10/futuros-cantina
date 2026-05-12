@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { CalendarRange, ChevronLeft, ChevronRight, Clock, MapPin, User, Cake, Trophy, Briefcase, Activity } from "lucide-react";
+import { CalendarRange, ChevronLeft, ChevronRight, Clock, MapPin, User, Cake, Trophy, Briefcase, Activity, Calendar } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import EventosView from "@/components/eventos/EventosView";
 
 const ACTIVITY_META = {
   alquiler:    { label: "Alquiler",    color: "bg-blue-100 text-blue-700 border-blue-200",       icon: Activity },
@@ -39,7 +40,8 @@ const fmtHour = (h) => {
 
 const fmtEndHour = (start, dur) => fmtHour(start + dur);
 
-export default function CalendarioView({ user }) {
+export default function CalendarioView({ user, rate, onNavigate }) {
+  const [subTab, setSubTab] = useState("reservas");
   const [date, setDate] = useState(todayISO());
   const [bookings, setBookings] = useState([]);
   const [courts, setCourts] = useState([]);
@@ -127,11 +129,41 @@ export default function CalendarioView({ user }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-6 pt-6 pb-3 shrink-0">
-        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+      <div className="px-6 pt-6 pb-2 shrink-0">
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <h1 className="font-bold text-brand text-lg flex items-center gap-2">
             <CalendarRange size={20} /> Calendario
           </h1>
+        </div>
+        <div className="flex gap-1 border-b border-stone-200">
+          <button
+            onClick={() => setSubTab("reservas")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5 ${
+              subTab === "reservas" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            <CalendarRange size={12} /> Reservas
+          </button>
+          <button
+            onClick={() => setSubTab("eventos")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5 ${
+              subTab === "eventos" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            <Calendar size={12} /> Eventos
+          </button>
+        </div>
+      </div>
+
+      {subTab === "eventos" ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <EventosView user={user} rate={rate} onNavigate={onNavigate} />
+        </div>
+      ) : (
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="px-6 pt-3 pb-3 shrink-0">
+        <div className="hidden">
+          {/* spacer */}
           <div className="flex items-center gap-2">
             <div className="flex bg-stone-100 rounded-lg p-0.5">
               <button
@@ -262,6 +294,8 @@ export default function CalendarioView({ user }) {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }

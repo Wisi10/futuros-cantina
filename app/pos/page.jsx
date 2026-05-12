@@ -968,7 +968,7 @@ function POSPageInner() {
 
         {activeTab === "calendario" && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <CalendarioView user={user} />
+            <CalendarioView user={user} rate={rate} onNavigate={setActiveTab} />
           </div>
         )}
 
@@ -986,7 +986,7 @@ function POSPageInner() {
 
         {activeTab === "clientes" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <ClientesView user={user} rate={rate} />
+            <ClientesView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 
