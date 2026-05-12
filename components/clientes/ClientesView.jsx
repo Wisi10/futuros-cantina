@@ -35,7 +35,7 @@ export default function ClientesView({ user, rate }) {
   const [creating, setCreating] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [mergeOpen, setMergeOpen] = useState(false);
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   // Debounce search
   useEffect(() => {

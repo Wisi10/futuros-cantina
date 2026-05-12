@@ -119,7 +119,7 @@ export default function EventosView({ user, rate, onNavigate }) {
   const [consumeModalEvent, setConsumeModalEvent] = useState(null);
 
   const monthOptions = useMemo(buildMonthOptions, []);
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   const loadAll = useCallback(async () => {
     if (!supabase) return;

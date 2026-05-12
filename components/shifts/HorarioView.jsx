@@ -19,7 +19,7 @@ export default function HorarioView({ user }) {
   const [editing, setEditing] = useState(null); // { employee_id, day_of_week, start_time, end_time, existingId }
   const [saving, setSaving] = useState(false);
 
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   const load = useCallback(async () => {
     if (!supabase) return;

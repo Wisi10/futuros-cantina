@@ -7,7 +7,7 @@ import { formatREF } from "@/lib/utils";
 const UNITS = ["unidad", "g", "kg", "ml", "l", "cucharada", "rebanada", "rodaja", "pizca"];
 
 export default function RecipeEditor({ product, user, onClose, onSaved }) {
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
   const [hasRecipe, setHasRecipe] = useState(!!product?.has_recipe);
   const [costOverride, setCostOverride] = useState(
     product?.recipe_cost_override != null ? String(product.recipe_cost_override) : ""

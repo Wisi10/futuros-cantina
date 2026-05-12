@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, ProductImage } from "@/lib/utils";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
   const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [savingDiscount, setSavingDiscount] = useState(false);

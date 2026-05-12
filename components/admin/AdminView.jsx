@@ -106,24 +106,24 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
                         <td className="px-3 py-2 text-stone-500 text-xs hidden md:table-cell capitalize">{p.role || "—"}</td>
                         <td className="px-3 py-2 text-center">
                           <div className="inline-flex bg-stone-100 rounded-lg p-0.5">
-                            <button
-                              onClick={() => setCantinaRole(p.id, "staff")}
-                              disabled={isSaving || cantinaRole === "staff"}
-                              className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors ${
-                                cantinaRole === "staff" ? "bg-white text-stone-700 shadow-sm" : "text-stone-500 hover:text-stone-700"
-                              }`}
-                            >
-                              Staff
-                            </button>
-                            <button
-                              onClick={() => setCantinaRole(p.id, "admin")}
-                              disabled={isSaving || cantinaRole === "admin"}
-                              className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors ${
-                                cantinaRole === "admin" ? "bg-brand text-white shadow-sm" : "text-stone-500 hover:text-stone-700"
-                              }`}
-                            >
-                              Admin
-                            </button>
+                            {["staff", "gerente", "owner"].map((role) => {
+                              const active = cantinaRole === role || (role === "gerente" && cantinaRole === "admin");
+                              const colors = {
+                                staff: active ? "bg-white text-stone-700 shadow-sm" : "text-stone-500 hover:text-stone-700",
+                                gerente: active ? "bg-brand text-white shadow-sm" : "text-stone-500 hover:text-stone-700",
+                                owner: active ? "bg-gold text-white shadow-sm" : "text-stone-500 hover:text-stone-700",
+                              };
+                              return (
+                                <button
+                                  key={role}
+                                  onClick={() => setCantinaRole(p.id, role)}
+                                  disabled={isSaving || active}
+                                  className={`px-2 py-1 text-[11px] font-medium rounded transition-colors capitalize ${colors[role]}`}
+                                >
+                                  {role}
+                                </button>
+                              );
+                            })}
                           </div>
                           {isSaving && <Loader2 size={10} className="animate-spin inline ml-1 text-stone-400" />}
                         </td>
@@ -175,22 +175,25 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               >
                 <p className="text-sm font-bold text-stone-800">Staff</p>
                 <p className="text-[11px] text-stone-500 mt-1">
-                  Vender, Inventario (sin valor/proveedores), Calendario, Eventos, Turnos. SIN Caja, Reportes, Costos, Config, Clientes, Puntos.
+                  Vender, Inventario (sin valor/proveedores), Calendario, Eventos, Turnos. SIN Caja, Reportes, Costos, Config, Clientes, Puntos, Admin.
                 </p>
               </button>
               <button
-                onClick={() => onImpersonate("admin")}
-                disabled={impersonatedRole === "admin" || (!impersonatedRole && user?.cantinaRole === "admin")}
+                onClick={() => onImpersonate("gerente")}
+                disabled={impersonatedRole === "gerente"}
                 className={`p-3 rounded-lg border-2 text-left transition-colors ${
-                  impersonatedRole === "admin" ? "border-brand bg-brand/5" : "border-stone-200 hover:border-stone-300"
+                  impersonatedRole === "gerente" ? "border-brand bg-brand/5" : "border-stone-200 hover:border-stone-300"
                 }`}
               >
-                <p className="text-sm font-bold text-stone-800">Admin</p>
+                <p className="text-sm font-bold text-stone-800">Gerente</p>
                 <p className="text-[11px] text-stone-500 mt-1">
-                  Acceso completo. Caja, Reportes, Costos, Config, todo.
+                  Acceso completo a operaciones: Caja, Reportes, Costos, Config, Clientes, Puntos. SIN Admin (este tab).
                 </p>
               </button>
             </div>
+            <p className="text-[10px] text-stone-400">
+              Owner es tu rol real. Para volver, usa el banner amarillo arriba.
+            </p>
           </div>
         </div>
       )}

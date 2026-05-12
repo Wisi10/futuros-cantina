@@ -27,7 +27,7 @@ export default function InventarioView({ user }) {
   const [deleting, setDeleting] = useState(null);
   const [sortKey, setSortKey] = useState(null); // null = orden original (stock asc)
   const [sortDir, setSortDir] = useState("asc"); // asc | desc
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   const toggleSort = (key) => {
     if (sortKey === key) {

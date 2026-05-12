@@ -14,7 +14,7 @@ export default function RewardsConfigView({ user, saleClient }) {
   const [editPts, setEditPts] = useState("");
   const [savingId, setSavingId] = useState(null);
 
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
   const clientPoints = Number(saleClient?.points || 0);
 
   const load = useCallback(async () => {

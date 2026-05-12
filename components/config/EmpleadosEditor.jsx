@@ -13,7 +13,7 @@ export default function EmpleadosEditor({ user }) {
   const [savingId, setSavingId] = useState(null);
   const [form, setForm] = useState({ name: "", cedula: "", position: "Cantina", phone: "" });
 
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   const load = useCallback(async () => {
     if (!supabase) return;

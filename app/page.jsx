@@ -13,9 +13,9 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      // Admin PIN hardcoded — checked BEFORE DB query, always wins
+      // Owner PIN hardcoded — checked BEFORE DB query, always wins. Solo el owner.
       if (pin === "9999") {
-        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "admin", name: "Admin", role: "admin", cantinaRole: "admin" }));
+        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "owner", name: "Owner", role: "owner", cantinaRole: "owner" }));
         router.push("/pos");
         setLoading(false);
         return;

@@ -14,7 +14,7 @@ export default function DescuentosCantinaEditor({ user }) {
   const [editPct, setEditPct] = useState("");
   const [savingId, setSavingId] = useState(null);
 
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   const load = useCallback(async () => {
     if (!supabase) return;

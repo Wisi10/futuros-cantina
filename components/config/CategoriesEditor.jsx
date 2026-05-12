@@ -13,7 +13,7 @@ export default function CategoriesEditor({ user }) {
   const [editName, setEditName] = useState("");
   const [savingId, setSavingId] = useState(null);
 
-  const isAdmin = user?.cantinaRole === "admin";
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
   const load = useCallback(async () => {
     if (!supabase) return;

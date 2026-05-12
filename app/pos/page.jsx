@@ -801,10 +801,14 @@ function POSPageInner() {
 
   if (!user) return null;
 
-  // effectiveUser: admin puede previsualizar como otro rol via Admin > Ver como
+  // effectiveUser: owner puede previsualizar como otro rol via Admin > Ver como
   const effectiveUser = impersonatedRole
     ? { ...user, cantinaRole: impersonatedRole, _impersonated: true }
     : user;
+  // Jerarquia: staff < gerente < owner. canAdmin abarca gerente+owner.
+  const effRole = effectiveUser.cantinaRole;
+  const canAdmin = effRole === "gerente" || effRole === "owner" || effRole === "admin"; // 'admin' legacy
+  const isOwner = effRole === "owner";
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-brand-cream-light overflow-hidden">
@@ -926,7 +930,7 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "caja" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "caja" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <CajaView user={user} rate={rate} />
           </div>
@@ -938,13 +942,13 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "reportes" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "reportes" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ReportesView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "costos" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "costos" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <CostosView user={user} />
           </div>
@@ -962,25 +966,25 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "puntos" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "puntos" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <PuntosView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 
-        {activeTab === "clientes" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "clientes" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ClientesView user={user} rate={rate} />
           </div>
         )}
 
-        {activeTab === "config" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "config" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ConfigView user={user} rate={rate} onRateUpdated={loadRate} />
           </div>
         )}
 
-        {activeTab === "admin" && effectiveUser.cantinaRole === "admin" && (
+        {activeTab === "admin" && isOwner && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <AdminView
               user={user}
