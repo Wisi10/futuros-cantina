@@ -867,14 +867,13 @@ function POSPageInner() {
                 />
               )}
 
-              {/* EN VIVO — collapsible para liberar espacio para productos */}
+              {/* Dashboard en Vivo — colapsable, sin doble titulo */}
               <div className="border-t border-stone-200 shrink-0">
                 <button
                   onClick={() => setShowLiveDashboard(!showLiveDashboard)}
-                  className="w-full px-4 py-2 flex items-center justify-between hover:bg-stone-50 transition-colors"
+                  className="w-full px-4 py-1.5 flex items-center justify-end hover:bg-stone-50 transition-colors"
                 >
-                  <span className="text-xs font-bold uppercase tracking-wider text-stone-500">En Vivo</span>
-                  <span className="text-[11px] text-stone-400">{showLiveDashboard ? "Ocultar" : "Mostrar dashboard"}</span>
+                  <span className="text-[11px] text-stone-400">{showLiveDashboard ? "Ocultar dashboard" : "Mostrar dashboard"}</span>
                 </button>
                 {showLiveDashboard && (
                   <DashboardView user={user} rate={rate} products={products} embedded />

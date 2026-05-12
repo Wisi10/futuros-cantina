@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag } from "lucide-react";
+import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
@@ -19,6 +19,61 @@ const SECTIONS = [
 export default function ConfigView({ user, rate, onRateUpdated }) {
   const [section, setSection] = useState("tasa");
   const [products, setProducts] = useState([]);
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
+
+  const toggleSort = (key) => {
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey(null); setSortDir("asc"); }
+    } else {
+      setSortKey(key); setSortDir("asc");
+    }
+  };
+
+  const SortHeader = ({ k, label, align = "left" }) => {
+    const active = sortKey === k;
+    return (
+      <button
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-brand transition-colors w-full ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : ""}`}
+      >
+        <span>{label}</span>
+        {active ? (
+          sortDir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />
+        ) : (
+          <ArrowUpDown size={10} className="opacity-30" />
+        )}
+      </button>
+    );
+  };
+
+  const sortedProducts = (() => {
+    if (!sortKey) return products;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const cmp = (a, b) => {
+      let av, bv;
+      switch (sortKey) {
+        case "name": av = (a.name || "").toLowerCase(); bv = (b.name || "").toLowerCase(); break;
+        case "category": av = (a.category || "").toLowerCase(); bv = (b.category || "").toLowerCase(); break;
+        case "is_cantina": av = a.is_cantina ? 1 : 0; bv = b.is_cantina ? 1 : 0; break;
+        case "active": av = a.active ? 1 : 0; bv = b.active ? 1 : 0; break;
+        case "price": av = Number(a.price_ref || 0); bv = Number(b.price_ref || 0); break;
+        case "cost": av = Number(a.cost_ref || 0); bv = Number(b.cost_ref || 0); break;
+        case "margin": {
+          const ma = Number(a.price_ref || 0) > 0 ? ((Number(a.price_ref) - Number(a.cost_ref || 0)) / Number(a.price_ref)) : -Infinity;
+          const mb = Number(b.price_ref || 0) > 0 ? ((Number(b.price_ref) - Number(b.cost_ref || 0)) / Number(b.price_ref)) : -Infinity;
+          av = ma; bv = mb; break;
+        }
+        case "redeemable": av = a.is_redeemable ? 1 : 0; bv = b.is_redeemable ? 1 : 0; break;
+        default: return 0;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    };
+    return [...products].sort(cmp);
+  })();
   const [rateHistory, setRateHistory] = useState([]);
   const [eurInput, setEurInput] = useState("");
   const [stockThresholdInput, setStockThresholdInput] = useState("");
@@ -272,26 +327,28 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
         {loading ? (
           <p className="p-4 text-sm text-stone-400 animate-pulse">Cargando...</p>
         ) : (
-          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[700px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
-                <th className="text-left px-3 py-2 font-medium">Producto</th>
-                <th className="text-center px-3 py-2 font-medium" title="Cuenta para deuda intercompania con el complejo">Es cantina</th>
-                <th className="text-center px-3 py-2 font-medium">Activo</th>
-                <th className="text-right px-3 py-2 font-medium">Precio REF</th>
-                <th className="text-right px-3 py-2 font-medium">Costo REF</th>
-                <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Margen</th>
+                <th className="text-left px-3 py-2 font-medium"><SortHeader k="name" label="Producto" /></th>
+                <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoria" /></th>
+                <th className="text-center px-3 py-2 font-medium" title="Cuenta para deuda intercompania con el complejo"><SortHeader k="is_cantina" label="Es cantina" align="center" /></th>
+                <th className="text-center px-3 py-2 font-medium"><SortHeader k="active" label="Activo" align="center" /></th>
+                <th className="text-right px-3 py-2 font-medium"><SortHeader k="price" label="Precio REF" align="right" /></th>
+                <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo REF" align="right" /></th>
+                <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
                 <th className="text-center px-3 py-2 font-medium">Emoji</th>
-                <th className="text-center px-3 py-2 font-medium">Canjeable</th>
+                <th className="text-center px-3 py-2 font-medium"><SortHeader k="redeemable" label="Canjeable" align="center" /></th>
                 <th className="text-right px-3 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => {
+              {sortedProducts.map((p) => {
                 const profit = calculateProfitability(p.price_ref, p.cost_ref);
                 return (
                 <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                   <td className="px-3 py-2 font-medium text-stone-800">{p.name}</td>
+                  <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
                   <td className="px-3 py-2 text-center">
                     <button onClick={() => toggleCantina(p)}
                       className={`w-10 h-5 rounded-full transition-colors ${p.is_cantina ? "bg-brand" : "bg-stone-300"}`}>

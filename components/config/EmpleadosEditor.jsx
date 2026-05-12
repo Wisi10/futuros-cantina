@@ -21,6 +21,7 @@ export default function EmpleadosEditor({ user }) {
     const { data } = await supabase
       .from("employees")
       .select("id, name, cedula, position, phone, is_active, start_date")
+      .eq("is_cantina", true)
       .order("is_active", { ascending: false })
       .order("name");
     setEmployees(data || []);
@@ -39,7 +40,7 @@ export default function EmpleadosEditor({ user }) {
     const { error } = await supabase.from("employees").insert({
       id, name, cedula: form.cedula.trim() || null,
       position: form.position || null, phone: form.phone.trim() || null,
-      salary_usd: 0, is_active: true,
+      salary_usd: 0, is_active: true, is_cantina: true,
     });
     setSavingId(null);
     if (error) { alert("Error: " + error.message); return; }

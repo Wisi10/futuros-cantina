@@ -25,7 +25,7 @@ export default function HorarioView({ user }) {
     if (!supabase) return;
     setLoading(true);
     const [empRes, tplRes] = await Promise.all([
-      supabase.from("employees").select("id, name, position").eq("is_active", true).order("name"),
+      supabase.from("employees").select("id, name, position").eq("is_active", true).eq("is_cantina", true).order("name"),
       supabase.from("employee_schedule_template").select("*"),
     ]);
     setEmployees(empRes.data || []);
