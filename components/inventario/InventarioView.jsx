@@ -288,7 +288,7 @@ export default function InventarioView({ user }) {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <button
                   onClick={() => handleKpiClick("sin_stock")}
-                  className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`bg-white rounded-xl border p-3 text-left transition-all hover:shadow-md ${
                     kpiFilter === "sin_stock" ? "border-brand ring-1 ring-brand" : "border-[#e5e5e5]"
                   }`}
                 >
@@ -296,7 +296,7 @@ export default function InventarioView({ user }) {
                     <PackageX size={16} className="text-stone-400" />
                     <span className="text-[11px] text-[#a3a3a3] font-medium">Sin stock</span>
                   </div>
-                  <p className={`text-2xl font-extrabold ${sinStockCount > 0 ? "text-[#dc2626]" : "text-stone-400"}`}>
+                  <p className={`text-xl font-extrabold ${sinStockCount > 0 ? "text-[#dc2626]" : "text-stone-400"}`}>
                     {sinStockCount}
                   </p>
                   <p className="text-[11px] text-[#a3a3a3]">productos</p>
@@ -304,7 +304,7 @@ export default function InventarioView({ user }) {
 
                 <button
                   onClick={() => handleKpiClick("stock_bajo")}
-                  className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`bg-white rounded-xl border p-3 text-left transition-all hover:shadow-md ${
                     kpiFilter === "stock_bajo" ? "border-brand ring-1 ring-brand" : "border-[#e5e5e5]"
                   }`}
                 >
@@ -312,29 +312,29 @@ export default function InventarioView({ user }) {
                     <AlertTriangle size={16} className="text-stone-400" />
                     <span className="text-[11px] text-[#a3a3a3] font-medium">Stock bajo</span>
                   </div>
-                  <p className={`text-2xl font-extrabold ${stockBajoCount > 0 ? "text-[#dc2626]" : "text-stone-400"}`}>
+                  <p className={`text-xl font-extrabold ${stockBajoCount > 0 ? "text-[#dc2626]" : "text-stone-400"}`}>
                     {stockBajoCount}
                   </p>
                   <p className="text-[11px] text-[#a3a3a3]">productos</p>
                 </button>
 
-                <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
+                <div className="bg-white rounded-xl border border-[#e5e5e5] p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <DollarSign size={16} className="text-stone-400" />
                     <span className="text-[11px] text-[#a3a3a3] font-medium">Valor total</span>
                   </div>
-                  <p className="text-2xl font-extrabold text-[#1a1a1a]">
+                  <p className="text-xl font-extrabold text-[#1a1a1a]">
                     REF {valorTotal.toFixed(2)}
                   </p>
                   <p className="text-[11px] text-[#a3a3a3]">inventario</p>
                 </div>
 
-                <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
+                <div className="bg-white rounded-xl border border-[#e5e5e5] p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Truck size={16} className="text-stone-400" />
                     <span className="text-[11px] text-[#a3a3a3] font-medium">Pagado a proveedores</span>
                   </div>
-                  <p className="text-2xl font-extrabold text-[#1a1a1a]">
+                  <p className="text-xl font-extrabold text-[#1a1a1a]">
                     REF {pagadoProveedores.toFixed(2)}
                   </p>
                   <p className="text-[11px] text-[#a3a3a3]">ultimos 30d</p>

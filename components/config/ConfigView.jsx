@@ -1,13 +1,23 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RefreshCw, History, X, Package } from "lucide-react";
+import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
 import DescuentosCantinaEditor from "./DescuentosCantinaEditor";
 import EmpleadosEditor from "./EmpleadosEditor";
 
+const SECTIONS = [
+  { id: "tasa",        name: "Tasa del dia",   icon: RefreshCw },
+  { id: "categorias",  name: "Categorias",     icon: Tag },
+  { id: "descuentos",  name: "Descuentos",     icon: Percent },
+  { id: "empleados",   name: "Empleados",      icon: Users },
+  { id: "stock",       name: "Umbral stock",   icon: Package },
+  { id: "productos",   name: "Productos",      icon: ShoppingBag },
+];
+
 export default function ConfigView({ user, rate, onRateUpdated }) {
+  const [section, setSection] = useState("tasa");
   const [products, setProducts] = useState([]);
   const [rateHistory, setRateHistory] = useState([]);
   const [eurInput, setEurInput] = useState("");
@@ -124,11 +134,38 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   };
 
   return (
-    <div className="h-full overflow-auto p-6 space-y-6">
-      <h1 className="font-bold text-brand text-lg flex items-center gap-2">
+    <div className="h-full overflow-auto p-4 md:p-6">
+      <h1 className="font-bold text-brand text-lg flex items-center gap-2 mb-4">
         <Settings size={20} /> Configuracion
       </h1>
 
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Sidebar */}
+        <div className="md:w-48 shrink-0">
+          <div className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+            {SECTIONS.map((s) => {
+              const Icon = s.icon;
+              const active = section === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSection(s.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors whitespace-nowrap shrink-0 md:shrink md:whitespace-normal md:w-full ${
+                    active ? "bg-brand-cream-light text-brand font-medium" : "hover:bg-stone-100 text-stone-600"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {s.name}
+                  {active && <ChevronRight size={12} className="ml-auto hidden md:block" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0 space-y-4">
+      <div style={{ display: section === "tasa" ? undefined : "none" }}>
       {/* Rate Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">
         <h2 className="font-bold text-sm text-stone-700 mb-3 flex items-center gap-2">
@@ -177,13 +214,21 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
           </div>
         )}
       </div>
+      </div>
 
-      <CategoriesEditor user={user} />
+      <div style={{ display: section === "categorias" ? undefined : "none" }}>
+        <CategoriesEditor user={user} />
+      </div>
 
-      <DescuentosCantinaEditor user={user} />
+      <div style={{ display: section === "descuentos" ? undefined : "none" }}>
+        <DescuentosCantinaEditor user={user} />
+      </div>
 
-      <EmpleadosEditor user={user} />
+      <div style={{ display: section === "empleados" ? undefined : "none" }}>
+        <EmpleadosEditor user={user} />
+      </div>
 
+      <div style={{ display: section === "stock" ? undefined : "none" }}>
       {/* Stock Threshold Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">
         <h2 className="font-bold text-sm text-stone-700 mb-2 flex items-center gap-2">
@@ -215,7 +260,9 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
           )}
         </div>
       </div>
+      </div>
 
+      <div style={{ display: section === "productos" ? undefined : "none" }}>
       {/* Products Section */}
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-stone-100">
@@ -278,6 +325,10 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
             </tbody>
           </table></div>
         )}
+      </div>
+      </div>
+
+        </div>
       </div>
 
       {/* Edit Product Modal */}

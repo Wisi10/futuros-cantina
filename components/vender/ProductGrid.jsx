@@ -57,34 +57,34 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
     filtered = filtered.filter((p) => p.name.toLowerCase().includes(q));
   }
 
-  // ── Category Grid ──
+  // ── Category Grid (fills entire available space) ──
   if (view === "categories") {
     return (
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="flex-1 overflow-auto p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex-1 overflow-auto p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {categories.map(([cat, data]) => (
               <button
                 key={cat}
                 onClick={() => handleCategoryTap(cat)}
-                className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
-                style={{ padding: "28px 16px", minHeight: 140 }}
+                className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
+                style={{ padding: "22px 14px", minHeight: 124 }}
               >
-                <ProductImage product={{ photo_url: data.photo_url, emoji: data.emoji }} size={40} className="rounded-lg" />
-                <span className="text-[15px] font-bold text-[#1a1a1a]">{cat}</span>
-                <span className="text-[11px] text-[#a3a3a3]">{data.count} productos</span>
+                <ProductImage product={{ photo_url: data.photo_url, emoji: data.emoji }} size={36} className="rounded-lg" />
+                <span className="text-[14px] font-bold text-[#1a1a1a]">{cat}</span>
+                <span className="text-[10px] text-[#a3a3a3]">{data.count} productos</span>
               </button>
             ))}
 
             {/* Ver todos */}
             <button
               onClick={handleShowAll}
-              className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
-              style={{ padding: "28px 16px", minHeight: 140 }}
+              className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
+              style={{ padding: "22px 14px", minHeight: 124 }}
             >
-              <span className="text-4xl leading-none">🔍</span>
-              <span className="text-[15px] font-bold text-[#1a1a1a]">Ver todos</span>
-              <span className="text-[11px] text-[#a3a3a3]">{products.length} productos</span>
+              <span className="text-[32px] leading-none">🔍</span>
+              <span className="text-[14px] font-bold text-[#1a1a1a]">Ver todos</span>
+              <span className="text-[10px] text-[#a3a3a3]">{products.length} productos</span>
             </button>
           </div>
         </div>
@@ -92,20 +92,20 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
     );
   }
 
-  // ── Product Grid ──
+  // ── Product Grid — limitado a ~3 rows para que dashboard se vea sin scroll ──
   const headerCat = activeCategory ? categoryData[activeCategory] : null;
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div className="flex flex-col min-w-0 overflow-hidden shrink-0" style={{ maxHeight: '460px' }}>
       {/* Header with back button + search */}
-      <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 border-b border-stone-200 bg-white sticky top-0 z-10 flex-wrap md:flex-nowrap">
+      <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 border-b border-stone-200 bg-white shrink-0 flex-wrap md:flex-nowrap">
         <button
           onClick={handleBack}
-          className="flex items-center gap-1 text-[12px] md:text-[13px] font-semibold text-brand rounded-lg px-2 md:px-3 py-1.5 md:py-2 bg-brand-cream hover:bg-stone-200 transition-colors shrink-0"
+          className="flex items-center gap-1 text-[12px] font-semibold text-brand rounded-lg px-2.5 py-1.5 bg-brand-cream hover:bg-stone-200 transition-colors shrink-0"
         >
           ← Categorias
         </button>
-        <div className="flex items-center gap-1.5 md:gap-2 text-sm text-stone-600 shrink-0">
+        <div className="flex items-center gap-1.5 text-sm text-stone-600 shrink-0">
           {headerCat ? <ProductImage product={{ photo_url: headerCat.photo_url, emoji: headerCat.emoji }} size={18} /> : <span>🔍</span>}
           <span className="font-bold text-xs md:text-sm">{activeCategory || "Todos"}</span>
           <span className="text-stone-400 text-xs">({filtered.length})</span>
@@ -122,9 +122,9 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
         </div>
       </div>
 
-      {/* Products */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      {/* Products (scroll interno si pasan de 3 rows) */}
+      <div className="flex-1 overflow-auto p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
           {filtered.map((product) => {
             const stock = product.stock_quantity ?? 0;
             const alertThreshold = effectiveThreshold(product, lowStockThreshold);
@@ -136,7 +136,7 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                 key={product.id}
                 onClick={() => !outOfStock && onAdd(product)}
                 disabled={outOfStock}
-                className={`relative bg-white rounded-xl border-2 p-3 flex flex-col items-center text-center transition-all ${
+                className={`relative bg-white rounded-xl border-2 p-2.5 flex flex-col items-center text-center transition-all ${
                   outOfStock
                     ? "opacity-40 cursor-not-allowed border-[#e5e5e5] pointer-events-none"
                     : "border-[#e5e5e5] hover:border-brand hover:shadow-md active:scale-[0.97] cursor-pointer"
@@ -149,9 +149,9 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                   </div>
                 )}
 
-                <div className="mb-1"><ProductImage product={product} size={36} className="rounded-lg" /></div>
+                <div className="mb-1"><ProductImage product={product} size={32} className="rounded-lg" /></div>
 
-                <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-1.5 line-clamp-2 w-full">
+                <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-1 line-clamp-2 w-full">
                   {product.name}
                 </p>
 

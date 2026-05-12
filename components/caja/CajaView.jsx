@@ -456,13 +456,13 @@ export default function CajaView({ user, rate }) {
 
 function KPICard({ icon, label, value, sub, color }) {
   return (
-    <div className="bg-white rounded-xl border border-stone-200 p-4">
-      <div className="flex items-center gap-2 mb-2">
+    <div className="bg-white rounded-xl border border-stone-200 p-3">
+      <div className="flex items-center gap-1.5 mb-1.5">
         <div className="text-stone-400">{icon}</div>
-        <span className="text-xs text-stone-400 font-medium">{label}</span>
+        <span className="text-[10px] uppercase tracking-wider text-stone-400 font-medium">{label}</span>
       </div>
-      <p className={`text-lg font-bold ${color}`}>{value}</p>
-      {sub && <p className="text-[11px] text-stone-400 mt-0.5">{sub}</p>}
+      <p className={`text-base font-bold ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-stone-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
