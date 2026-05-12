@@ -50,6 +50,7 @@ function POSPageInner() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("vender");
+  const [showLiveDashboard, setShowLiveDashboard] = useState(false);
 
   // Vender state
   const [screen, setScreen] = useState("pos");
@@ -866,12 +867,18 @@ function POSPageInner() {
                 />
               )}
 
-              {/* EN VIVO — always expanded */}
+              {/* EN VIVO — collapsible para liberar espacio para productos */}
               <div className="border-t border-stone-200 shrink-0">
-                <div className="px-4 py-2">
+                <button
+                  onClick={() => setShowLiveDashboard(!showLiveDashboard)}
+                  className="w-full px-4 py-2 flex items-center justify-between hover:bg-stone-50 transition-colors"
+                >
                   <span className="text-xs font-bold uppercase tracking-wider text-stone-500">En Vivo</span>
-                </div>
-                <DashboardView user={user} rate={rate} products={products} embedded />
+                  <span className="text-[11px] text-stone-400">{showLiveDashboard ? "Ocultar" : "Mostrar dashboard"}</span>
+                </button>
+                {showLiveDashboard && (
+                  <DashboardView user={user} rate={rate} products={products} embedded />
+                )}
               </div>
             </div>
 
