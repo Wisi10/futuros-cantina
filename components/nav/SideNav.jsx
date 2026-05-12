@@ -1,15 +1,17 @@
 "use client";
 import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Star, Calendar, CalendarRange, Users, TrendingUp } from "lucide-react";
 
+// Staff ve: vender, turnos, inventario, calendario, eventos.
+// Admin (Jose Gregorio, Yusmelly, owners) ve todo.
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
   { id: "calendario", label: "Calendario", icon: CalendarRange },
-  { id: "puntos", label: "Puntos", icon: Star },
-  { id: "clientes", label: "Clientes", icon: Users },
+  { id: "eventos", label: "Eventos", icon: Calendar },
+  { id: "turnos", label: "Turnos", icon: Clock },
+  { id: "puntos", label: "Puntos", icon: Star, adminOnly: true },
+  { id: "clientes", label: "Clientes", icon: Users, adminOnly: true },
   { id: "caja", label: "Caja", icon: Wallet, adminOnly: true },
-  { id: "eventos", label: "Eventos", icon: Calendar, adminOnly: true },
-  { id: "turnos", label: "Turnos", icon: Clock, adminOnly: true },
   { id: "costos", label: "Costos", icon: TrendingUp, adminOnly: true },
   { id: "reportes", label: "Reportes", icon: BarChart3, adminOnly: true },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },

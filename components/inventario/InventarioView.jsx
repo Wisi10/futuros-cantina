@@ -318,27 +318,31 @@ export default function InventarioView({ user }) {
                   <p className="text-[11px] text-[#a3a3a3]">productos</p>
                 </button>
 
-                <div className="bg-white rounded-xl border border-[#e5e5e5] p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DollarSign size={16} className="text-stone-400" />
-                    <span className="text-[11px] text-[#a3a3a3] font-medium">Valor total</span>
+                {isAdmin && (
+                  <div className="bg-white rounded-xl border border-[#e5e5e5] p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign size={16} className="text-stone-400" />
+                      <span className="text-[11px] text-[#a3a3a3] font-medium">Valor total</span>
+                    </div>
+                    <p className="text-xl font-extrabold text-[#1a1a1a]">
+                      REF {valorTotal.toFixed(2)}
+                    </p>
+                    <p className="text-[11px] text-[#a3a3a3]">inventario</p>
                   </div>
-                  <p className="text-xl font-extrabold text-[#1a1a1a]">
-                    REF {valorTotal.toFixed(2)}
-                  </p>
-                  <p className="text-[11px] text-[#a3a3a3]">inventario</p>
-                </div>
+                )}
 
-                <div className="bg-white rounded-xl border border-[#e5e5e5] p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Truck size={16} className="text-stone-400" />
-                    <span className="text-[11px] text-[#a3a3a3] font-medium">Pagado a proveedores</span>
+                {isAdmin && (
+                  <div className="bg-white rounded-xl border border-[#e5e5e5] p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Truck size={16} className="text-stone-400" />
+                      <span className="text-[11px] text-[#a3a3a3] font-medium">Pagado a proveedores</span>
+                    </div>
+                    <p className="text-xl font-extrabold text-[#1a1a1a]">
+                      REF {pagadoProveedores.toFixed(2)}
+                    </p>
+                    <p className="text-[11px] text-[#a3a3a3]">ultimos 30d</p>
                   </div>
-                  <p className="text-xl font-extrabold text-[#1a1a1a]">
-                    REF {pagadoProveedores.toFixed(2)}
-                  </p>
-                  <p className="text-[11px] text-[#a3a3a3]">ultimos 30d</p>
-                </div>
+                )}
               </div>
 
               {/* Category filter buttons */}
@@ -454,7 +458,7 @@ export default function InventarioView({ user }) {
                     )}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-stone-200 bg-stone-50">
+                    {isAdmin && <tr className="border-t-2 border-stone-200 bg-stone-50">
                       <td colSpan={4} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
                         Valor total inventario:
                       </td>
@@ -462,13 +466,13 @@ export default function InventarioView({ user }) {
                         REF {totalValue.toFixed(2)}
                       </td>
                       <td colSpan={3}></td>
-                    </tr>
+                    </tr>}
                   </tfoot>
                 </table></div>
               </div>
 
-              {/* Supplier section — only when "Todos" and no kpiFilter */}
-              {selectedCategory === "todos" && !kpiFilter && (
+              {/* Supplier section — only when "Todos" and no kpiFilter — admin only (info financiera) */}
+              {isAdmin && selectedCategory === "todos" && !kpiFilter && (
                 <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
                   <div className="px-4 py-3 border-b border-stone-100">
                     <h3 className="text-sm font-bold text-stone-700 flex items-center gap-2">

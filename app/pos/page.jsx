@@ -912,7 +912,7 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "eventos" && user.cantinaRole === "admin" && (
+        {activeTab === "eventos" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <EventosView user={user} rate={rate} onNavigate={setActiveTab} />
           </div>
@@ -936,19 +936,19 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "turnos" && user.cantinaRole === "admin" && (
+        {activeTab === "turnos" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ShiftsView user={user} />
           </div>
         )}
 
-        {activeTab === "puntos" && (
+        {activeTab === "puntos" && user.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <PuntosView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 
-        {activeTab === "clientes" && (
+        {activeTab === "clientes" && user.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ClientesView user={user} rate={rate} />
           </div>
