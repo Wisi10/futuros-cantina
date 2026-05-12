@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, Camera, Upload, Plus, Trash2 } from "lucide-react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, ChevronUp, Camera, Upload, Plus, Trash2, ArrowUpDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
@@ -25,7 +25,35 @@ export default function InventarioView({ user }) {
   const [photoSearch, setPhotoSearch] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [sortKey, setSortKey] = useState(null); // null = orden original (stock asc)
+  const [sortDir, setSortDir] = useState("asc"); // asc | desc
   const isAdmin = user?.cantinaRole === "admin";
+
+  const toggleSort = (key) => {
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey(null); setSortDir("asc"); } // tercer click resetea
+    } else {
+      setSortKey(key); setSortDir("asc");
+    }
+  };
+
+  const SortHeader = ({ k, label, align = "left" }) => {
+    const active = sortKey === k;
+    return (
+      <button
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-brand transition-colors w-full ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : ""}`}
+      >
+        <span>{label}</span>
+        {active ? (
+          sortDir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />
+        ) : (
+          <ArrowUpDown size={10} className="opacity-30" />
+        )}
+      </button>
+    );
+  };
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
@@ -82,19 +110,48 @@ export default function InventarioView({ user }) {
   );
 
   // Filtering
-  const filtered = products.filter((p) => {
-    // KPI filter
-    if (kpiFilter === "sin_stock" && Number(p.stock_quantity || 0) > 0) return false;
-    if (kpiFilter === "stock_bajo") {
-      const stock = Number(p.stock_quantity || 0);
-      if (!(stock > 0 && stock <= (p.low_stock_alert || 5))) return false;
-    }
-    // Category filter
-    if (selectedCategory !== "todos" && (p.category || "Otro") !== selectedCategory) return false;
-    // Search filter
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = (() => {
+    const list = products.filter((p) => {
+      if (kpiFilter === "sin_stock" && Number(p.stock_quantity || 0) > 0) return false;
+      if (kpiFilter === "stock_bajo") {
+        const stock = Number(p.stock_quantity || 0);
+        if (!(stock > 0 && stock <= (p.low_stock_alert || 5))) return false;
+      }
+      if (selectedCategory !== "todos" && (p.category || "Otro") !== selectedCategory) return false;
+      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+    if (!sortKey) return list;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const cmp = (a, b) => {
+      let av, bv;
+      switch (sortKey) {
+        case "name": av = (a.name || "").toLowerCase(); bv = (b.name || "").toLowerCase(); break;
+        case "category": av = (a.category || "").toLowerCase(); bv = (b.category || "").toLowerCase(); break;
+        case "stock": av = Number(a.stock_quantity || 0); bv = Number(b.stock_quantity || 0); break;
+        case "alert": av = Number(a.low_stock_alert || 5); bv = Number(b.low_stock_alert || 5); break;
+        case "cost": av = Number(a.cost_ref || 0); bv = Number(b.cost_ref || 0); break;
+        case "margin": {
+          const ma = Number(a.price_ref || 0) > 0 ? ((Number(a.price_ref) - Number(a.cost_ref || 0)) / Number(a.price_ref)) : -Infinity;
+          const mb = Number(b.price_ref || 0) > 0 ? ((Number(b.price_ref) - Number(b.cost_ref || 0)) / Number(b.price_ref)) : -Infinity;
+          av = ma; bv = mb; break;
+        }
+        case "status": {
+          const sa = Number(a.stock_quantity || 0);
+          const sb = Number(b.stock_quantity || 0);
+          // sin_stock=0 < bajo=1 < ok=2
+          av = sa <= 0 ? 0 : sa <= (a.low_stock_alert || 5) ? 1 : 2;
+          bv = sb <= 0 ? 0 : sb <= (b.low_stock_alert || 5) ? 1 : 2;
+          break;
+        }
+        default: return 0;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    };
+    return [...list].sort(cmp);
+  })();
 
   const totalValue = filtered.reduce(
     (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.cost_ref || 0), 0
@@ -333,13 +390,13 @@ export default function InventarioView({ user }) {
                 <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                   <thead>
                     <tr className="bg-stone-50 text-stone-500 text-xs">
-                      <th className="text-left px-3 py-2 font-medium">Producto</th>
-                      <th className="text-left px-3 py-2 font-medium">Categoria</th>
-                      <th className="text-right px-3 py-2 font-medium">Stock</th>
-                      <th className="text-right px-3 py-2 font-medium">Alerta</th>
-                      <th className="text-right px-3 py-2 font-medium">Costo REF</th>
-                      <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Margen</th>
-                      <th className="text-center px-3 py-2 font-medium">Estado</th>
+                      <th className="text-left px-3 py-2 font-medium"><SortHeader k="name" label="Producto" /></th>
+                      <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoria" /></th>
+                      <th className="text-right px-3 py-2 font-medium"><SortHeader k="stock" label="Stock" align="right" /></th>
+                      <th className="text-right px-3 py-2 font-medium"><SortHeader k="alert" label="Alerta" align="right" /></th>
+                      <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo REF" align="right" /></th>
+                      <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
+                      <th className="text-center px-3 py-2 font-medium"><SortHeader k="status" label="Estado" align="center" /></th>
                       <th className="text-right px-3 py-2 font-medium"></th>
                     </tr>
                   </thead>

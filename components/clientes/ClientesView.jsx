@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Search, Plus, Users } from "lucide-react";
+import { Search, Plus, Users, Merge } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF } from "@/lib/utils";
 import { avatarColor, avatarInitials, relativeFromNow, daysSince, formatVePhone } from "@/lib/clientHelpers";
 import ClientProfileModal from "./ClientProfileModal";
 import ClientFormModal from "./ClientFormModal";
+import MergeDuplicatesModal from "./MergeDuplicatesModal";
 
 const FILTERS = [
   { id: "all", label: "Todos" },
@@ -30,6 +31,8 @@ export default function ClientesView({ user, rate }) {
   const [profileId, setProfileId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const isAdmin = user?.cantinaRole === "admin";
 
   // Debounce search
   useEffect(() => {
@@ -68,12 +71,23 @@ export default function ClientesView({ user, rate }) {
             <Users size={20} className="text-brand" />
             <h1 className="text-lg font-bold text-brand">Clientes</h1>
           </div>
-          <button
-            onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1 px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark"
-          >
-            <Plus size={14} /> Nuevo cliente
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => setMergeOpen(true)}
+                className="inline-flex items-center gap-1 px-3 py-2 bg-stone-100 text-stone-700 rounded-lg text-xs font-medium hover:bg-stone-200"
+                title="Fusionar duplicados"
+              >
+                <Merge size={14} /> Duplicados
+              </button>
+            )}
+            <button
+              onClick={() => setCreating(true)}
+              className="inline-flex items-center gap-1 px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark"
+            >
+              <Plus size={14} /> Nuevo cliente
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -184,6 +198,13 @@ export default function ClientesView({ user, rate }) {
             await load();
             setProfileId(newId);
           }}
+        />
+      )}
+
+      {mergeOpen && (
+        <MergeDuplicatesModal
+          onClose={() => setMergeOpen(false)}
+          onMerged={() => load()}
         />
       )}
     </div>

@@ -31,7 +31,15 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
   const [clientSearch, setClientSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
+  // Pre-poblar selectedClient con saleClient si ya esta asociado en el header.
+  // Asi el usuario NO tiene que volver a buscar al cliente cuando elige Credito.
+  const [selectedClient, setSelectedClient] = useState(
+    saleClient?.id ? {
+      id: saleClient.id,
+      full_name: saleClient.name,
+      cedula: saleClient.cedula || null,
+    } : null
+  );
   const [clientDebts, setClientDebts] = useState({});
   const [creditNotes, setCreditNotes] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -535,7 +543,15 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                 {clients.length > 0 && !selectedClient && (
                   <div className="border border-stone-200 rounded-lg overflow-hidden max-h-48 overflow-auto">
                     {clients.map((c) => (
-                      <button key={c.id} onClick={() => { setSelectedClient(c); setClientSearch(""); setClients([]); }}
+                      <button key={c.id} onClick={() => {
+                        setSelectedClient(c);
+                        setClientSearch("");
+                        setClients([]);
+                        // Si no hay saleClient asociado arriba, asociarlo automaticamente para que tambien gane puntos.
+                        if (!saleClient?.id && onAssociateClient && c?.id) {
+                          onAssociateClient({ id: c.id, name: c.full_name, cedula: c.cedula || null, points: Number(c.loyalty_points || 0) });
+                        }
+                      }}
                         className="w-full text-left px-3 py-2.5 hover:bg-stone-50 border-b border-stone-100 last:border-0 flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-stone-700">{(c.full_name || "?").trim().replace(/\s+/g, " ")}</p>
