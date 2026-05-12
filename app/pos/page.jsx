@@ -839,6 +839,17 @@ function POSPageInner() {
           </div>
         )}
 
+        {/* Floating exit button — visible siempre que se este impersonando */}
+        {impersonatedRole && (
+          <button
+            onClick={() => { setImpersonatedRole(null); setActiveTab("admin"); }}
+            className="fixed bottom-6 right-6 z-50 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-xl px-4 py-3 text-sm font-bold flex items-center gap-2 transition-all active:scale-95"
+            style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.25)" }}
+          >
+            <span>← Salir vista {impersonatedRole}</span>
+          </button>
+        )}
+
         {/* Header */}
         <header className="bg-white border-b border-stone-200 px-3 md:px-4 py-2 md:py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:gap-3">
