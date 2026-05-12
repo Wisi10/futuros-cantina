@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Users, Eye, Lightbulb, Check, X, Loader2 } from "lucide-react";
+import { Shield, Users, Eye, Lightbulb, Check, X, Loader2, Power, AlertTriangle, Gift, Key } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const TABS = [
   { id: "permisos", label: "Permisos", icon: Users },
+  { id: "sistema", label: "Sistema", icon: Power },
   { id: "verComo", label: "Ver como", icon: Eye },
   { id: "ideas", label: "Ideas", icon: Lightbulb },
 ];
@@ -14,17 +15,53 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+  const [killswitchSales, setKillswitchSales] = useState({ enabled: false, message: "" });
+  const [killswitchSalesLoading, setKillswitchSalesLoading] = useState(false);
+  const [resetPinFor, setResetPinFor] = useState(null);
+  const [newPin, setNewPin] = useState("");
 
   const load = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("user_profiles")
-      .select("id, name, role, cantina_role, is_active, pin, phone")
-      .order("name");
-    setProfiles(data || []);
+    const [profilesRes, killRes] = await Promise.all([
+      supabase.from("user_profiles").select("id, name, role, cantina_role, is_active, pin, phone, cortesia_limit_monthly_ref").order("name"),
+      supabase.from("app_settings").select("value").eq("key", "killswitch_cantina_sales").maybeSingle(),
+    ]);
+    setProfiles(profilesRes.data || []);
+    if (killRes.data?.value) setKillswitchSales(killRes.data.value);
     setLoading(false);
   }, []);
+
+  const saveKillswitchSales = async (patch) => {
+    setKillswitchSalesLoading(true);
+    const next = { ...killswitchSales, ...patch };
+    setKillswitchSales(next);
+    const { error } = await supabase.from("app_settings").upsert({
+      key: "killswitch_cantina_sales",
+      value: next,
+      updated_by: user?.name || "Owner",
+    }, { onConflict: "key" });
+    setKillswitchSalesLoading(false);
+    if (error) alert("Error: " + error.message);
+  };
+
+  const handleResetPin = async () => {
+    if (!resetPinFor || !newPin.trim()) return;
+    if (!/^\d{4,8}$/.test(newPin)) { alert("PIN debe ser 4-8 digitos"); return; }
+    const { error } = await supabase.from("user_profiles").update({ pin: newPin }).eq("id", resetPinFor.id);
+    if (error) { alert("Error: " + error.message); return; }
+    setResetPinFor(null); setNewPin("");
+    alert(`PIN actualizado para ${resetPinFor.name}`);
+    await load();
+  };
+
+  const setCortesiaLimit = async (profileId, val) => {
+    const num = val === "" ? null : Number(val);
+    if (val !== "" && (!Number.isFinite(num) || num < 0)) return;
+    const { error } = await supabase.from("user_profiles").update({ cortesia_limit_monthly_ref: num }).eq("id", profileId);
+    if (error) alert("Error: " + error.message);
+    await load();
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -84,6 +121,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
                     <th className="text-left px-3 py-2 font-medium hidden md:table-cell">Rol demo</th>
                     <th className="text-center px-3 py-2 font-medium">Acceso cantina</th>
                     <th className="text-center px-3 py-2 font-medium">Activo</th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,6 +168,13 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
                         <td className="px-3 py-2 text-center">
                           {p.is_active ? <Check size={14} className="text-green-500 inline" /> : <X size={14} className="text-stone-300 inline" />}
                         </td>
+                        <td className="px-3 py-2 text-right">
+                          {p.pin && (
+                            <button onClick={() => { setResetPinFor(p); setNewPin(""); }} className="text-[11px] text-brand hover:underline">
+                              Reset PIN
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -137,6 +182,74 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {tab === "sistema" && (
+        <div className="space-y-3">
+          {/* Killswitch ventas */}
+          <div className="bg-white rounded-xl border border-stone-200 p-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2">
+                  <Power size={14} className={killswitchSales.enabled ? "text-red-600" : "text-stone-400"} />
+                  Killswitch ventas cantina
+                </h3>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  Cuando esta activo, el POS bloquea todas las ventas con el mensaje de abajo. Util para cerrar inesperadamente o por inventario critico.
+                </p>
+              </div>
+              <button
+                onClick={() => saveKillswitchSales({ enabled: !killswitchSales.enabled })}
+                disabled={killswitchSalesLoading}
+                className={`w-12 h-6 rounded-full transition-colors shrink-0 ${killswitchSales.enabled ? "bg-red-500" : "bg-stone-300"}`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${killswitchSales.enabled ? "translate-x-6" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Mensaje al staff</label>
+            <input
+              type="text"
+              value={killswitchSales.message || ""}
+              onChange={(e) => setKillswitchSales({ ...killswitchSales, message: e.target.value })}
+              onBlur={() => saveKillswitchSales({})}
+              placeholder="Cantina cerrada temporalmente"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+            {killswitchSales.enabled && (
+              <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-800 flex items-center gap-2">
+                <AlertTriangle size={12} /> Ventas BLOQUEADAS en este momento. Recuerda desactivar para volver a operar.
+              </div>
+            )}
+          </div>
+
+          {/* Topes cortesia */}
+          <div className="bg-white rounded-xl border border-stone-200 p-4">
+            <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2 mb-1">
+              <Gift size={14} /> Topes de cortesia por usuario
+            </h3>
+            <p className="text-[11px] text-stone-500 mb-3">
+              Limite mensual REF que cada admin/gerente puede regalar como cortesia. Vacio = sin limite. Owner siempre sin limite.
+            </p>
+            <div className="space-y-1">
+              {profiles.filter((p) => p.cantina_role && p.cantina_role !== "staff").map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-sm">
+                  <span className="flex-1 text-stone-700">{p.name}</span>
+                  <span className="text-[10px] text-stone-400 uppercase tracking-wider">{p.cantina_role}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    defaultValue={p.cortesia_limit_monthly_ref ?? ""}
+                    onBlur={(e) => setCortesiaLimit(p.id, e.target.value)}
+                    placeholder="Sin limite"
+                    className="w-24 border border-stone-300 rounded-lg px-2 py-1 text-xs focus:border-brand focus:outline-none"
+                  />
+                  <span className="text-[10px] text-stone-400 w-12">REF/mes</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -237,6 +350,40 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
                 <p className="font-bold text-stone-800">Staff</p>
                 <p className="text-xs text-stone-500">Solo operativo: Vender, ver Inventario (sin costos), Turnos, Calendario, Eventos.</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset PIN modal */}
+      {resetPinFor && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setResetPinFor(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+              <h3 className="font-bold text-stone-800 text-sm flex items-center gap-2">
+                <Key size={14} /> Reset PIN — {resetPinFor.name}
+              </h3>
+              <button onClick={() => setResetPinFor(null)} className="text-stone-400 hover:text-stone-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block">Nuevo PIN (4-8 digitos)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+                maxLength={8}
+                autoFocus
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-lg font-mono tracking-widest text-center focus:border-brand focus:outline-none"
+              />
+              <p className="text-[11px] text-stone-400">El PIN actual sera reemplazado. Avisa al usuario.</p>
+            </div>
+            <div className="flex gap-2 px-5 py-3 border-t border-stone-100 bg-stone-50 rounded-b-2xl">
+              <button onClick={() => setResetPinFor(null)} className="flex-1 px-3 py-2 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium">Cancelar</button>
+              <button onClick={handleResetPin} disabled={!newPin || newPin.length < 4} className="flex-1 px-3 py-2 text-xs text-white bg-brand hover:bg-brand-dark disabled:opacity-50 rounded-lg font-medium">Reset PIN</button>
             </div>
           </div>
         </div>

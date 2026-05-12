@@ -53,6 +53,7 @@ function POSPageInner() {
   const [activeTab, setActiveTab] = useState("vender");
   const [showLiveDashboard, setShowLiveDashboard] = useState(false);
   const [impersonatedRole, setImpersonatedRole] = useState(null);
+  const [killswitchSales, setKillswitchSales] = useState({ enabled: false, message: "" });
 
   // Vender state
   const [screen, setScreen] = useState("pos");
@@ -209,6 +210,9 @@ function POSPageInner() {
     loadPendingCreditsCount();
     loadActiveShift();
     loadLowStockThreshold(supabase).then(setLowStockThreshold);
+    // Killswitch ventas (owner toggle)
+    supabase.from("app_settings").select("value").eq("key", "killswitch_cantina_sales").maybeSingle()
+      .then(({ data }) => { if (data?.value) setKillswitchSales(data.value); });
   }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount, loadActiveShift]);
 
   // Show low-stock toast at most once per day (sessionStorage flag)
@@ -815,6 +819,13 @@ function POSPageInner() {
       <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={effectiveUser.cantinaRole || "staff"} />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0 pb-16 md:pb-0">
+        {/* Killswitch ventas activado por owner */}
+        {killswitchSales.enabled && (
+          <div className="bg-red-600 text-white px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium shrink-0">
+            <span>🚫 VENTAS BLOQUEADAS — {killswitchSales.message || "Cantina cerrada temporalmente"}</span>
+          </div>
+        )}
+
         {/* Banner impersonation */}
         {impersonatedRole && (
           <div className="bg-amber-100 border-b border-amber-300 px-4 py-1.5 flex items-center justify-between text-xs text-amber-900 shrink-0">
@@ -912,6 +923,7 @@ function POSPageInner() {
               onUpdateQty={updateQty}
               onRemove={removeFromCart}
               onCheckout={() => {
+                if (killswitchSales.enabled) { alert("Ventas bloqueadas: " + (killswitchSales.message || "Cantina cerrada")); return; }
                 if (!activeShift) { setShowOpenShift(true); return; }
                 setScreen("payment");
               }}
