@@ -13,6 +13,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
   const [payMethod, setPayMethod] = useState("");
   const [payRef, setPayRef] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [expandedClient, setExpandedClient] = useState(null);
 
   const loadCredits = useCallback(async () => {
     if (!supabase) return;
@@ -180,41 +181,81 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
               </button>
             </div>
           ) : (
-            /* Credits list */
+            /* Credits agrupados por cliente */
             <div className="space-y-2">
-              {credits.map((c) => {
-                const outstanding = Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0);
-                const days = daysSince(c.created_at);
-                return (
-                  <div key={c.id} className={`${ageBg(days)} rounded-lg p-3 flex items-center justify-between`}>
-                    <div>
-                      <p className="text-sm font-medium text-stone-800">
-                        <ClientLink clientId={c.client_id} name={c.client_name} />
-                      </p>
-                      <p className="text-xs text-stone-500 mt-0.5">
-                        Original: REF {Number(c.original_amount_ref).toFixed(2)}
-                        {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: REF ${Number(c.paid_amount_ref).toFixed(2)}`}
-                      </p>
-                      <p className={`text-xs mt-0.5 ${ageColor(days)}`}>
-                        {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days} dias`}
-                        {c.status === "partial" && " · Pago parcial"}
-                      </p>
-                    </div>
-                    <div className="text-right flex items-center gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-brand">REF {outstanding.toFixed(2)}</p>
-                        <p className="text-[10px] text-stone-400">pendiente</p>
-                      </div>
+              {(() => {
+                // Agrupar por client_id (o por nombre si no hay id)
+                const groups = {};
+                credits.forEach((c) => {
+                  const key = c.client_id || `name:${c.client_name || "?"}`;
+                  if (!groups[key]) {
+                    groups[key] = {
+                      key, client_id: c.client_id, client_name: c.client_name,
+                      items: [], total: 0, oldestDays: 0,
+                    };
+                  }
+                  const outstanding = Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0);
+                  groups[key].items.push({ ...c, outstanding });
+                  groups[key].total += outstanding;
+                  groups[key].oldestDays = Math.max(groups[key].oldestDays, daysSince(c.created_at));
+                });
+                const groupList = Object.values(groups).sort((a, b) => b.oldestDays - a.oldestDays);
+
+                return groupList.map((g) => {
+                  const isExpanded = expandedClient === g.key;
+                  return (
+                    <div key={g.key} className={`${ageBg(g.oldestDays)} rounded-lg overflow-hidden`}>
                       <button
-                        onClick={() => openPay(c)}
-                        className="px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors"
+                        onClick={() => setExpandedClient(isExpanded ? null : g.key)}
+                        className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-black/5"
                       >
-                        Cobrar
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-stone-800 truncate">
+                            <ClientLink clientId={g.client_id} name={g.client_name} />
+                          </p>
+                          <p className={`text-xs mt-0.5 ${ageColor(g.oldestDays)}`}>
+                            {g.items.length} credito{g.items.length !== 1 ? "s" : ""} · mas antiguo {g.oldestDays === 0 ? "hoy" : g.oldestDays === 1 ? "ayer" : `hace ${g.oldestDays}d`}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <p className="text-base font-bold text-brand">REF {g.total.toFixed(2)}</p>
+                          <p className="text-[10px] text-stone-400">total pendiente</p>
+                        </div>
+                        <span className="text-stone-400 ml-2">{isExpanded ? "▾" : "▸"}</span>
                       </button>
+
+                      {isExpanded && (
+                        <div className="bg-white/60 border-t border-stone-200 px-3 py-2 space-y-1.5">
+                          {g.items.map((c) => {
+                            const days = daysSince(c.created_at);
+                            return (
+                              <div key={c.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-stone-100 last:border-0">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-stone-600">
+                                    Original: REF {Number(c.original_amount_ref).toFixed(2)}
+                                    {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: REF ${Number(c.paid_amount_ref).toFixed(2)}`}
+                                  </p>
+                                  <p className={`text-[10px] ${ageColor(days)}`}>
+                                    {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days}d`}
+                                    {c.status === "partial" && " · Parcial"}
+                                  </p>
+                                </div>
+                                <p className="text-xs font-bold text-brand whitespace-nowrap">REF {c.outstanding.toFixed(2)}</p>
+                                <button
+                                  onClick={() => openPay(c)}
+                                  className="px-2.5 py-1 bg-brand text-white rounded text-[11px] font-medium hover:bg-brand-dark transition-colors shrink-0"
+                                >
+                                  Cobrar
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
