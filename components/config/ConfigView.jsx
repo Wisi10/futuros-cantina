@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
 import DescuentosCantinaEditor from "./DescuentosCantinaEditor";
+import EmpleadosEditor from "./EmpleadosEditor";
 
 export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
@@ -180,6 +181,8 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       <CategoriesEditor user={user} />
 
       <DescuentosCantinaEditor user={user} />
+
+      <EmpleadosEditor user={user} />
 
       {/* Stock Threshold Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">

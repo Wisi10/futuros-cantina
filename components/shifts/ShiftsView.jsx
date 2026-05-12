@@ -2,8 +2,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, METHOD_LABELS } from "@/lib/utils";
+import HorarioView from "./HorarioView";
 
 export default function ShiftsView({ user }) {
+  const [view, setView] = useState("turnos"); // turnos | horario
   const [shifts, setShifts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
@@ -43,8 +45,26 @@ export default function ShiftsView({ user }) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
-      <h2 className="text-sm font-bold text-stone-700 mb-3">Historial de Turnos</h2>
+      <div className="flex gap-1 mb-3 border-b border-stone-200">
+        <button
+          onClick={() => setView("turnos")}
+          className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+            view === "turnos" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+          }`}
+        >
+          Historial Turnos
+        </button>
+        <button
+          onClick={() => setView("horario")}
+          className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+            view === "horario" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+          }`}
+        >
+          Horario semanal
+        </button>
+      </div>
 
+      {view === "horario" ? <HorarioView user={user} /> : (<>
       {shifts.length === 0 ? (
         <p className="text-sm text-stone-400 text-center py-8">Sin turnos registrados</p>
       ) : (
@@ -130,6 +150,7 @@ export default function ShiftsView({ user }) {
           })}
         </div>
       )}
+      </>)}
     </div>
   );
 }

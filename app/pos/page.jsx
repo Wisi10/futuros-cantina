@@ -837,26 +837,26 @@ function POSPageInner() {
 
         {/* Tab content */}
         {activeTab === "vender" && (
-          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-            {/* Live strip — sutil */}
-            <div className="bg-stone-50 border-b border-stone-200 px-4 py-1.5 text-[11px] text-stone-500 flex items-center gap-3 flex-wrap shrink-0">
-              <span><span className="text-stone-400">Hoy:</span> <span className="font-semibold text-stone-700">REF {todayStats.total.toFixed(2)}</span></span>
-              <span className="text-stone-300">·</span>
-              <span>{todayStats.count} venta{todayStats.count === 1 ? "" : "s"}</span>
-              {todayStats.lastClient && (
-                <>
-                  <span className="text-stone-300">·</span>
-                  <span><span className="text-stone-400">ult:</span> {todayStats.lastClient.name}</span>
-                </>
-              )}
-            </div>
-            <div className="flex min-h-[60vh] shrink-0">
-            {loading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-stone-400 text-sm animate-pulse">Cargando productos...</p>
+          <div className="flex-1 flex min-h-0">
+            {/* LEFT: scrolleable - productos + en vivo */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+              {/* Live strip — sutil */}
+              <div className="bg-stone-50 border-b border-stone-200 px-4 py-1.5 text-[11px] text-stone-500 flex items-center gap-3 flex-wrap shrink-0">
+                <span><span className="text-stone-400">Hoy:</span> <span className="font-semibold text-stone-700">REF {todayStats.total.toFixed(2)}</span></span>
+                <span className="text-stone-300">·</span>
+                <span>{todayStats.count} venta{todayStats.count === 1 ? "" : "s"}</span>
+                {todayStats.lastClient && (
+                  <>
+                    <span className="text-stone-300">·</span>
+                    <span><span className="text-stone-400">ult:</span> {todayStats.lastClient.name}</span>
+                  </>
+                )}
               </div>
-            ) : (
-              <>
+              {loading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-stone-400 text-sm animate-pulse">Cargando productos...</p>
+                </div>
+              ) : (
                 <ProductGrid
                   products={products}
                   cart={cart}
@@ -864,32 +864,33 @@ function POSPageInner() {
                   onAdd={addToCart}
                   lowStockThreshold={lowStockThreshold}
                 />
-                <CartSidebar
-                  cart={cart}
-                  rate={rate}
-                  onUpdateQty={updateQty}
-                  onRemove={removeFromCart}
-                  onCheckout={() => {
-                    if (!activeShift) { setShowOpenShift(true); return; }
-                    setScreen("payment");
-                  }}
-                  saleClient={saleClient}
-                  onAddRedemption={addRedemption}
-                  subtotalRef={subtotalRef}
-                  discountAmount={discountAmount}
-                  discountPct={discountPct}
-                />
-              </>
-            )}
+              )}
+
+              {/* EN VIVO — always expanded */}
+              <div className="border-t border-stone-200 shrink-0">
+                <div className="px-4 py-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-500">En Vivo</span>
+                </div>
+                <DashboardView user={user} rate={rate} products={products} embedded />
+              </div>
             </div>
 
-            {/* EN VIVO — always expanded */}
-            <div className="border-t border-stone-200 shrink-0">
-              <div className="px-4 py-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-500">En Vivo</span>
-              </div>
-              <DashboardView user={user} rate={rate} products={products} embedded />
-            </div>
+            {/* RIGHT: carrito sticky - no scrolls con productos */}
+            <CartSidebar
+              cart={cart}
+              rate={rate}
+              onUpdateQty={updateQty}
+              onRemove={removeFromCart}
+              onCheckout={() => {
+                if (!activeShift) { setShowOpenShift(true); return; }
+                setScreen("payment");
+              }}
+              saleClient={saleClient}
+              onAddRedemption={addRedemption}
+              subtotalRef={subtotalRef}
+              discountAmount={discountAmount}
+              discountPct={discountPct}
+            />
           </div>
         )}
 
