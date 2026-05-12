@@ -1,9 +1,10 @@
 "use client";
-import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Star, Calendar, Users, TrendingUp } from "lucide-react";
+import { ShoppingCart, Package, Wallet, BarChart3, Settings, Clock, Star, Calendar, CalendarRange, Users, TrendingUp } from "lucide-react";
 
 const TABS = [
   { id: "vender", label: "Vender", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
+  { id: "calendario", label: "Calendario", icon: CalendarRange },
   { id: "puntos", label: "Puntos", icon: Star },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "caja", label: "Caja", icon: Wallet, adminOnly: true },

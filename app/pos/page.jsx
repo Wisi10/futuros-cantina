@@ -19,6 +19,7 @@ import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
 import ReportesView from "@/components/reportes/ReportesView";
 import CostosView from "@/components/costos/CostosView";
+import CalendarioView from "@/components/calendario/CalendarioView";
 import ShiftPill from "@/components/shifts/ShiftPill";
 import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
@@ -919,6 +920,12 @@ function POSPageInner() {
         {activeTab === "costos" && user.cantinaRole === "admin" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <CostosView user={user} />
+          </div>
+        )}
+
+        {activeTab === "calendario" && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <CalendarioView user={user} />
           </div>
         )}
 
