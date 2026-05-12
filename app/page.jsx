@@ -13,9 +13,22 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      // Owner PIN hardcoded — checked BEFORE DB query, always wins. Solo el owner.
-      if (pin === "9999") {
+      // PINs hardcoded — checkeados ANTES del query DB.
+      // 5555 = owner (Sam), 9999 = admin/gerente generico, 1234 = staff generico
+      if (pin === "5555") {
         sessionStorage.setItem("cantina_user", JSON.stringify({ id: "owner", name: "Owner", role: "owner", cantinaRole: "owner" }));
+        router.push("/pos");
+        setLoading(false);
+        return;
+      }
+      if (pin === "9999") {
+        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "gerente_generic", name: "Gerente", role: "gerente", cantinaRole: "gerente" }));
+        router.push("/pos");
+        setLoading(false);
+        return;
+      }
+      if (pin === "1234") {
+        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "staff_generic", name: "Staff", role: "staff", cantinaRole: "staff" }));
         router.push("/pos");
         setLoading(false);
         return;

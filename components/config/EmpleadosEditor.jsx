@@ -15,18 +15,21 @@ export default function EmpleadosEditor({ user }) {
 
   const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
 
+  const [showAll, setShowAll] = useState(false);
+
   const load = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    const { data } = await supabase
+    let q = supabase
       .from("employees")
-      .select("id, name, cedula, position, phone, is_active, start_date")
-      .eq("is_cantina", true)
+      .select("id, name, cedula, position, phone, is_active, start_date, is_cantina, is_demo")
       .order("is_active", { ascending: false })
       .order("name");
+    if (!showAll) q = q.eq("is_cantina", true);
+    const { data } = await q;
     setEmployees(data || []);
     setLoading(false);
-  }, []);
+  }, [showAll]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -40,7 +43,7 @@ export default function EmpleadosEditor({ user }) {
     const { error } = await supabase.from("employees").insert({
       id, name, cedula: form.cedula.trim() || null,
       position: form.position || null, phone: form.phone.trim() || null,
-      salary_usd: 0, is_active: true, is_cantina: true,
+      salary_usd: 0, is_active: true, is_cantina: true, is_demo: false,
     });
     setSavingId(null);
     if (error) { alert("Error: " + error.message); return; }
@@ -73,6 +76,18 @@ export default function EmpleadosEditor({ user }) {
     await load();
   };
 
+  const toggleScope = async (e, field) => {
+    setSavingId(e.id);
+    const newVal = !e[field];
+    // No permitir que ambos queden false (huerfana)
+    const other = field === "is_cantina" ? e.is_demo : e.is_cantina;
+    if (!newVal && !other) { alert("Empleado debe estar visible al menos en un sistema (cantina o demo)."); setSavingId(null); return; }
+    const { error } = await supabase.from("employees").update({ [field]: newVal }).eq("id", e.id);
+    setSavingId(null);
+    if (error) { alert("Error: " + error.message); return; }
+    await load();
+  };
+
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-4">
       <div className="flex items-center justify-between mb-3">
@@ -89,9 +104,13 @@ export default function EmpleadosEditor({ user }) {
         )}
       </div>
 
-      <p className="text-[11px] text-stone-400 mb-3">
+      <p className="text-[11px] text-stone-400 mb-2">
         Listado del personal de cantina. Usado para asignar horarios en Turnos {">"} Horario.
       </p>
+      <label className="text-[11px] text-stone-600 flex items-center gap-1.5 mb-3 cursor-pointer">
+        <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="w-3 h-3" />
+        Ver todos los empleados (incluye demo-only para asignar scope)
+      </label>
 
       {creating && (
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 mb-3 grid grid-cols-2 gap-2">
@@ -141,7 +160,7 @@ export default function EmpleadosEditor({ user }) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-stone-800">{e.name}</p>
                       <p className="text-[11px] text-stone-500">
@@ -152,6 +171,28 @@ export default function EmpleadosEditor({ user }) {
                     </div>
                     {isAdmin && (
                       <>
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={() => toggleScope(e, "is_cantina")}
+                            disabled={isSaving}
+                            title="Visible en cantina"
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider transition-colors ${
+                              e.is_cantina ? "bg-brand text-white" : "bg-stone-100 text-stone-400 hover:bg-stone-200"
+                            }`}
+                          >
+                            Cantina
+                          </button>
+                          <button
+                            onClick={() => toggleScope(e, "is_demo")}
+                            disabled={isSaving}
+                            title="Visible en demo (complejo)"
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider transition-colors ${
+                              e.is_demo ? "bg-blue-500 text-white" : "bg-stone-100 text-stone-400 hover:bg-stone-200"
+                            }`}
+                          >
+                            Demo
+                          </button>
+                        </div>
                         <button onClick={() => toggleActive(e)} disabled={isSaving} className={`w-9 h-5 rounded-full transition-colors shrink-0 ${e.is_active ? "bg-green-500" : "bg-stone-300"}`} title={e.is_active ? "Activo" : "Inactivo"}>
                           <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${e.is_active ? "translate-x-4" : "translate-x-0.5"}`} />
                         </button>
