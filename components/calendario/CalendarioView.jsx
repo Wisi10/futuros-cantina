@@ -6,7 +6,7 @@ import EventosView from "@/components/eventos/EventosView";
 
 const ACTIVITY_META = {
   alquiler:    { label: "Alquiler",    color: "bg-blue-100 text-blue-700 border-blue-200",       icon: Activity },
-  cumpleanos:  { label: "Cumpleanos",  color: "bg-pink-100 text-pink-700 border-pink-200",       icon: Cake },
+  cumpleanos:  { label: "Cumpleaños",  color: "bg-pink-100 text-pink-700 border-pink-200",       icon: Cake },
   academia:    { label: "Academia",    color: "bg-green-100 text-green-700 border-green-200",    icon: Trophy },
   torneo:      { label: "Torneo",      color: "bg-purple-100 text-purple-700 border-purple-200", icon: Trophy },
   evento:      { label: "Evento",      color: "bg-amber-100 text-amber-700 border-amber-200",    icon: Briefcase },

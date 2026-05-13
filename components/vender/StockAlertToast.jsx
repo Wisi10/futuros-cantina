@@ -19,7 +19,7 @@ export default function StockAlertToast({ items, onDismiss, onNavigate }) {
     .slice(0, 3)
     .map((p) => `${p.name} (${Number(p.stock_quantity || 0)})`)
     .join(", ");
-  const more = items.length > 3 ? ` y ${items.length - 3} mas` : "";
+  const more = items.length > 3 ? ` y ${items.length - 3} más` : "";
 
   return (
     <div className="fixed top-4 right-4 left-4 md:left-auto md:max-w-md z-50 bg-amber-50 border border-amber-300 rounded-xl shadow-lg p-3 flex items-start gap-2">

@@ -219,7 +219,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                         </div>
                         <div className="text-right shrink-0 ml-2">
                           <p className="text-base font-bold text-brand">REF {g.total.toFixed(2)}</p>
-                          <p className="text-[10px] text-stone-400">total pendiente</p>
+                          <p className="text-xs text-stone-500">total pendiente</p>
                         </div>
                         <span className="text-stone-400 ml-2">{isExpanded ? "▾" : "▸"}</span>
                       </button>
@@ -235,7 +235,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                                     Original: REF {Number(c.original_amount_ref).toFixed(2)}
                                     {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: REF ${Number(c.paid_amount_ref).toFixed(2)}`}
                                   </p>
-                                  <p className={`text-[10px] ${ageColor(days)}`}>
+                                  <p className={`text-xs ${ageColor(days)}`}>
                                     {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days}d`}
                                     {c.status === "partial" && " · Parcial"}
                                   </p>
@@ -243,7 +243,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                                 <p className="text-xs font-bold text-brand whitespace-nowrap">REF {c.outstanding.toFixed(2)}</p>
                                 <button
                                   onClick={() => openPay(c)}
-                                  className="px-2.5 py-1 bg-brand text-white rounded text-[11px] font-medium hover:bg-brand-dark transition-colors shrink-0"
+                                  className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors shrink-0 min-h-[36px]"
                                 >
                                   Cobrar
                                 </button>

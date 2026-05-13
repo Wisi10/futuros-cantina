@@ -1,8 +1,24 @@
 "use client";
+import { useState, useEffect } from "react";
 import { CheckCircle, RotateCcw } from "lucide-react";
 import { formatBs, METHOD_LABELS } from "@/lib/utils";
 
-export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale, canVoid }) {
+const VOID_WINDOW_MS = 5 * 60 * 1000;
+
+export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale, canVoid, saleTimestamp }) {
+  // Countdown del tiempo restante para anular
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!canVoid || !saleTimestamp) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [canVoid, saleTimestamp]);
+
+  const remainingMs = saleTimestamp ? Math.max(0, VOID_WINDOW_MS - (now - saleTimestamp)) : 0;
+  const remainingMin = Math.floor(remainingMs / 60000);
+  const remainingSec = Math.floor((remainingMs % 60000) / 1000);
+  const voidStillActive = canVoid && remainingMs > 0;
+
   return (
     <div className="fixed inset-0 bg-brand-cream-light z-40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm w-full text-center">
@@ -61,12 +77,12 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
           Nueva Venta
         </button>
 
-        {canVoid && onVoidSale && (
+        {voidStillActive && onVoidSale && (
           <button
             onClick={onVoidSale}
             className="w-full mt-2 py-3 rounded-xl border-2 border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
-            <RotateCcw size={14} /> Anular esta venta
+            <RotateCcw size={14} /> Anular esta venta — {remainingMin}:{String(remainingSec).padStart(2, '0')}
           </button>
         )}
       </div>

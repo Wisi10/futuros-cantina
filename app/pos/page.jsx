@@ -479,16 +479,24 @@ function POSPageInner() {
     setPendingPayment(null);
   };
 
+  // Lock sincrono: previene double-submit por click rapido antes de que setProcessing(true) propague
+  const processingRef = useRef(false);
+
   const executeConfirmedSale = async () => {
-    if (!pendingPayment || processing) return;
+    if (!pendingPayment || processingRef.current || processing) return;
+    processingRef.current = true;
     setShowConfirm(false);
 
-    if (pendingPayment.type === "sale") {
-      await confirmSale(pendingPayment.saleData);
-    } else {
-      await confirmCreditSale(pendingPayment);
+    try {
+      if (pendingPayment.type === "sale") {
+        await confirmSale(pendingPayment.saleData);
+      } else {
+        await confirmCreditSale(pendingPayment);
+      }
+    } finally {
+      processingRef.current = false;
+      setPendingPayment(null);
     }
-    setPendingPayment(null);
   };
 
   // Confirm regular sale (saleData = { payments: [], change?: {kind, amount, method?, client_id?}, legacy_method })
@@ -792,6 +800,11 @@ function POSPageInner() {
   }, [showConfirm, processing, screen]);
 
   const handleLogout = () => {
+    // Reset impersonation y carrito al cerrar sesion para evitar arrastres entre usuarios
+    setImpersonatedRole(null);
+    setCart([]);
+    setSaleClient(null);
+    localStorage.removeItem("cantina_cart");
     sessionStorage.removeItem("cantina_user");
     router.push("/");
   };
@@ -1089,6 +1102,7 @@ function POSPageInner() {
           todayStats={todayStats}
           onNewSale={handleNewSale}
           canVoid={canVoid}
+          saleTimestamp={lastSaleTime}
           onVoidSale={handleVoidSale}
         />
       )}

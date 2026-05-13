@@ -57,14 +57,14 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => onUpdateQty(item.product.id, -1)}
-                        className="w-9 h-9 md:w-7 md:h-7 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200">
-                        <Minus size={14} />
+                        className="w-10 h-10 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200">
+                        <Minus size={16} />
                       </button>
-                      <span className="text-sm font-bold w-6 text-center">{item.qty}</span>
+                      <span className="text-sm font-bold w-8 text-center">{item.qty}</span>
                       <button onClick={() => onUpdateQty(item.product.id, 1)}
                         disabled={item.qty >= (item.product.stock_quantity ?? 0)}
-                        className="w-9 h-9 md:w-7 md:h-7 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200 disabled:opacity-30">
-                        <Plus size={14} />
+                        className="w-10 h-10 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200 disabled:opacity-30">
+                        <Plus size={16} />
                       </button>
                     </div>
                     <div className="text-right">

@@ -45,11 +45,11 @@ export default function OpenShiftModal({ user, onOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <h2 className="text-base font-bold text-stone-800">Abrir Turno</h2>
-          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg"><X size={18} className="text-stone-400" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center"><X size={18} className="text-stone-400" /></button>
         </div>
 
         <div className="px-5 pb-5 space-y-4">

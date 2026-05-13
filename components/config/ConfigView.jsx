@@ -8,8 +8,8 @@ import DescuentosCantinaEditor from "./DescuentosCantinaEditor";
 import EmpleadosEditor from "./EmpleadosEditor";
 
 const SECTIONS = [
-  { id: "tasa",        name: "Tasa del dia",   icon: RefreshCw },
-  { id: "categorias",  name: "Categorias",     icon: Tag },
+  { id: "tasa",        name: "Tasa del día",   icon: RefreshCw },
+  { id: "categorias",  name: "Categorías",     icon: Tag },
   { id: "descuentos",  name: "Descuentos",     icon: Percent },
   { id: "empleados",   name: "Empleados",      icon: Users },
   { id: "stock",       name: "Umbral stock",   icon: Package },
@@ -191,7 +191,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   return (
     <div className="h-full overflow-auto p-4 md:p-6">
       <h1 className="font-bold text-brand text-lg flex items-center gap-2 mb-4">
-        <Settings size={20} /> Configuracion
+        <Settings size={20} /> Configuración
       </h1>
 
       <div className="flex flex-col md:flex-row gap-4">
@@ -224,7 +224,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       {/* Rate Section */}
       <div className="bg-white rounded-xl border border-stone-200 p-4">
         <h2 className="font-bold text-sm text-stone-700 mb-3 flex items-center gap-2">
-          <RefreshCw size={14} /> Tasa del dia
+          <RefreshCw size={14} /> Tasa del día
         </h2>
         {rate ? (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3 text-sm">
@@ -331,7 +331,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
                 <th className="text-left px-3 py-2 font-medium"><SortHeader k="name" label="Producto" /></th>
-                <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoria" /></th>
+                <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                 <th className="text-center px-3 py-2 font-medium" title="Cuenta para deuda intercompania con el complejo"><SortHeader k="is_cantina" label="Es cantina" align="center" /></th>
                 <th className="text-center px-3 py-2 font-medium"><SortHeader k="active" label="Activo" align="center" /></th>
                 <th className="text-right px-3 py-2 font-medium"><SortHeader k="price" label="Precio REF" align="right" /></th>
@@ -462,7 +462,7 @@ function EditProductModal({ product, onClose, onSave }) {
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-center text-xl focus:border-brand focus:outline-none" />
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 block mb-1">Categoria</label>
+              <label className="text-xs font-medium text-stone-500 block mb-1">Categoría</label>
               <input type="text" value={category} onChange={(e) => setCategory(e.target.value)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
             </div>

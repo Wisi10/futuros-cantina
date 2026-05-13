@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { X, AlertTriangle, ArrowRight, CheckCircle2, RotateCcw, Plus, Search, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF, formatBs, generateId } from "@/lib/utils";
+import { formatREF, formatBs, generateId, METHOD_LABELS } from "@/lib/utils";
 
 function fmtConsumedAt(iso) {
   if (!iso) return "—";
@@ -33,16 +33,6 @@ function fmtDateTime(iso) {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
-
-const METHOD_LABELS = {
-  transferencia: "Transferencia",
-  pago_movil: "Pago Movil",
-  cash_bs: "Efectivo Bs",
-  cash_usd: "Cash USD",
-  zelle: "Zelle",
-  refund: "Refund",
-  datafono: "Datafono",
-};
 
 export default function EventDetailModal({
   event,

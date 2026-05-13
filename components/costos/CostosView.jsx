@@ -40,7 +40,7 @@ function Sparkline({ points, width = 60, height = 18, color = "#B8963E" }) {
 
 const SUB_TABS = [
   { id: "resumen", label: "Resumen" },
-  { id: "evolucion", label: "Evolucion" },
+  { id: "evolucion", label: "Evolución" },
   { id: "productos", label: "Productos" },
   { id: "materia", label: "Materia Prima" },
   { id: "proveedores", label: "Proveedores" },
@@ -313,13 +313,13 @@ export default function CostosView({ user }) {
       // Hoja 1: Productos con margenes
       const prodRows = productosWithMargin.map((p) => ({
         Producto: p.name,
-        Categoria: p.category || "",
+        Categoría: p.category || "",
         "Precio REF": Number(p.price.toFixed(2)),
         "MAC REF": Number(p.macCost.toFixed(2)),
         "Reemplazo REF": Number(p.replacementCost.toFixed(2)),
         "Margen MAC %": p.macMargin != null ? Number(p.macMargin.toFixed(2)) : null,
         "Margen Reemplazo %": p.replMargin != null ? Number(p.replMargin.toFixed(2)) : null,
-        "Variacion Costo %": p.costVariation != null ? Number(p.costVariation.toFixed(2)) : null,
+        "Variación Costo %": p.costVariation != null ? Number(p.costVariation.toFixed(2)) : null,
         "Revenue 90d REF": Number((revenueByProduct[p.id] || 0).toFixed(2)),
         "Tiene receta": p.recipe ? "Si" : "No",
       }));
@@ -328,11 +328,11 @@ export default function CostosView({ user }) {
       // Hoja 2: Materia prima
       const matRows = materiaPrima.map((p) => ({
         Ingrediente: p.name,
-        Categoria: p.category || "",
+        Categoría: p.category || "",
         "Stock": Number(p.stock_quantity || 0),
         "MAC REF": Number(Number(p.cost_ref || 0).toFixed(4)),
-        "Ultimo REF": replacementCostByProduct[p.id] != null ? Number(Number(replacementCostByProduct[p.id]).toFixed(4)) : null,
-        "Variacion %": variationByProduct[p.id] != null ? Number(variationByProduct[p.id].toFixed(2)) : null,
+        "Último REF": replacementCostByProduct[p.id] != null ? Number(Number(replacementCostByProduct[p.id]).toFixed(4)) : null,
+        "Variación %": variationByProduct[p.id] != null ? Number(variationByProduct[p.id].toFixed(2)) : null,
         "# Compras 90d": (priceHistoryByProduct[p.id] || []).length,
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matRows), "Materia Prima");
@@ -899,7 +899,7 @@ function MateriaLista({ items, priceHistoryByProduct, replacementCostByProduct, 
               <th className="text-right px-3 py-2 font-medium">Stock</th>
               <th className="text-right px-3 py-2 font-medium">MAC</th>
               <th className="text-center px-3 py-2 font-medium hidden md:table-cell">Tendencia 90d</th>
-              <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Ultimo</th>
+              <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Último</th>
               <th className="text-right px-3 py-2 font-medium">Var.</th>
               <th className="w-8"></th>
             </tr>
@@ -1208,7 +1208,7 @@ function EvolucionMAC({ movementsYear, materiaPrima }) {
       <div className="bg-white rounded-xl border border-stone-200 p-4">
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h3 className="text-sm font-bold text-stone-700">
-            Evolucion MAC mes a mes — 12 meses
+            Evolución MAC mes a mes — 12 meses
           </h3>
           <span className="text-[11px] text-stone-400">
             {selectedIds.length} producto{selectedIds.length !== 1 ? "s" : ""} seleccionado{selectedIds.length !== 1 ? "s" : ""}
@@ -1217,7 +1217,7 @@ function EvolucionMAC({ movementsYear, materiaPrima }) {
 
         {selectedIds.length === 0 ? (
           <p className="text-xs text-stone-400 text-center py-12">
-            Selecciona productos abajo para ver su evolucion.
+            Selecciona productos abajo para ver su evolución.
           </p>
         ) : (
           <div style={{ height: 340 }}>

@@ -245,7 +245,7 @@ export default function InventarioView({ user }) {
           </button>
         </div>
         {scope === "eventos" && (
-          <p className="text-xs text-stone-500 mb-2">Items utilizados en eventos / combos cumpleanos. No se compran como inventario fisico.</p>
+          <p className="text-xs text-stone-500 mb-2">Items utilizados en eventos / combos cumpleaños. No se compran como inventario físico.</p>
         )}
         <div className="flex gap-2 flex-wrap">
           <button
@@ -395,7 +395,7 @@ export default function InventarioView({ user }) {
                   <thead>
                     <tr className="bg-stone-50 text-stone-500 text-xs">
                       <th className="text-left px-3 py-2 font-medium"><SortHeader k="name" label="Producto" /></th>
-                      <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoria" /></th>
+                      <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="stock" label="Stock" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="alert" label="Alerta" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo REF" align="right" /></th>

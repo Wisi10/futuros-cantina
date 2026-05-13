@@ -408,8 +408,8 @@ export default function ReportesContentView({ user, rate }) {
       // Sheet 2: Gastos
       const gastosData = expenses.map((e) => ({
         Fecha: e.expense_date,
-        Categoria: e.category,
-        Descripcion: e.description,
+        Categoría: e.category,
+        Descripción: e.description,
         "Monto REF": Number(e.amount_ref || 0).toFixed(2),
         "Monto Bs": e.amount_bs ? Number(e.amount_bs).toFixed(2) : "",
         "Monto USD": e.amount_usd ? Number(e.amount_usd).toFixed(2) : "",
@@ -431,7 +431,7 @@ export default function ReportesContentView({ user, rate }) {
       // Sheet 4: Inventario
       const invData = products.map((p) => ({
         Producto: p.name,
-        Categoria: p.category || "",
+        Categoría: p.category || "",
         "Stock actual": Number(p.stock_quantity || 0),
         "Costo REF": Number(p.cost_ref || 0).toFixed(2),
         "Valor REF": (Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)).toFixed(2),

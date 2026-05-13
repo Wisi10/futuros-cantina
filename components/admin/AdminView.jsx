@@ -344,7 +344,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               </div>
               <div>
                 <p className="font-bold text-stone-800">Admin (Jose Gregorio, Yusmelly)</p>
-                <p className="text-xs text-stone-500">Caja, Reportes, Costos (lectura), Config (categorias/descuentos/empleados/stock), Clientes, Puntos. NO puede borrar ventas viejas ni ajustar MAC.</p>
+                <p className="text-xs text-stone-500">Caja, Reportes, Costos (lectura), Config (categorías/descuentos/empleados/stock), Clientes, Puntos. NO puede borrar ventas viejas ni ajustar MAC.</p>
               </div>
               <div>
                 <p className="font-bold text-stone-800">Staff</p>

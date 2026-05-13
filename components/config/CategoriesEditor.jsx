@@ -38,7 +38,7 @@ export default function CategoriesEditor({ user }) {
     const name = newName.trim();
     if (!name) return;
     if (categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
-      alert("Ya existe una categoria con ese nombre");
+      alert("Ya existe una categoría con ese nombre");
       return;
     }
     const id = "cat_" + Math.random().toString(36).slice(2, 10);
@@ -73,10 +73,10 @@ export default function CategoriesEditor({ user }) {
   const handleDelete = async (c) => {
     const cnt = counts[c.name] || 0;
     if (cnt > 0) {
-      alert(`No se puede borrar: ${cnt} producto${cnt === 1 ? "" : "s"} usa${cnt === 1 ? "" : "n"} esta categoria. Renombra o reasigna primero.`);
+      alert(`No se puede borrar: ${cnt} producto${cnt === 1 ? "" : "s"} usa${cnt === 1 ? "" : "n"} esta categoría. Renombra o reasigna primero.`);
       return;
     }
-    if (!window.confirm(`Borrar categoria "${c.name}"?`)) return;
+    if (!window.confirm(`Borrar categoría "${c.name}"?`)) return;
     setSavingId(c.id);
     const { error } = await supabase.from("product_categories").delete().eq("id", c.id);
     setSavingId(null);
@@ -88,7 +88,7 @@ export default function CategoriesEditor({ user }) {
     <div className="bg-white rounded-xl border border-stone-200 p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-bold text-sm text-stone-700 flex items-center gap-2">
-          <Tag size={14} /> Categorias de productos
+          <Tag size={14} /> Categorías de productos
         </h2>
         {isAdmin && !adding && (
           <button onClick={() => setAdding(true)} className="px-2 py-1 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark flex items-center gap-1">
@@ -104,7 +104,7 @@ export default function CategoriesEditor({ user }) {
             autoFocus
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nombre de categoria"
+            placeholder="Nombre de categoría"
             className="flex-1 border border-stone-300 rounded px-2 py-1 text-sm focus:border-brand focus:outline-none"
           />
           <button onClick={handleAdd} disabled={!newName.trim()} className="p-1.5 rounded bg-brand text-white disabled:opacity-50">
@@ -119,7 +119,7 @@ export default function CategoriesEditor({ user }) {
       {loading ? (
         <p className="text-xs text-stone-400 animate-pulse text-center py-4">Cargando...</p>
       ) : categories.length === 0 ? (
-        <p className="text-xs text-stone-400 text-center py-4">Sin categorias. Crea la primera arriba.</p>
+        <p className="text-xs text-stone-400 text-center py-4">Sin categorías. Crea la primera arriba.</p>
       ) : (
         <div className="space-y-1">
           {categories.map((c) => {

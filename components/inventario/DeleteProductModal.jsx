@@ -19,7 +19,7 @@ export default function DeleteProductModal({ product, user, onClose, onDeleted }
         if (!cancelled) {
           setBlocker({
             type: "redeemable",
-            message: "Este producto esta marcado como premio canjeable. Desmarcalo como premio primero (tab Puntos -> Configuracion).",
+            message: "Este producto está marcado como premio canjeable. Desmárcalo como premio primero (tab Puntos → Configuración).",
           });
           setChecking(false);
         }

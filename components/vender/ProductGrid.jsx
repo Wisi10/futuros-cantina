@@ -142,9 +142,9 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                     : "border-[#e5e5e5] hover:border-brand hover:shadow-md active:scale-[0.97] cursor-pointer"
                 }`}
               >
-                {/* Cart badge */}
+                {/* Cart badge — pointer-events-none para que el tap caiga en el producto */}
                 {inCart > 0 && (
-                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-brand text-brand-cream text-[10px] font-bold flex items-center justify-center shadow z-10">
+                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-brand text-brand-cream text-[10px] font-bold flex items-center justify-center shadow z-10 pointer-events-none">
                     {inCart}
                   </div>
                 )}

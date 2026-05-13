@@ -74,7 +74,7 @@ function HoyManianaBadge({ iso }) {
     return <span className="inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Hoy</span>;
   }
   if (delta === 1) {
-    return <span className="inline-block bg-orange-100 text-orange-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Maniana</span>;
+    return <span className="inline-block bg-orange-100 text-orange-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Mañana</span>;
   }
   return null;
 }

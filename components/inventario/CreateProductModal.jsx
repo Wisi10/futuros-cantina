@@ -97,7 +97,7 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
 
           <div>
             <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-              Categoria
+              Categoría
             </label>
             <select
               value={category}
