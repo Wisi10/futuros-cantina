@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { formatBs, ProductImage } from "@/lib/utils";
+import { formatBs, formatUSD, ProductImage } from "@/lib/utils";
 import { effectiveThreshold } from "@/lib/stockHelpers";
 
 export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5 }) {
@@ -92,39 +92,39 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
     );
   }
 
-  // ── Product Grid — limitado a ~3 rows para que dashboard se vea sin scroll ──
+  // ── Product Grid — llena el espacio disponible. Dashboard colapsable abajo no compite. ──
   const headerCat = activeCategory ? categoryData[activeCategory] : null;
 
   return (
-    <div className="flex flex-col min-w-0 overflow-hidden shrink-0" style={{ maxHeight: '460px' }}>
-      {/* Header with back button + search */}
-      <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 border-b border-stone-200 bg-white shrink-0 flex-wrap md:flex-nowrap">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+      {/* Header with back button + search — tablet-friendly touch targets */}
+      <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 border-b border-stone-200 bg-white shrink-0 flex-wrap md:flex-nowrap">
         <button
           onClick={handleBack}
-          className="flex items-center gap-1 text-[12px] font-semibold text-brand rounded-lg px-2.5 py-1.5 bg-brand-cream hover:bg-stone-200 transition-colors shrink-0"
+          className="flex items-center gap-1.5 text-sm font-semibold text-brand rounded-lg px-3 py-2 bg-brand-cream hover:bg-stone-200 transition-colors shrink-0 min-h-[40px]"
         >
-          ← Categorias
+          ← Categorías
         </button>
         <div className="flex items-center gap-1.5 text-sm text-stone-600 shrink-0">
-          {headerCat ? <ProductImage product={{ photo_url: headerCat.photo_url, emoji: headerCat.emoji }} size={18} /> : <span>🔍</span>}
-          <span className="font-bold text-xs md:text-sm">{activeCategory || "Todos"}</span>
+          {headerCat ? <ProductImage product={{ photo_url: headerCat.photo_url, emoji: headerCat.emoji }} size={20} /> : <span>🔍</span>}
+          <span className="font-bold text-sm">{activeCategory || "Todos"}</span>
           <span className="text-stone-400 text-xs">({filtered.length})</span>
         </div>
         <div className="flex-1 max-w-full md:max-w-xs ml-auto relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar..."
-            className="w-full border border-stone-200 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:border-brand focus:outline-none bg-white"
+            className="w-full border border-stone-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
           />
         </div>
       </div>
 
-      {/* Products (scroll interno si pasan de 3 rows) */}
-      <div className="flex-1 overflow-auto p-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+      {/* Products grid — llena el alto disponible, scroll interno si rebosa */}
+      <div className="flex-1 overflow-auto p-3 md:p-4 min-h-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 md:gap-3">
           {filtered.map((product) => {
             const stock = product.stock_quantity ?? 0;
             const alertThreshold = effectiveThreshold(product, lowStockThreshold);
@@ -160,9 +160,14 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                 </p>
 
                 {rate && (
-                  <p className="text-[10px] text-[#a3a3a3]">
-                    {formatBs(product.price_ref, rate.eur)}
-                  </p>
+                  <>
+                    <p className="text-[10px] text-stone-600 font-semibold">
+                      {formatUSD(product.price_ref, rate)}
+                    </p>
+                    <p className="text-[10px] text-[#a3a3a3]">
+                      {formatBs(product.price_ref, rate.eur)}
+                    </p>
+                  </>
                 )}
 
                 {/* Stock badge */}

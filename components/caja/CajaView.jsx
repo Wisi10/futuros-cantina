@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download, Gift } from "lucide-react";
+import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download, Gift, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
+import { formatBs, formatUSD, calcUSD, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 import * as XLSX from "xlsx";
 
@@ -119,6 +119,33 @@ export default function CajaView({ user, rate }) {
     if (!p.is_change) methodBreakdown[m].count += 1;
   }
 
+  // Flujo de dinero — desglosado por entradas vs vueltos, separando cash de digital
+  const cashMethods = new Set(["cash_bs", "cash_usd"]);
+  const flujo = {
+    entradaTotal: 0,   // todos los pagos positivos (suma ingresos)
+    vueltoTotal: 0,    // todos los pagos negativos (suma vueltos)
+    cashBsEntrada: 0, cashBsVuelto: 0,
+    cashUsdEntrada: 0, cashUsdVuelto: 0,
+    digitalTotal: 0,   // pago_movil + zelle + cripto
+  };
+  for (const p of salePayments) {
+    const amt = parseFloat(p.amount_ref || 0);
+    const m = p.payment_method || "";
+    if (p.is_change || amt < 0) {
+      flujo.vueltoTotal += Math.abs(amt);
+      if (m === "cash_bs") flujo.cashBsVuelto += Math.abs(amt);
+      else if (m === "cash_usd") flujo.cashUsdVuelto += Math.abs(amt);
+    } else {
+      flujo.entradaTotal += amt;
+      if (m === "cash_bs") flujo.cashBsEntrada += amt;
+      else if (m === "cash_usd") flujo.cashUsdEntrada += amt;
+      else if (!cashMethods.has(m) && m !== "cortesia") flujo.digitalTotal += amt;
+    }
+  }
+  const cashBsNeto = flujo.cashBsEntrada - flujo.cashBsVuelto;
+  const cashUsdNeto = flujo.cashUsdEntrada - flujo.cashUsdVuelto;
+  const cajaNeta = flujo.entradaTotal - flujo.vueltoTotal;
+
   const exportExcel = () => {
     const rows = sales.map((s) => ({
       Hora: new Date(s.created_at).toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" }),
@@ -207,6 +234,97 @@ export default function CajaView({ user, rate }) {
               color="text-gold"
             />
           </div>
+
+          {/* Flujo de caja — entradas, vueltos, neto por moneda */}
+          {salePayments.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-stone-100">
+                <h3 className="text-sm font-bold text-stone-700 flex items-center gap-2">
+                  <Wallet size={16} /> Flujo de caja
+                </h3>
+                <p className="text-[11px] text-stone-400 mt-0.5">Entradas, vueltos entregados y neto del día.</p>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Resumen general */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-green-50 border border-green-100 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <TrendingUp size={14} className="text-green-600" />
+                      <span className="text-[10px] uppercase tracking-wider text-green-700 font-bold">Entró</span>
+                    </div>
+                    <p className="text-base md:text-lg font-bold text-green-700">REF {flujo.entradaTotal.toFixed(2)}</p>
+                    {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.entradaTotal, rate.eur)}</p>}
+                  </div>
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <TrendingDown size={14} className="text-red-600" />
+                      <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold">Vuelto</span>
+                    </div>
+                    <p className="text-base md:text-lg font-bold text-red-700">REF {flujo.vueltoTotal.toFixed(2)}</p>
+                    {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.vueltoTotal, rate.eur)}</p>}
+                  </div>
+                  <div className="bg-brand/5 border border-brand/20 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Wallet size={14} className="text-brand" />
+                      <span className="text-[10px] uppercase tracking-wider text-brand font-bold">Neto</span>
+                    </div>
+                    <p className="text-base md:text-lg font-bold text-brand">REF {cajaNeta.toFixed(2)}</p>
+                    {rate && <p className="text-[10px] text-stone-500">{formatUSD(cajaNeta, rate)} · {formatBs(cajaNeta, rate.eur)}</p>}
+                  </div>
+                </div>
+
+                {/* Desglose cash en gaveta */}
+                {(flujo.cashBsEntrada + flujo.cashBsVuelto + flujo.cashUsdEntrada + flujo.cashUsdVuelto) > 0 && (
+                  <div className="border border-stone-200 rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-stone-50 border-b border-stone-200">
+                      <p className="text-[11px] uppercase tracking-wider font-bold text-stone-600">Cash en gaveta (efectivo neto)</p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[10px] text-stone-400 uppercase">
+                          <th className="text-left px-3 py-1.5 font-medium">Moneda</th>
+                          <th className="text-right px-3 py-1.5 font-medium">Entró</th>
+                          <th className="text-right px-3 py-1.5 font-medium">Vuelto</th>
+                          <th className="text-right px-3 py-1.5 font-medium">Neto (REF)</th>
+                          <th className="text-right px-3 py-1.5 font-medium">Neto (real)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-t border-stone-100">
+                          <td className="px-3 py-2 font-medium text-stone-700">💵 Cash Bs</td>
+                          <td className="px-3 py-2 text-right text-green-700">+{flujo.cashBsEntrada.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right text-red-600">-{flujo.cashBsVuelto.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-brand">{cashBsNeto.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-stone-700">
+                            {rate ? formatBs(cashBsNeto, rate.eur) : "—"}
+                          </td>
+                        </tr>
+                        <tr className="border-t border-stone-100">
+                          <td className="px-3 py-2 font-medium text-stone-700">💲 Cash USD</td>
+                          <td className="px-3 py-2 text-right text-green-700">+{flujo.cashUsdEntrada.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right text-red-600">-{flujo.cashUsdVuelto.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-brand">{cashUsdNeto.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-stone-700">
+                            {rate ? formatUSD(cashUsdNeto, rate) : "—"}
+                          </td>
+                        </tr>
+                        {flujo.digitalTotal > 0 && (
+                          <tr className="border-t border-stone-100 bg-stone-50/50">
+                            <td className="px-3 py-2 font-medium text-stone-700">📱 Digital (Pago Móvil / Zelle / Cripto)</td>
+                            <td className="px-3 py-2 text-right text-green-700">+{flujo.digitalTotal.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-stone-400">—</td>
+                            <td className="px-3 py-2 text-right font-bold text-brand">{flujo.digitalTotal.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-stone-400 text-[10px]">no toca gaveta</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Payment method breakdown */}
           {Object.keys(methodBreakdown).length > 0 && (

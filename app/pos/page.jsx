@@ -853,7 +853,7 @@ function POSPageInner() {
         {/* Header */}
         <header className="bg-white border-b border-stone-200 px-3 md:px-4 py-2 md:py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:gap-3">
-            <RateChip rate={rate} />
+            <RateChip rate={rate} user={user} onRateUpdated={loadRate} />
             <button onClick={() => setShowClientModal(true)}
               className="flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors">
               <User size={14} /> <span className="hidden sm:inline">Cliente</span>

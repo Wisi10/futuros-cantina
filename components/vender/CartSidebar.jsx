@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Minus, Plus, Trash2, ShoppingCart, Gift, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, ProductImage } from "@/lib/utils";
+import { formatBs, formatUSD, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 
 function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption, totalRef, subtotalRef, discountAmount, discountPct, discountName }) {
@@ -69,7 +69,12 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-bold text-brand">REF {subtotalRef.toFixed(2)}</p>
-                      {hasTasa && <p className="text-[10px] text-stone-400">{formatBs(subtotalRef, rate.eur)}</p>}
+                      {hasTasa && (
+                        <>
+                          <p className="text-[10px] text-stone-600 font-semibold">{formatUSD(subtotalRef, rate)}</p>
+                          <p className="text-[10px] text-stone-400">{formatBs(subtotalRef, rate.eur)}</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -128,7 +133,12 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
             <span className="text-xs text-stone-500">Total</span>
             <span className="text-xl font-bold text-brand">REF {totalRef.toFixed(2)}</span>
           </div>
-          {hasTasa && <p className="text-right text-xs text-stone-400">{formatBs(totalRef, rate.eur)}</p>}
+          {hasTasa && (
+            <div className="text-right space-y-0">
+              <p className="text-sm text-stone-700 font-bold">{formatUSD(totalRef, rate)}</p>
+              <p className="text-xs text-stone-400">{formatBs(totalRef, rate.eur)}</p>
+            </div>
+          )}
         </div>
         <button onClick={onCheckout} disabled={cart.length === 0}
           className="w-full py-3 rounded-xl bg-brand text-white font-bold text-sm disabled:opacity-30 hover:bg-brand-dark active:scale-[0.98] transition-all">

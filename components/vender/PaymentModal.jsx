@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, PAYMENT_METHODS, METHOD_LABELS, ProductImage } from "@/lib/utils";
+import { formatBs, formatUSD, PAYMENT_METHODS, METHOD_LABELS, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 
 // Mixed-mode methods (everything except credit). Cortesia is exclusive.
@@ -339,7 +339,10 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
               <span className="text-2xl font-bold text-brand">REF {totalRef.toFixed(2)}</span>
             </div>
             {hasTasa && (
-              <p className="text-right text-sm text-stone-400">{formatBs(totalRef, rate.eur)}</p>
+              <div className="text-right">
+                <p className="text-sm font-semibold text-stone-700">{formatUSD(totalRef, rate)}</p>
+                <p className="text-xs text-stone-400">{formatBs(totalRef, rate.eur)}</p>
+              </div>
             )}
           </div>
         </div>

@@ -139,19 +139,29 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="flex items-center gap-2">
+          {!isAdmin && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800 flex items-start gap-2">
+              <span className="text-base leading-none">🔒</span>
+              <span>
+                Solo el gerente puede editar recetas. Estás viendo en modo lectura.
+                {!hasRecipe && " Este producto aún no tiene receta configurada."}
+              </span>
+            </div>
+          )}
+
+          <label htmlFor="has-recipe-toggle" className="flex items-center gap-3 cursor-pointer min-h-[44px]">
             <input
               id="has-recipe-toggle"
               type="checkbox"
               checked={hasRecipe}
               onChange={(e) => setHasRecipe(e.target.checked)}
               disabled={!isAdmin}
-              className="w-4 h-4"
+              className="w-5 h-5"
             />
-            <label htmlFor="has-recipe-toggle" className="text-sm font-semibold text-stone-700">
+            <span className="text-sm font-semibold text-stone-700">
               Este producto tiene receta (consume materia prima al venderse)
-            </label>
-          </div>
+            </span>
+          </label>
 
           {hasRecipe && (
             <>

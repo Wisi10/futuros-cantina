@@ -1,28 +1,70 @@
 "use client";
-import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import QuickRateModal from "./QuickRateModal";
 
-export default function RateChip({ rate }) {
+export default function RateChip({ rate, user, onRateUpdated }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
+
+  let chipContent;
   if (!rate) {
-    return (
-      <div className="bg-yellow-50 border border-yellow-200 px-3 py-1 rounded-lg text-xs text-yellow-700 flex items-center gap-1">
-        <AlertTriangle size={12} />
-        Sin tasa configurada
-      </div>
+    chipContent = (
+      <span className="flex items-center gap-1.5">
+        <AlertTriangle size={14} />
+        <span>Sin tasa</span>
+      </span>
+    );
+  } else if (rate.isOld) {
+    chipContent = (
+      <span className="flex items-center gap-1.5">
+        <AlertTriangle size={14} />
+        <span><span className="font-bold">REF {rate.eur.toFixed(2)}</span> · <span className="font-bold">USD {rate.usd.toFixed(2)}</span> <span className="opacity-70">(anterior)</span></span>
+      </span>
+    );
+  } else {
+    chipContent = (
+      <span className="flex items-center gap-1.5">
+        <span className="font-bold">REF {rate.eur.toFixed(2)}</span>
+        <span className="text-stone-400">·</span>
+        <span className="font-bold">USD {rate.usd.toFixed(2)}</span>
+        {isAdmin && <RefreshCw size={12} className="opacity-60" />}
+      </span>
     );
   }
 
-  if (rate.isOld) {
+  const colorClass = !rate
+    ? "bg-yellow-50 border-yellow-200 text-yellow-700"
+    : rate.isOld
+      ? "bg-amber-50 border-amber-200 text-amber-700"
+      : "bg-green-50 border-green-200 text-green-700";
+
+  const baseClass = `${colorClass} border px-3 py-2 rounded-lg text-xs min-h-[40px] inline-flex items-center`;
+
+  if (isAdmin) {
     return (
-      <div className="bg-amber-50 border border-amber-200 px-3 py-1 rounded-lg text-xs text-amber-700 flex items-center gap-1">
-        <AlertTriangle size={12} />
-        <span><span className="font-bold">1 REF = {rate.eur.toFixed(2)} Bs</span> (anterior)</span>
-      </div>
+      <>
+        <button
+          onClick={() => setModalOpen(true)}
+          className={`${baseClass} hover:opacity-90 active:scale-95 transition-all cursor-pointer`}
+          title="Tocar para actualizar tasa"
+        >
+          {chipContent}
+        </button>
+        {modalOpen && (
+          <QuickRateModal
+            currentRate={rate}
+            user={user}
+            onClose={() => setModalOpen(false)}
+            onSaved={() => {
+              setModalOpen(false);
+              if (onRateUpdated) onRateUpdated();
+            }}
+          />
+        )}
+      </>
     );
   }
 
-  return (
-    <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg text-xs text-green-700">
-      <span className="font-bold">1 REF = {rate.eur.toFixed(2)} Bs</span>
-    </div>
-  );
+  return <div className={baseClass}>{chipContent}</div>;
 }
