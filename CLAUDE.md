@@ -20,7 +20,7 @@ Lee este archivo PRIMERO en cada sesion. Para features historicas ver `RESUMEN.m
 ## 2. Reglas obligatorias (NUNCA romper)
 
 - **REF moneda primaria.** NUNCA mostrar "EUR" en UI. Helper `formatREF(n)` -> `REF X.XX`. Conversion a Bs solo display secundario.
-- **Sin tildes ni enes** en strings nuevos: Maniana, Companias, Saldado, Anadir, Pequeno, etc.
+- **Tildes y ñ SÍ** en strings visibles al usuario (UI, recibos, mensajes, reportes). Es español correcto: Mañana, Compañías, Añadir, Pequeño, Categoría, día, etc. En identificadores de código (variables, IDs, claves de objeto, slugs, valores de enum, columnas) usar ASCII sin tildes (`cumpleanos`, `pago_movil`).
 - **Mobile responsive 375px minimo.** Cada vista nueva debe probarse mental o visualmente en mobile. Flex chains usan `min-h-0` para evitar bug de scroll.
 - **Soft delete con `active = false`.** NUNCA hard delete. Rompe historial en `cantina_sales.items` jsonb + audit trails.
 - **NO `npm run dev`.** Workflow es: edit -> `npm run build` -> commit -> `git push origin main` -> `npx vercel --prod`.
@@ -151,7 +151,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 - Hard delete (DELETE FROM) en `products`, `clients`, `cantina_sales`, `events`
 - Mostrar "EUR" en cualquier string visible al usuario
-- Tildes/enes en strings nuevos
+- Tildes/ñ en identificadores de código (variables, IDs, claves de objeto, slugs, enum). En texto visible al usuario, SÍ usar tildes y ñ.
 - `npm run dev` o servidor local
 - Agregar deps sin checar `package.json` (puede haber alternativa instalada)
 - Crear tabla cantina_* que duplique funcionalidad de tabla shared con demo

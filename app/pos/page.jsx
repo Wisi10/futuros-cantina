@@ -63,7 +63,7 @@ function POSPageInner() {
   const [cart, setCart] = useState(() => {
     if (typeof window !== "undefined") {
       try {
-        const saved = sessionStorage.getItem("cantina_cart");
+        const saved = localStorage.getItem("cantina_cart");
         return saved ? JSON.parse(saved) : [];
       } catch { return []; }
     }
@@ -84,9 +84,9 @@ function POSPageInner() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingPayment, setPendingPayment] = useState(null); // {method, ref} or {credit data}
 
-  // Persist cart to sessionStorage
+  // Persist cart to localStorage (sobrevive refresh y cierre de pestana)
   useEffect(() => {
-    sessionStorage.setItem("cantina_cart", JSON.stringify(cart));
+    localStorage.setItem("cantina_cart", JSON.stringify(cart));
   }, [cart]);
 
   // Credits state

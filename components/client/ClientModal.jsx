@@ -1,14 +1,20 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Search, ArrowLeft, User, Gift, Percent } from "lucide-react";
+import { X, Search, ArrowLeft, User, Gift, Percent, UserPlus, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF, formatBs, ProductImage } from "@/lib/utils";
+import { formatREF, formatBs, generateId, ProductImage } from "@/lib/utils";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
   const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
   const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [savingDiscount, setSavingDiscount] = useState(false);
+
+  // Crear cliente nuevo (inline desde el search)
+  const [createForm, setCreateForm] = useState({ first_name: "", last_name: "", phone: "", cedula: "", email: "" });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const creatingRef = useRef(false);
 
   // Cargar descuentos cantina disponibles (una vez)
   useEffect(() => {
@@ -21,7 +27,7 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
       .order("sort_order")
       .then(({ data }) => setAvailableDiscounts(data || []));
   }, []);
-  const [view, setView] = useState("list"); // "list" | "profile" | "rewards" | "redeemSuccess"
+  const [view, setView] = useState("list"); // "list" | "profile" | "rewards" | "redeemSuccess" | "create"
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -105,7 +111,72 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
 
   const goBack = () => {
     if (view === "redeemSuccess" || view === "rewards") { setView("profile"); setLastRedeemed(null); }
+    else if (view === "create") {
+      setView("list");
+      setCreateForm({ first_name: "", last_name: "", phone: "", cedula: "", email: "" });
+      setCreateError("");
+    }
     else { setView("list"); setProfile(null); }
+  };
+
+  const openCreate = () => {
+    const q = searchQuery.trim();
+    const parts = q.split(/\s+/);
+    const looksLikeCedula = /^\d{5,}$/.test(q);
+    const looksLikePhone = /^[+\d][\d\s-]{6,}$/.test(q);
+    setCreateForm({
+      first_name: looksLikeCedula || looksLikePhone ? "" : (parts[0] || ""),
+      last_name: looksLikeCedula || looksLikePhone ? "" : (parts.slice(1).join(" ") || ""),
+      phone: looksLikePhone ? q : "",
+      cedula: looksLikeCedula ? q : "",
+      email: "",
+    });
+    setCreateError("");
+    setView("create");
+  };
+
+  const handleCreate = async () => {
+    if (creatingRef.current || !supabase) return;
+    const first = createForm.first_name.trim();
+    const last = createForm.last_name.trim();
+    if (!first || !last) {
+      setCreateError("Nombre y apellido son obligatorios");
+      return;
+    }
+    creatingRef.current = true;
+    setCreating(true);
+    setCreateError("");
+    const newId = generateId();
+    const { error } = await supabase.from("clients").insert({
+      id: newId,
+      first_name: first,
+      last_name: last,
+      phone: createForm.phone.trim() || null,
+      cedula: createForm.cedula.trim() || null,
+      email: createForm.email.trim() || null,
+    });
+    creatingRef.current = false;
+    setCreating(false);
+    if (error) {
+      setCreateError(error.message || "Error creando cliente");
+      return;
+    }
+    // Auto-asociar a la venta y cerrar
+    if (onAssociateClient) {
+      onAssociateClient({
+        id: newId,
+        name: `${first} ${last}`,
+        cedula: createForm.cedula.trim() || null,
+        points: 0,
+        discount: null,
+      });
+      onClose();
+    } else {
+      // Sin asociacion: abrir perfil del cliente recien creado
+      openProfile(newId);
+      setSearchQuery("");
+      setCreateForm({ first_name: "", last_name: "", phone: "", cedula: "", email: "" });
+    }
   };
 
   const fmtHour = (h) => {
@@ -145,7 +216,15 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
 
               {searching && <p className="text-xs text-stone-400 animate-pulse text-center py-2">Buscando...</p>}
               {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
-                <p className="text-xs text-stone-400 text-center py-2">Sin resultados para "{searchQuery}"</p>
+                <div className="text-center py-3">
+                  <p className="text-xs text-stone-400 mb-2">Sin resultados para "{searchQuery}"</p>
+                  <button
+                    onClick={openCreate}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-xl text-xs font-medium hover:bg-brand-dark transition-colors"
+                  >
+                    <UserPlus size={14} /> Crear nuevo cliente
+                  </button>
+                </div>
               )}
               {searchResults.length > 0 && (
                 <div className="space-y-1">
@@ -158,7 +237,96 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                   ))}
                 </div>
               )}
+
+              {/* Crear cliente nuevo — siempre visible cuando hay query corta o sin resultados aun */}
+              {(searchQuery.length < 2 || searchResults.length > 0) && (
+                <div className="mt-3 pt-3 border-t border-stone-100">
+                  <button
+                    onClick={openCreate}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 border-2 border-dashed border-stone-300 hover:border-brand rounded-xl text-xs font-medium text-stone-500 hover:text-brand transition-colors"
+                  >
+                    <UserPlus size={14} /> Crear nuevo cliente
+                  </button>
+                </div>
+              )}
             </>
+          )}
+
+          {/* ═══ VIEW: CREATE ═══ */}
+          {view === "create" && (
+            <div className="space-y-3">
+              <p className="text-[10px] uppercase tracking-[1.5px] text-stone-400 font-medium">Nuevo cliente</p>
+
+              <div>
+                <label className="text-[11px] text-stone-500 block mb-1">Nombre *</label>
+                <input
+                  type="text"
+                  value={createForm.first_name}
+                  onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })}
+                  placeholder="María"
+                  autoFocus
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-500 block mb-1">Apellido *</label>
+                <input
+                  type="text"
+                  value={createForm.last_name}
+                  onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })}
+                  placeholder="González"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-500 block mb-1">Teléfono</label>
+                <input
+                  type="tel"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                  placeholder="+58 412 1234567"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-500 block mb-1">Cédula</label>
+                <input
+                  type="text"
+                  value={createForm.cedula}
+                  onChange={(e) => setCreateForm({ ...createForm, cedula: e.target.value })}
+                  placeholder="V-12345678"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-500 block mb-1">Email</label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="cliente@ejemplo.com"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+
+              {createError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700">
+                  {createError}
+                </div>
+              )}
+
+              <button
+                onClick={handleCreate}
+                disabled={creating || !createForm.first_name.trim() || !createForm.last_name.trim()}
+                className="w-full py-2.5 bg-brand text-white rounded-xl text-sm font-bold hover:bg-brand-dark disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {creating ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : (onAssociateClient ? "Crear y asociar a venta" : "Crear cliente")}
+              </button>
+            </div>
           )}
 
           {/* ═══ VIEW: PROFILE ═══ */}
