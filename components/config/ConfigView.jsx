@@ -135,7 +135,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       return;
     }
     setStockThresholdSaved(n);
-    alert("Umbral guardado. Recarga la pagina para que aplique en POS.");
+    // Aplica automaticamente en POS al volver a la pestana (refreshLiveSettings escucha visibilitychange + cambio de tab)
   };
 
   // Pre-fill rate inputs with latest values

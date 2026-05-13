@@ -202,18 +202,45 @@ function POSPageInner() {
     setActiveShift(data || null);
   }, []);
 
+  // Refresca settings que pueden cambiar mientras el tablet esta abierto (umbral stock, killswitch, tasa).
+  // Se llama al inicio y cuando la pestana/app vuelve a tener foco.
+  const refreshLiveSettings = useCallback(async () => {
+    if (!supabase) return;
+    loadLowStockThreshold(supabase).then(setLowStockThreshold);
+    const { data: ks } = await supabase.from("app_settings").select("value").eq("key", "killswitch_cantina_sales").maybeSingle();
+    setKillswitchSales(ks?.value || { enabled: false, message: "" });
+    loadRate();
+  }, [loadRate]);
+
   useEffect(() => {
     if (!user) return;
     loadProducts();
-    loadRate();
     loadTodayStats();
     loadPendingCreditsCount();
     loadActiveShift();
-    loadLowStockThreshold(supabase).then(setLowStockThreshold);
-    // Killswitch ventas (owner toggle)
-    supabase.from("app_settings").select("value").eq("key", "killswitch_cantina_sales").maybeSingle()
-      .then(({ data }) => { if (data?.value) setKillswitchSales(data.value); });
-  }, [user, loadProducts, loadRate, loadTodayStats, loadPendingCreditsCount, loadActiveShift]);
+    refreshLiveSettings();
+  }, [user, loadProducts, loadTodayStats, loadPendingCreditsCount, loadActiveShift, refreshLiveSettings]);
+
+  // Auto-refresh settings cuando el tablet vuelve a tener foco (cambio de tab navegador, app foreground).
+  // Asi el cambio de umbral/killswitch/tasa hecho en otra pantalla aplica sin reload manual.
+  useEffect(() => {
+    if (!user) return;
+    const onFocus = () => {
+      if (document.visibilityState === "visible") refreshLiveSettings();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [user, refreshLiveSettings]);
+
+  // Refresh settings cuando se vuelve al tab "vender" (ej: admin cambio el umbral en Config y vuelve a vender).
+  useEffect(() => {
+    if (!user || activeTab !== "vender") return;
+    refreshLiveSettings();
+  }, [user, activeTab, refreshLiveSettings]);
 
   // Show low-stock toast at most once per day (sessionStorage flag)
   useEffect(() => {
