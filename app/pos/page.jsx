@@ -458,31 +458,35 @@ function POSPageInner() {
       if (movError) throw movError;
     }
 
-    // Decrement plain product stock (non-recipe items)
+    // Decrement plain product stock (non-recipe items) — RPC atomico previene oversells concurrentes
     for (const item of stockBearingItems) {
       if (item.product.has_recipe) continue;
-      const { error: stockError } = await supabase
-        .from("products")
-        .update({ stock_quantity: (item.product.stock_quantity ?? 0) - item.qty })
-        .eq("id", item.product.id);
-      if (stockError) throw stockError;
+      const { error: stockError } = await supabase.rpc("decrement_product_stock", {
+        p_id: item.product.id,
+        p_qty: item.qty,
+      });
+      if (stockError) {
+        // Si stock insuficiente, el RPC raise. Mensaje claro al staff.
+        throw new Error(stockError.message?.includes("Stock insuficiente")
+          ? `Sin stock disponible para ${item.product.name}. Otro vendedor pudo haberlo agotado.`
+          : stockError.message);
+      }
     }
 
-    // Decrement ingredient stocks (aggregate per ingredient if same one used multiple times)
+    // Decrement ingredient stocks (aggregate per ingredient si la misma materia prima se usa varias veces)
     const aggIngredient = {};
     for (const u of ingredientUpdates) {
       aggIngredient[u.id] = (aggIngredient[u.id] || 0) + u.decrement;
     }
     for (const ingId of Object.keys(aggIngredient)) {
       const current = ingredientStockById[ingId];
-      const newStock = Number(current?.stock_quantity || 0) - aggIngredient[ingId];
-      const { error: ingErr } = await supabase
-        .from("products")
-        .update({ stock_quantity: newStock })
-        .eq("id", ingId);
+      const { error: ingErr } = await supabase.rpc("decrement_product_stock", {
+        p_id: ingId,
+        p_qty: aggIngredient[ingId],
+      });
       if (ingErr) {
-        console.error("[RECIPE] inconsistencia: stock_movements OK pero ingredient update fallo", ingId, ingErr);
-        alert(`Inconsistencia detectada: el movimiento de stock_movements se grabo pero el ingrediente ${current?.name || ingId} no se actualizo. Revisar manual.`);
+        console.error("[RECIPE] ingredient update fallo (RPC atomico)", ingId, ingErr);
+        alert(`Stock insuficiente en ingrediente ${current?.name || ingId}. Revisar inventario.`);
       }
     }
 
@@ -731,18 +735,13 @@ function POSPageInner() {
           restoreMap[m.product_id] = (restoreMap[m.product_id] || 0) + Math.abs(Number(m.quantity || 0));
         }
       }
+      // Restaurar via RPC atomico (evita race contra otra venta concurrente)
       for (const productId of Object.keys(restoreMap)) {
-        const { data: prod } = await supabase
-          .from("products")
-          .select("stock_quantity")
-          .eq("id", productId)
-          .single();
-        if (prod) {
-          await supabase
-            .from("products")
-            .update({ stock_quantity: Number(prod.stock_quantity || 0) + restoreMap[productId] })
-            .eq("id", productId);
-        }
+        const { error: restoreErr } = await supabase.rpc("restore_product_stock", {
+          p_id: productId,
+          p_qty: restoreMap[productId],
+        });
+        if (restoreErr) console.error("[VOID] restore_product_stock fallo", productId, restoreErr);
       }
 
       // 2. Delete stock movements for this sale

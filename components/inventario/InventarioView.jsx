@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, ChevronUp, Camera, Upload, Plus, Trash2, ArrowUpDown } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, ChevronUp, Camera, Upload, Plus, Trash2, ArrowUpDown, History } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
@@ -273,6 +273,14 @@ export default function InventarioView({ user }) {
             }`}
           >
             <Camera size={14} /> Fotos
+          </button>
+          <button
+            onClick={() => setSubTab("historial")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              subTab === "historial" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+            }`}
+          >
+            <History size={14} /> Historial
           </button>
         </div>
       </div>
@@ -623,6 +631,12 @@ export default function InventarioView({ user }) {
         </div>
       )}
 
+      {subTab === "historial" && (
+        <div className="flex-1 overflow-auto px-6 pb-6">
+          <HistorialView />
+        </div>
+      )}
+
       {/* Adjust modal */}
       {adjusting && (
         <StockAdjustModal
@@ -660,6 +674,143 @@ export default function InventarioView({ user }) {
           onClose={() => setDeleting(null)}
           onDeleted={() => { setDeleting(null); loadProducts(); }}
         />
+      )}
+    </div>
+  );
+}
+
+// === Historial: ultimos movimientos de inventario (sale, restock, adjustment, recipe, event) ===
+
+const MOVEMENT_TYPE_META = {
+  sale:                 { label: "Venta",            color: "bg-blue-100 text-blue-700", sign: "-" },
+  recipe_consumption:   { label: "Consumo receta",   color: "bg-purple-100 text-purple-700", sign: "-" },
+  event_consumption:    { label: "Consumo evento",   color: "bg-pink-100 text-pink-700", sign: "-" },
+  adjustment:           { label: "Ajuste",           color: "bg-stone-100 text-stone-700", sign: "±" },
+  restock:              { label: "Restock",          color: "bg-green-100 text-green-700", sign: "+" },
+  sale_reverse:         { label: "Venta anulada",    color: "bg-amber-100 text-amber-700", sign: "+" },
+  recipe_reverse:       { label: "Receta revertida", color: "bg-amber-100 text-amber-700", sign: "+" },
+  event_reverse:        { label: "Evento revertido", color: "bg-amber-100 text-amber-700", sign: "+" },
+};
+
+function HistorialView() {
+  const [movements, setMovements] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filterType, setFilterType] = React.useState("todos");
+  const [search, setSearch] = React.useState("");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabase) return;
+      const { data } = await supabase
+        .from("stock_movements")
+        .select("id, product_id, product_name, movement_type, quantity, cost_ref, notes, created_by, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (!cancelled) {
+        setMovements(data || []);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const types = React.useMemo(() => {
+    const s = new Set(movements.map((m) => m.movement_type));
+    return ["todos", ...Array.from(s)];
+  }, [movements]);
+
+  const filtered = movements.filter((m) => {
+    if (filterType !== "todos" && m.movement_type !== filterType) return false;
+    if (search && !(m.product_name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const fmtDateTime = (iso) => {
+    const d = new Date(iso);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar producto..."
+            className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:border-brand focus:outline-none"
+          />
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {types.map((t) => {
+            const meta = MOVEMENT_TYPE_META[t];
+            return (
+              <button
+                key={t}
+                onClick={() => setFilterType(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                  filterType === t
+                    ? "bg-brand text-white border-brand"
+                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                }`}
+              >
+                {t === "todos" ? "Todos" : meta?.label || t}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-stone-400 animate-pulse text-center py-8">Cargando historial...</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-stone-400 text-center py-8">Sin movimientos para este filtro.</p>
+      ) : (
+        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider">
+                  <th className="text-left px-3 py-2 font-medium">Fecha</th>
+                  <th className="text-left px-3 py-2 font-medium">Producto</th>
+                  <th className="text-left px-3 py-2 font-medium">Tipo</th>
+                  <th className="text-right px-3 py-2 font-medium">Cantidad</th>
+                  <th className="text-left px-3 py-2 font-medium">Usuario</th>
+                  <th className="text-left px-3 py-2 font-medium hidden md:table-cell">Notas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((m) => {
+                  const meta = MOVEMENT_TYPE_META[m.movement_type] || { label: m.movement_type, color: "bg-stone-100 text-stone-700", sign: "" };
+                  const qty = Number(m.quantity || 0);
+                  const qtyDisplay = qty > 0 ? `+${qty}` : `${qty}`;
+                  return (
+                    <tr key={m.id} className="border-t border-stone-100">
+                      <td className="px-3 py-2 text-stone-600 text-xs whitespace-nowrap">{fmtDateTime(m.created_at)}</td>
+                      <td className="px-3 py-2 font-medium text-stone-800">{m.product_name || "?"}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${meta.color}`}>
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className={`px-3 py-2 text-right font-bold ${qty < 0 ? "text-red-600" : qty > 0 ? "text-green-600" : "text-stone-500"}`}>
+                        {qtyDisplay}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-stone-500">{m.created_by || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-stone-400 hidden md:table-cell truncate max-w-xs">{m.notes || ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-3 py-2 text-[11px] text-stone-400 text-center border-t border-stone-100">
+            Mostrando {filtered.length} de {movements.length} movimientos · últimos 200
+          </p>
+        </div>
       )}
     </div>
   );
