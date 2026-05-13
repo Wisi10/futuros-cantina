@@ -394,13 +394,16 @@ export default function ReportesContentView({ user, rate }) {
     try {
       const wb = XLSX.utils.book_new();
 
+      // Helper: redondear a 2 decimales pero retornar Number (no string) para que Excel sume
+      const round2 = (v) => Number(Number(v || 0).toFixed(2));
+
       // Sheet 1: Ventas
       const ventasData = sales.map((s) => ({
         Fecha: s.sale_date,
         Productos: (s.items || []).map((i) => `${i.qty}x ${i.name}`).join(", "),
-        "Total REF": Number(s.total_ref || 0).toFixed(2),
-        "Total Bs": s.total_bs ? Number(s.total_bs).toFixed(2) : "",
-        Metodo: s.payment_status === "credit" ? "Credito" : (METHOD_LABELS[s.payment_method] || s.payment_method || ""),
+        "Total REF": round2(s.total_ref),
+        "Total Bs": s.total_bs ? round2(s.total_bs) : null,
+        Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || ""),
         Cliente: s.client_name || "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventasData), "Ventas");
@@ -410,31 +413,31 @@ export default function ReportesContentView({ user, rate }) {
         Fecha: e.expense_date,
         Categoría: e.category,
         Descripción: e.description,
-        "Monto REF": Number(e.amount_ref || 0).toFixed(2),
-        "Monto Bs": e.amount_bs ? Number(e.amount_bs).toFixed(2) : "",
-        "Monto USD": e.amount_usd ? Number(e.amount_usd).toFixed(2) : "",
-        Metodo: METHOD_LABELS[e.payment_method] || e.payment_method || "",
+        "Monto REF": round2(e.amount_ref),
+        "Monto Bs": e.amount_bs ? round2(e.amount_bs) : null,
+        "Monto USD": e.amount_usd ? round2(e.amount_usd) : null,
+        Método: METHOD_LABELS[e.payment_method] || e.payment_method || "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gastosData), "Gastos");
 
-      // Sheet 3: Creditos
+      // Sheet 3: Créditos
       const creditosData = credits.map((c) => ({
         Cliente: c.client_name,
-        "Monto original REF": Number(c.original_amount_ref || 0).toFixed(2),
-        "Pagado REF": Number(c.paid_amount_ref || 0).toFixed(2),
-        "Pendiente REF": (Number(c.original_amount_ref || 0) - Number(c.paid_amount_ref || 0)).toFixed(2),
+        "Monto original REF": round2(c.original_amount_ref),
+        "Pagado REF": round2(c.paid_amount_ref),
+        "Pendiente REF": round2(Number(c.original_amount_ref || 0) - Number(c.paid_amount_ref || 0)),
         Status: c.status,
         Fecha: c.created_at?.split("T")[0] || "",
       }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(creditosData), "Creditos");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(creditosData), "Créditos");
 
       // Sheet 4: Inventario
       const invData = products.map((p) => ({
         Producto: p.name,
         Categoría: p.category || "",
         "Stock actual": Number(p.stock_quantity || 0),
-        "Costo REF": Number(p.cost_ref || 0).toFixed(2),
-        "Valor REF": (Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)).toFixed(2),
+        "Costo REF": round2(p.cost_ref),
+        "Valor REF": round2(Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)),
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invData), "Inventario");
 

@@ -147,13 +147,14 @@ export default function CajaView({ user, rate }) {
   const cajaNeta = flujo.entradaTotal - flujo.vueltoTotal;
 
   const exportExcel = () => {
+    // Numeros van como Number (no string), para que las sumas/promedios de Excel funcionen
     const rows = sales.map((s) => ({
       Hora: new Date(s.created_at).toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" }),
       Items: (s.items || []).map((i) => `${i.name} x${i.qty}`).join(", "),
-      "Total REF": parseFloat(s.total_ref || 0).toFixed(2),
-      "Total Bs": s.total_bs ? parseFloat(s.total_bs).toFixed(2) : "—",
-      Metodo: s.payment_status === "credit" ? "Credito" : (METHOD_LABELS[s.payment_method] || s.payment_method || "—"),
-      Estado: s.payment_status === "credit" ? "Credito" : "Pagado",
+      "Total REF": Number(parseFloat(s.total_ref || 0).toFixed(2)),
+      "Total Bs": s.total_bs ? Number(parseFloat(s.total_bs).toFixed(2)) : null,
+      Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || "—"),
+      Estado: s.payment_status === "credit" ? "Crédito" : "Pagado",
       Cliente: s.client_name || "—",
       Operador: s.created_by || "—",
     }));
