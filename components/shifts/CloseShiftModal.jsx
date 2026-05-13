@@ -1,8 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, METHOD_LABELS } from "@/lib/utils";
+
+// Umbrales: si la diferencia entre esperado y contado supera estos valores, pedir notas obligatorias.
+// Ajustables aqui hasta que se muevan a app_settings.
+const BIG_DIFF_BS = 5000;   // ≈ 10 USD a tasa actual
+const BIG_DIFF_USD = 5;     // 5 USD
 
 export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
   const [sales, setSales] = useState([]);
@@ -64,7 +69,17 @@ export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
 
   const diffColor = (d) => d === 0 ? "text-ok" : d < 0 ? "text-danger" : "text-warn";
 
+  // Flags: discrepancia "grande" requiere notas
+  const bigDiffBs = countedBs !== "" && Math.abs(diffBs) > BIG_DIFF_BS;
+  const bigDiffUsd = countedUsd !== "" && Math.abs(diffUsd) > BIG_DIFF_USD;
+  const needsNote = bigDiffBs || bigDiffUsd;
+  const noteMissing = needsNote && !notes.trim();
+
   const handleClose = async () => {
+    if (noteMissing) {
+      setError("La diferencia es grande. Agrega una nota explicando antes de cerrar.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -144,8 +159,9 @@ export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
             <input type="number" step="0.01" value={countedBs} onChange={e => setCountedBs(e.target.value)} placeholder="0.00"
               className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gold" style={mono} />
             {countedBs && (
-              <p className={`text-xs mt-1 font-medium ${diffColor(diffBs)}`} style={mono}>
+              <p className={`text-xs mt-1 font-medium ${bigDiffBs ? 'text-danger font-bold' : diffColor(diffBs)}`} style={mono}>
                 Diferencia: {diffBs >= 0 ? "+" : ""}{diffBs.toLocaleString("es-VE", { minimumFractionDigits: 2 })} Bs
+                {bigDiffBs && " ⚠️ grande"}
               </p>
             )}
           </div>
@@ -154,22 +170,42 @@ export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
             <input type="number" step="0.01" value={countedUsd} onChange={e => setCountedUsd(e.target.value)} placeholder="0.00"
               className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gold" style={mono} />
             {countedUsd && (
-              <p className={`text-xs mt-1 font-medium ${diffColor(diffUsd)}`} style={mono}>
+              <p className={`text-xs mt-1 font-medium ${bigDiffUsd ? 'text-danger font-bold' : diffColor(diffUsd)}`} style={mono}>
                 Diferencia: {diffUsd >= 0 ? "+" : ""}{diffUsd.toFixed(2)} USD
+                {bigDiffUsd && " ⚠️ grande"}
               </p>
             )}
           </div>
 
+          {/* Banner discrepancia grande */}
+          {needsNote && (
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl px-3 py-2.5 flex items-start gap-2">
+              <AlertTriangle size={16} className="text-red-600 mt-0.5 shrink-0" />
+              <div className="text-xs text-red-800">
+                <p className="font-bold">Discrepancia grande detectada</p>
+                <p>
+                  La diferencia supera el límite ({BIG_DIFF_BS.toLocaleString("es-VE")} Bs / ${BIG_DIFF_USD} USD).
+                  Explica abajo qué pasó antes de cerrar el turno.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           <div>
-            <label className="text-[10px] uppercase tracking-[1.5px] text-stone-400 font-medium block mb-1">Notas (opcional)</label>
+            <label className="text-[10px] uppercase tracking-[1.5px] text-stone-400 font-medium block mb-1">
+              Notas {needsNote ? <span className="text-red-600 font-bold normal-case">(obligatorias)</span> : "(opcional)"}
+            </label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-gold" placeholder="Observaciones del turno..." />
+              className={`w-full border rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none ${
+                noteMissing ? 'border-red-400 focus:border-red-500' : 'border-stone-200 focus:border-gold'
+              }`}
+              placeholder={needsNote ? "Explica la discrepancia (ej: vuelto mal contado, error de tipeo, etc.)" : "Observaciones del turno..."} />
           </div>
 
           {error && <p className="text-xs text-danger font-medium">{error}</p>}
 
-          <button onClick={handleClose} disabled={saving}
+          <button onClick={handleClose} disabled={saving || noteMissing}
             className="w-full py-3 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-dark disabled:opacity-50 transition-colors">
             {saving ? "Cerrando..." : "Cerrar turno"}
           </button>
