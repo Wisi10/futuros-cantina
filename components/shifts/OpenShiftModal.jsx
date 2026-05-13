@@ -11,6 +11,13 @@ export default function OpenShiftModal({ user, onOpen, onClose }) {
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
+    // Validar montos no negativos. Vacio = 0 implicito (acepta).
+    const bs = cashBs === "" ? 0 : parseFloat(cashBs);
+    const usd = cashUsd === "" ? 0 : parseFloat(cashUsd);
+    if (!Number.isFinite(bs) || bs < 0 || !Number.isFinite(usd) || usd < 0) {
+      setError("Los montos no pueden ser negativos.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -20,8 +27,8 @@ export default function OpenShiftModal({ user, onOpen, onClose }) {
         .insert({
           id,
           opened_by: user?.name || "Staff",
-          opening_cash_bs: parseFloat(cashBs) || 0,
-          opening_cash_usd: parseFloat(cashUsd) || 0,
+          opening_cash_bs: bs,
+          opening_cash_usd: usd,
           status: "open",
         })
         .select()

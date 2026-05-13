@@ -60,7 +60,21 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
                         className="w-10 h-10 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200">
                         <Minus size={16} />
                       </button>
-                      <span className="text-sm font-bold w-8 text-center">{item.qty}</span>
+                      <button
+                        onClick={() => {
+                          const stockMax = item.product.stock_quantity ?? 999;
+                          const input = window.prompt(`Cantidad de ${item.product.name} (max ${stockMax}):`, String(item.qty));
+                          if (input === null) return;
+                          const n = parseInt(input, 10);
+                          if (!Number.isFinite(n) || n < 1) return;
+                          const newQty = Math.min(n, stockMax);
+                          onUpdateQty(item.product.id, newQty - item.qty);
+                        }}
+                        className="text-sm font-bold w-8 text-center hover:bg-stone-100 rounded py-1 min-h-[40px]"
+                        title="Toca para escribir cantidad"
+                      >
+                        {item.qty}
+                      </button>
                       <button onClick={() => onUpdateQty(item.product.id, 1)}
                         disabled={item.qty >= (item.product.stock_quantity ?? 0)}
                         className="w-10 h-10 rounded-lg bg-white border border-stone-200 flex items-center justify-center active:bg-stone-200 disabled:opacity-30">

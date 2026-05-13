@@ -527,7 +527,10 @@ export default function EventDetailModal({
               ) : (
                 <div className="border border-stone-200 rounded-xl p-3 bg-stone-50/40 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Registrar pago</span>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Registrar pago</span>
+                      <p className="text-[11px] text-stone-400">Dinero que el cliente entregó por este evento (independiente del consumo).</p>
+                    </div>
                     <button onClick={() => { setShowAddPayment(false); setPayAmount(""); setPayRef(""); }} className="text-xs text-stone-500 hover:text-stone-700">Cancelar</button>
                   </div>
                   <div>
@@ -692,7 +695,8 @@ export default function EventDetailModal({
 
           {/* Consumption */}
           <div className="px-5 pt-5">
-            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">Consumo</h4>
+            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-1">Consumo</h4>
+            <p className="text-[11px] text-stone-400 mb-2">Marca cuando el evento se celebró y los productos del combo se entregaron. Descuenta del inventario.</p>
           </div>
           {!event.is_consumed ? (
             <div className="px-5 pb-4 flex items-center gap-2 flex-wrap">
@@ -702,6 +706,7 @@ export default function EventDetailModal({
               <button
                 onClick={() => onMarkConsumed && onMarkConsumed()}
                 className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 bg-brand text-white text-xs font-bold rounded-lg hover:bg-brand-dark"
+                title="Marca que el evento ya se hizo y los productos se entregaron"
               >
                 <CheckCircle2 size={14} /> Marcar evento celebrado
               </button>

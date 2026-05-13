@@ -56,9 +56,15 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-sm text-stone-500">Metodo</span>
+              <span className="text-sm text-stone-500">Método</span>
               <span className="text-sm font-medium">{METHOD_LABELS[sale.paymentMethod] || sale.paymentMethod}</span>
             </div>
+            {sale.reference && (
+              <div className="flex justify-between">
+                <span className="text-sm text-stone-500">Referencia</span>
+                <span className="text-sm font-medium font-mono text-stone-700">{sale.reference}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -77,13 +83,17 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
           Nueva Venta
         </button>
 
-        {voidStillActive && onVoidSale && (
+        {voidStillActive && onVoidSale ? (
           <button
             onClick={onVoidSale}
             className="w-full mt-2 py-3 rounded-xl border-2 border-red-200 text-red-600 font-medium text-sm hover:bg-red-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <RotateCcw size={14} /> Anular esta venta — {remainingMin}:{String(remainingSec).padStart(2, '0')}
           </button>
+        ) : canVoid === false && saleTimestamp && (
+          <p className="w-full mt-2 py-3 text-center text-xs text-stone-400 italic">
+            Ventana de anulación cerrada (pasaron 5 min)
+          </p>
         )}
       </div>
     </div>

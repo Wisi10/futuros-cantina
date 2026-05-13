@@ -201,24 +201,30 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
     setSelectedClient(null); setManualClientName(""); setUseManualClient(false);
   };
 
-  const canConfirm = (() => {
-    if (processing) return false;
+  // canConfirm + razon: si no se puede, explicar al staff por que (mejor que un boton mudo)
+  const confirmBlockReason = (() => {
+    if (processing) return "Procesando...";
     if (isCredit) {
-      return !!(selectedClient || (useManualClient && manualClientName.trim()));
+      if (!(selectedClient || (useManualClient && manualClientName.trim()))) {
+        return "Selecciona o agrega un cliente para registrar el crédito";
+      }
+      return null;
     }
     if (isCortesia) {
-      return !!saleClient?.id;
+      if (!saleClient?.id) return "Asocia un cliente antes de dar cortesía";
+      return null;
     }
     // Mixed
-    if (paidSum < totalRef - 0.01) return false; // not enough
+    if (payments.length === 0) return "Agrega al menos un pago";
+    if (paidSum < totalRef - 0.01) return `Falta REF ${(totalRef - paidSum).toFixed(2)} por cubrir`;
     if (overpay > 0.01) {
-      // Need explicit overpay action selection
-      if (!overpayAction) return false;
-      if (overpayAction === "credit" && !saleClient?.id) return false;
-      if (overpayAction === "change" && !changeMethod) return false;
+      if (!overpayAction) return "Elige qué hacer con el sobrepago: vuelto o crédito a cuenta";
+      if (overpayAction === "credit" && !saleClient?.id) return "Asocia cliente para dejar sobrepago como crédito";
+      if (overpayAction === "change" && !changeMethod) return "Elige cómo entregar el vuelto";
     }
-    return payments.length > 0;
+    return null;
   })();
+  const canConfirm = !confirmBlockReason;
 
   const handleConfirm = () => {
     if (!canConfirm) return;
@@ -617,7 +623,12 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
       </div>
 
       <div className="bg-white border-t border-stone-200 p-4">
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-lg mx-auto space-y-2">
+          {confirmBlockReason && !processing && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center">
+              {confirmBlockReason}
+            </p>
+          )}
           <button
             onClick={handleConfirm}
             disabled={!canConfirm}
@@ -626,9 +637,9 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
             {processing ? (
               <><Loader2 size={18} className="animate-spin" /> Procesando...</>
             ) : isCredit ? (
-              "Confirmar Credito"
+              "Confirmar Crédito"
             ) : isCortesia ? (
-              "Confirmar Cortesia"
+              "Confirmar Cortesía"
             ) : (
               "Confirmar Venta"
             )}

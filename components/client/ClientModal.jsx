@@ -139,8 +139,27 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
     if (creatingRef.current || !supabase) return;
     const first = createForm.first_name.trim();
     const last = createForm.last_name.trim();
+    const phone = createForm.phone.trim();
+    const cedula = createForm.cedula.trim();
+    const email = createForm.email.trim();
+
     if (!first || !last) {
       setCreateError("Nombre y apellido son obligatorios");
+      return;
+    }
+    // Teléfono: solo dígitos, espacios, +, -. Permitir vacío.
+    if (phone && !/^[+]?[\d\s-]{6,20}$/.test(phone)) {
+      setCreateError("Teléfono inválido. Usa solo números, espacios, + o -.");
+      return;
+    }
+    // Cédula venezolana: V/E/J + dígitos, o solo dígitos. Permitir vacío.
+    if (cedula && !/^[VEJvej]?-?\d{5,12}$/.test(cedula.replace(/\s/g, ""))) {
+      setCreateError("Cédula inválida. Formato esperado: V-12345678 o solo dígitos.");
+      return;
+    }
+    // Email básico. Permitir vacío.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCreateError("Email inválido.");
       return;
     }
     creatingRef.current = true;
@@ -151,9 +170,9 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
       id: newId,
       first_name: first,
       last_name: last,
-      phone: createForm.phone.trim() || null,
-      cedula: createForm.cedula.trim() || null,
-      email: createForm.email.trim() || null,
+      phone: phone || null,
+      cedula: cedula || null,
+      email: email || null,
     });
     creatingRef.current = false;
     setCreating(false);
@@ -166,7 +185,7 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
       onAssociateClient({
         id: newId,
         name: `${first} ${last}`,
-        cedula: createForm.cedula.trim() || null,
+        cedula: cedula || null,
         points: 0,
         discount: null,
       });

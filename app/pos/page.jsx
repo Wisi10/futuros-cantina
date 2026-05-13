@@ -1129,7 +1129,14 @@ function POSPageInner() {
           shift={activeShift}
           rate={rate}
           onClose={() => setShowCloseShift(false)}
-          onClosed={() => { setActiveShift(null); setShowCloseShift(false); }}
+          onClosed={() => {
+            // Limpiar carrito al cerrar turno para que el siguiente staff arranque limpio
+            setCart([]);
+            setSaleClient(null);
+            localStorage.removeItem("cantina_cart");
+            setActiveShift(null);
+            setShowCloseShift(false);
+          }}
         />
       )}
 
