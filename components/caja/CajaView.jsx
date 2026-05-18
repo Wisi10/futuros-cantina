@@ -23,7 +23,7 @@ export default function CajaView({ user, rate }) {
   const [expandedSale, setExpandedSale] = useState(null);
 
   const isToday = selectedDate === new Date().toISOString().split("T")[0];
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.cantinaRole === "admin" || user?.cantinaRole === "owner";
 
   const [salePayments, setSalePayments] = useState([]); // sprint 7B
   const [productStock, setProductStock] = useState({}); // {productId: {name, stock, has_recipe}}
@@ -170,7 +170,9 @@ export default function CajaView({ user, rate }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-stone-800">
-          {isToday ? "Caja del dia" : `Caja — ${selectedDate}`}
+          {isAdmin
+            ? (isToday ? "Caja del día" : `Caja — ${selectedDate}`)
+            : "Historial del día"}
         </h2>
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -197,6 +199,8 @@ export default function CajaView({ user, rate }) {
         <div className="text-center py-12 text-stone-400 text-sm animate-pulse">Cargando...</div>
       ) : (
         <>
+          {isAdmin && (
+          <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <KPICard
@@ -490,6 +494,8 @@ export default function CajaView({ user, rate }) {
               </div>
             );
           })()}
+          </>
+          )}
 
           {/* Recent sales */}
           <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">

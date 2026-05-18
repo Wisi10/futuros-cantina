@@ -10,7 +10,7 @@ const TABS = [
   { id: "calendario", label: "Calendario", icon: CalendarRange },
   { id: "turnos", label: "Turnos", icon: Clock },
   { id: "clientes", label: "Clientes", icon: Users, adminOnly: true },
-  { id: "caja", label: "Caja", icon: Wallet, adminOnly: true },
+  { id: "caja", label: "Caja", icon: Wallet },
   { id: "costos", label: "Costos", icon: TrendingUp, adminOnly: true },
   { id: "reportes", label: "Reportes", icon: BarChart3, adminOnly: true },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },

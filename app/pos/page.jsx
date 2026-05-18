@@ -992,9 +992,9 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "caja" && canAdmin && (
+        {activeTab === "caja" && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <CajaView user={user} rate={rate} />
+            <CajaView user={effectiveUser} rate={rate} />
           </div>
         )}
 
