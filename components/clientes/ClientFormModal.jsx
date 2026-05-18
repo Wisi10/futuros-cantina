@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { generateId } from "@/lib/utils";
 
 export default function ClientFormModal({ client, user, onClose, onSaved }) {
   const isEdit = !!client;
@@ -37,16 +36,14 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
         if (error) throw error;
         await onSaved(client.id);
       } else {
-        const id = "cli_" + generateId();
-        const { error } = await supabase.from("clients").insert({
-          id,
-          first_name: first.trim() || null,
-          last_name: last.trim() || null,
-          phone: phone.trim() || null,
-          cedula: cedula.trim() || null,
-          notes: notes.trim() || null,
+        const { data: id, error } = await supabase.rpc("create_client_quick", {
+          p_first_name: first.trim(),
+          p_last_name: last.trim(),
+          p_phone: phone.trim() || null,
+          p_cedula: cedula.trim() || null,
+          p_notes: notes.trim() || null,
         });
-        if (error) throw error;
+        if (error || !id) throw (error || new Error("No se pudo crear el cliente"));
         await onSaved(id);
       }
     } catch (e) {

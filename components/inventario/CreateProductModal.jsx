@@ -125,7 +125,7 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-                Costo REF (opcional)
+                Costo $ (opcional)
               </label>
               <input
                 type="number"

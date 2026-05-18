@@ -151,7 +151,7 @@ export default function CajaView({ user, rate }) {
     const rows = sales.map((s) => ({
       Hora: new Date(s.created_at).toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" }),
       Items: (s.items || []).map((i) => `${i.name} x${i.qty}`).join(", "),
-      "Total REF": Number(parseFloat(s.total_ref || 0).toFixed(2)),
+      "Total $": Number(parseFloat(s.total_ref || 0).toFixed(2)),
       "Total Bs": s.total_bs ? Number(parseFloat(s.total_bs).toFixed(2)) : null,
       Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || "—"),
       Estado: s.payment_status === "credit" ? "Crédito" : "Pagado",
@@ -206,7 +206,7 @@ export default function CajaView({ user, rate }) {
             <KPICard
               icon={<DollarSign size={20} />}
               label="Total ventas"
-              value={`REF ${totalRef.toFixed(2)}`}
+              value={`$${totalRef.toFixed(2)}`}
               sub={rate ? formatBs(totalRef, rate.eur) : null}
               color="text-brand"
             />
@@ -220,21 +220,21 @@ export default function CajaView({ user, rate }) {
             <KPICard
               icon={<CreditCard size={20} />}
               label="Creditos"
-              value={`REF ${creditTotal.toFixed(2)}`}
+              value={`$${creditTotal.toFixed(2)}`}
               sub="pendientes"
               color="text-amber-600"
             />
             <KPICard
               icon={<Banknote size={20} />}
               label="Cobrado"
-              value={`REF ${paidTotal.toFixed(2)}`}
+              value={`$${paidTotal.toFixed(2)}`}
               sub="excluye cortesias"
               color="text-green-600"
             />
             <KPICard
               icon={<Gift size={20} />}
               label="Cortesias"
-              value={`REF ${cortesiaTotal.toFixed(2)}`}
+              value={`$${cortesiaTotal.toFixed(2)}`}
               sub="no afecta caja"
               color="text-gold"
             />
@@ -258,7 +258,7 @@ export default function CajaView({ user, rate }) {
                       <TrendingUp size={14} className="text-green-600" />
                       <span className="text-[10px] uppercase tracking-wider text-green-700 font-bold">Entró</span>
                     </div>
-                    <p className="text-base md:text-lg font-bold text-green-700">REF {flujo.entradaTotal.toFixed(2)}</p>
+                    <p className="text-base md:text-lg font-bold text-green-700">${flujo.entradaTotal.toFixed(2)}</p>
                     {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.entradaTotal, rate.eur)}</p>}
                   </div>
                   <div className="bg-red-50 border border-red-100 rounded-xl p-3">
@@ -266,7 +266,7 @@ export default function CajaView({ user, rate }) {
                       <TrendingDown size={14} className="text-red-600" />
                       <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold">Vuelto</span>
                     </div>
-                    <p className="text-base md:text-lg font-bold text-red-700">REF {flujo.vueltoTotal.toFixed(2)}</p>
+                    <p className="text-base md:text-lg font-bold text-red-700">${flujo.vueltoTotal.toFixed(2)}</p>
                     {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.vueltoTotal, rate.eur)}</p>}
                   </div>
                   <div className="bg-brand/5 border border-brand/20 rounded-xl p-3">
@@ -274,7 +274,7 @@ export default function CajaView({ user, rate }) {
                       <Wallet size={14} className="text-brand" />
                       <span className="text-[10px] uppercase tracking-wider text-brand font-bold">Neto</span>
                     </div>
-                    <p className="text-base md:text-lg font-bold text-brand">REF {cajaNeta.toFixed(2)}</p>
+                    <p className="text-base md:text-lg font-bold text-brand">${cajaNeta.toFixed(2)}</p>
                     {rate && <p className="text-[10px] text-stone-500">{formatUSD(cajaNeta, rate)} · {formatBs(cajaNeta, rate.eur)}</p>}
                   </div>
                 </div>
@@ -343,7 +343,7 @@ export default function CajaView({ user, rate }) {
                   <tr className="text-xs text-stone-400 border-b border-stone-100">
                     <th className="text-left px-4 py-2 font-medium">Metodo</th>
                     <th className="text-center px-4 py-2 font-medium"># ventas</th>
-                    <th className="text-right px-4 py-2 font-medium">Total REF</th>
+                    <th className="text-right px-4 py-2 font-medium">Total $</th>
                     <th className="text-right px-4 py-2 font-medium">Total Bs</th>
                   </tr>
                 </thead>
@@ -357,7 +357,7 @@ export default function CajaView({ user, rate }) {
                         </td>
                         <td className="px-4 py-2.5 text-center text-stone-500">{data.count}</td>
                         <td className="px-4 py-2.5 text-right font-semibold text-brand">
-                          REF {data.total.toFixed(2)}
+                          ${data.total.toFixed(2)}
                         </td>
                         <td className="px-4 py-2.5 text-right text-stone-400 text-xs">
                           {method === "credit" ? "—" : rate ? formatBs(data.total, rate.eur) : "—"}
@@ -536,7 +536,7 @@ export default function CajaView({ user, rate }) {
                           )}
                         </span>
                         <span className="text-xs font-bold text-brand whitespace-nowrap">
-                          REF {parseFloat(sale.total_ref).toFixed(2)}
+                          ${parseFloat(sale.total_ref).toFixed(2)}
                         </span>
                         <span className="text-xs text-stone-400 w-20 text-right truncate">
                           {icon} {method}
@@ -552,12 +552,12 @@ export default function CajaView({ user, rate }) {
                           {items.map((item, i) => (
                             <div key={i} className="flex justify-between text-stone-500">
                               <span>{item.name} x{item.qty}</span>
-                              <span>REF {(item.price_ref * item.qty).toFixed(2)}</span>
+                              <span>${(item.price_ref * item.qty).toFixed(2)}</span>
                             </div>
                           ))}
                           <div className="flex justify-between pt-1 border-t border-stone-200 font-semibold text-stone-700">
                             <span>Total</span>
-                            <span>REF {parseFloat(sale.total_ref).toFixed(2)}</span>
+                            <span>${parseFloat(sale.total_ref).toFixed(2)}</span>
                           </div>
                           {sale.client_name && (
                             <div className="text-stone-400">Cliente: {sale.client_name}</div>

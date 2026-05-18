@@ -38,14 +38,14 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
             {sale.items.map((item, i) => (
               <div key={i} className="flex justify-between text-sm">
                 <span className="text-stone-600">{item.qty}x {item.name}</span>
-                <span className="font-medium">REF {(item.price_ref * item.qty).toFixed(2)}</span>
+                <span className="font-medium">${(item.price_ref * item.qty).toFixed(2)}</span>
               </div>
             ))}
           </div>
           <div className="border-t border-stone-200 pt-2 space-y-1">
             <div className="flex justify-between">
               <span className="text-sm text-stone-500">Total</span>
-              <span className="font-bold text-brand">REF {sale.totalRef.toFixed(2)}</span>
+              <span className="font-bold text-brand">${sale.totalRef.toFixed(2)}</span>
             </div>
             {sale.rate != null && sale.rate > 0 && (
               <div className="flex justify-between">
@@ -71,7 +71,7 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
         {todayStats.count > 1 && (
           <div className="bg-brand/5 rounded-xl p-3 mb-4">
             <p className="text-xs text-brand font-medium">
-              Total del dia: REF {todayStats.total.toFixed(2)} en {todayStats.count} ventas
+              Total del dia: ${todayStats.total.toFixed(2)} en {todayStats.count} ventas
             </p>
           </div>
         )}

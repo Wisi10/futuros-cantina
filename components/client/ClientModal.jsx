@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Search, ArrowLeft, User, Gift, Percent, UserPlus, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF, formatBs, generateId, ProductImage } from "@/lib/utils";
+import { formatREF, formatBs, ProductImage } from "@/lib/utils";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
   const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
@@ -165,19 +165,17 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
     creatingRef.current = true;
     setCreating(true);
     setCreateError("");
-    const newId = generateId();
-    const { error } = await supabase.from("clients").insert({
-      id: newId,
-      first_name: first,
-      last_name: last,
-      phone: phone || null,
-      cedula: cedula || null,
-      email: email || null,
+    const { data: newId, error } = await supabase.rpc("create_client_quick", {
+      p_first_name: first,
+      p_last_name: last,
+      p_phone: phone || null,
+      p_cedula: cedula || null,
+      p_email: email || null,
     });
     creatingRef.current = false;
     setCreating(false);
-    if (error) {
-      setCreateError(error.message || "Error creando cliente");
+    if (error || !newId) {
+      setCreateError(error?.message || "Error creando cliente");
       return;
     }
     // Auto-asociar a la venta y cerrar

@@ -333,7 +333,7 @@ export default function InventarioView({ user }) {
                       <span className="text-[11px] text-[#a3a3a3] font-medium">Valor total</span>
                     </div>
                     <p className="text-xl font-extrabold text-[#1a1a1a]">
-                      REF {valorTotal.toFixed(2)}
+                      ${valorTotal.toFixed(2)}
                     </p>
                     <p className="text-[11px] text-[#a3a3a3]">inventario</p>
                   </div>
@@ -346,7 +346,7 @@ export default function InventarioView({ user }) {
                       <span className="text-[11px] text-[#a3a3a3] font-medium">Pagado a proveedores</span>
                     </div>
                     <p className="text-xl font-extrabold text-[#1a1a1a]">
-                      REF {pagadoProveedores.toFixed(2)}
+                      ${pagadoProveedores.toFixed(2)}
                     </p>
                     <p className="text-[11px] text-[#a3a3a3]">ultimos 30d</p>
                   </div>
@@ -406,7 +406,7 @@ export default function InventarioView({ user }) {
                       <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="stock" label="Stock" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="alert" label="Alerta" align="right" /></th>
-                      <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo REF" align="right" /></th>
+                      <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo $" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
                       <th className="text-center px-3 py-2 font-medium"><SortHeader k="status" label="Estado" align="center" /></th>
                       <th className="text-right px-3 py-2 font-medium"></th>
@@ -471,7 +471,7 @@ export default function InventarioView({ user }) {
                         Valor total inventario:
                       </td>
                       <td className="px-3 py-2 text-right text-sm font-bold text-brand" colSpan={1}>
-                        REF {totalValue.toFixed(2)}
+                        ${totalValue.toFixed(2)}
                       </td>
                       <td colSpan={3}></td>
                     </tr>}
@@ -514,7 +514,7 @@ export default function InventarioView({ user }) {
                                 </p>
                               </div>
                               <div className="text-right shrink-0">
-                                <p className="text-sm font-bold text-brand">REF {data.total.toFixed(2)}</p>
+                                <p className="text-sm font-bold text-brand">${data.total.toFixed(2)}</p>
                                 <p className="text-[11px] text-stone-400">{data.count} entrada{data.count !== 1 ? "s" : ""}</p>
                               </div>
                               <ChevronDown
@@ -543,7 +543,7 @@ export default function InventarioView({ user }) {
                                             {(r.items || []).map((i) => `${i.name} x${i.qty}`).join(", ")}
                                           </td>
                                           <td className="py-1.5 text-right font-semibold text-stone-700">
-                                            REF {Number(r.total_cost_ref || 0).toFixed(2)}
+                                            ${Number(r.total_cost_ref || 0).toFixed(2)}
                                           </td>
                                         </tr>
                                       ))}

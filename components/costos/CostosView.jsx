@@ -314,7 +314,7 @@ export default function CostosView({ user }) {
       const prodRows = productosWithMargin.map((p) => ({
         Producto: p.name,
         Categoría: p.category || "",
-        "Precio REF": Number(p.price.toFixed(2)),
+        "Precio $": Number(p.price.toFixed(2)),
         "MAC REF": Number(p.macCost.toFixed(2)),
         "Reemplazo REF": Number(p.replacementCost.toFixed(2)),
         "Margen MAC %": p.macMargin != null ? Number(p.macMargin.toFixed(2)) : null,
@@ -353,8 +353,8 @@ export default function CostosView({ user }) {
           Fecha: new Date(m.created_at).toLocaleDateString("es-VE", { timeZone: "America/Caracas" }),
           Producto: m.product_name,
           Cantidad: Number(m.quantity || 0),
-          "Costo/u REF": Number(Number(m.cost_ref || 0).toFixed(4)),
-          "Total REF": Number((Number(m.quantity || 0) * Number(m.cost_ref || 0)).toFixed(2)),
+          "Costo/u $": Number(Number(m.cost_ref || 0).toFixed(4)),
+          "Total $": Number((Number(m.quantity || 0) * Number(m.cost_ref || 0)).toFixed(2)),
           Nota: m.notes || "",
         });
       });
@@ -499,14 +499,14 @@ function Resumen({ productosWithMargin, materiaPrima, variationByProduct, suppli
     plugins: {
       legend: { display: false },
       tooltip: {
-        callbacks: { label: (c) => `REF ${Number(c.raw).toFixed(2)}` },
+        callbacks: { label: (c) => `$${Number(c.raw).toFixed(2)}` },
       },
     },
     scales: {
       x: {
         beginAtZero: true,
         grid: { color: "#f5f5f4" },
-        ticks: { font: { size: 10 }, callback: (v) => `REF ${v}` },
+        ticks: { font: { size: 10 }, callback: (v) => `$${v}` },
       },
       y: { grid: { display: false }, ticks: { font: { size: 11 } } },
     },
@@ -1179,7 +1179,7 @@ function EvolucionMAC({ movementsYear, materiaPrima }) {
       },
       tooltip: {
         callbacks: {
-          label: (c) => `${c.dataset.label}: ${c.raw != null ? `REF ${Number(c.raw).toFixed(4)}` : "sin data"}`,
+          label: (c) => `${c.dataset.label}: ${c.raw != null ? `$${Number(c.raw).toFixed(4)}` : "sin data"}`,
         },
       },
     },
@@ -1188,7 +1188,7 @@ function EvolucionMAC({ movementsYear, materiaPrima }) {
       y: {
         beginAtZero: false,
         grid: { color: "#f5f5f4" },
-        ticks: { font: { size: 10 }, callback: (v) => `REF ${v}` },
+        ticks: { font: { size: 10 }, callback: (v) => `$${v}` },
       },
     },
   };

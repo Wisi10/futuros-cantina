@@ -232,7 +232,7 @@ export default function GastosView({ user, rate }) {
                   <td className="px-3 py-2 text-stone-500">{new Date(e.expense_date + "T12:00:00").toLocaleDateString("es-VE")}</td>
                   <td className="px-3 py-2">{e.category}</td>
                   <td className="px-3 py-2 text-stone-600">{e.description}</td>
-                  <td className="px-3 py-2 text-right font-medium">REF {Number(e.amount_ref || 0).toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right font-medium">${Number(e.amount_ref || 0).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right text-stone-400">
                     {e.amount_bs ? `Bs ${Number(e.amount_bs).toFixed(2)}` : e.amount_usd ? `USD ${Number(e.amount_usd).toFixed(2)}` : "—"}
                   </td>
@@ -243,7 +243,7 @@ export default function GastosView({ user, rate }) {
             <tfoot>
               <tr className="border-t-2 border-stone-200 bg-stone-50">
                 <td colSpan={3} className="px-3 py-2 text-right font-bold text-sm text-stone-700">Total:</td>
-                <td className="px-3 py-2 text-right font-bold text-sm text-brand">REF {totalRef.toFixed(2)}</td>
+                <td className="px-3 py-2 text-right font-bold text-sm text-brand">${totalRef.toFixed(2)}</td>
                 <td colSpan={2}></td>
               </tr>
             </tfoot>
@@ -262,7 +262,7 @@ export default function GastosView({ user, rate }) {
                 <div className="flex-1 bg-stone-100 rounded-full h-4 overflow-hidden">
                   <div className="bg-brand h-4 rounded-full transition-all" style={{ width: `${(total / maxCat) * 100}%` }} />
                 </div>
-                <span className="text-xs font-medium text-stone-700 w-24 text-right">REF {total.toFixed(2)}</span>
+                <span className="text-xs font-medium text-stone-700 w-24 text-right">${total.toFixed(2)}</span>
               </div>
             ))}
           </div>

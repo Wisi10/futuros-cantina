@@ -118,7 +118,7 @@ export default function RestockForm({ products, user, onRestocked }) {
               <tr className="bg-stone-50 text-stone-500 text-xs">
                 <th className="text-left px-3 py-2 font-medium min-w-[200px]">Producto</th>
                 <th className="text-center px-3 py-2 font-medium w-20">Qty</th>
-                <th className="text-center px-3 py-2 font-medium w-28">Costo/u REF</th>
+                <th className="text-center px-3 py-2 font-medium w-28">Costo/u $</th>
                 <th className="text-center px-3 py-2 font-medium w-28">Costo/u USD</th>
                 <th className="w-10"></th>
               </tr>
@@ -229,7 +229,7 @@ export default function RestockForm({ products, user, onRestocked }) {
       <div className="bg-white rounded-xl border border-stone-200 p-4 flex items-center justify-between">
         <div className="text-sm text-stone-500">
           {validRows.length} producto{validRows.length !== 1 ? "s" : ""} ·
-          Total: <span className="font-bold text-brand">REF {totalCostRef.toFixed(2)}</span>
+          Total: <span className="font-bold text-brand">${totalCostRef.toFixed(2)}</span>
           {totalCostUsd > 0 && <> · <span className="font-bold text-stone-700">USD {totalCostUsd.toFixed(2)}</span></>}
         </div>
         <button

@@ -62,7 +62,7 @@ function HeatMap({ sales, loading, rate }) {
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-4 mt-4">
-      <p className="text-xs text-stone-500 mb-3 font-medium">Mapa de calor — ultimos 30 dias (REF por franja)</p>
+      <p className="text-xs text-stone-500 mb-3 font-medium">Mapa de calor — ultimos 30 dias ($ por franja)</p>
 
       {!hasData ? (
         <p className="text-xs text-stone-400 text-center py-6">Sin datos suficientes en los ultimos 30 dias</p>
@@ -401,7 +401,7 @@ export default function ReportesContentView({ user, rate }) {
       const ventasData = sales.map((s) => ({
         Fecha: s.sale_date,
         Productos: (s.items || []).map((i) => `${i.qty}x ${i.name}`).join(", "),
-        "Total REF": round2(s.total_ref),
+        "Total $": round2(s.total_ref),
         "Total Bs": s.total_bs ? round2(s.total_bs) : null,
         Método: s.payment_status === "credit" ? "Crédito" : (METHOD_LABELS[s.payment_method] || s.payment_method || ""),
         Cliente: s.client_name || "",
@@ -424,7 +424,7 @@ export default function ReportesContentView({ user, rate }) {
       const creditosData = credits.map((c) => ({
         Cliente: c.client_name,
         "Monto original REF": round2(c.original_amount_ref),
-        "Pagado REF": round2(c.paid_amount_ref),
+        "Pagado $": round2(c.paid_amount_ref),
         "Pendiente REF": round2(Number(c.original_amount_ref || 0) - Number(c.paid_amount_ref || 0)),
         Status: c.status,
         Fecha: c.created_at?.split("T")[0] || "",
@@ -436,7 +436,7 @@ export default function ReportesContentView({ user, rate }) {
         Producto: p.name,
         Categoría: p.category || "",
         "Stock actual": Number(p.stock_quantity || 0),
-        "Costo REF": round2(p.cost_ref),
+        "Costo $": round2(p.cost_ref),
         "Valor REF": round2(Number(p.stock_quantity || 0) * Number(p.cost_ref || 0)),
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invData), "Inventario");
@@ -710,9 +710,9 @@ export default function ReportesContentView({ user, rate }) {
                     return (
                       <tr key={c.id} className="border-t border-stone-100">
                         <td className="px-3 py-2 font-medium">{c.client_name}</td>
-                        <td className="px-3 py-2 text-right">REF {Number(c.original_amount_ref).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right text-stone-500">REF {Number(c.paid_amount_ref || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-brand">REF {outstanding.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">${Number(c.original_amount_ref).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-stone-500">${Number(c.paid_amount_ref || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-brand">${outstanding.toFixed(2)}</td>
                         <td className={`px-3 py-2 ${days > 7 ? "text-red-600" : days > 3 ? "text-yellow-600" : "text-green-600"}`}>
                           {days === 0 ? "Hoy" : `${days}d`}
                         </td>
@@ -749,7 +749,7 @@ export default function ReportesContentView({ user, rate }) {
                       <td className="px-3 py-2 text-stone-600 text-xs">
                         {(s.items || []).map((i) => `${i.qty}x ${i.name}`).join(", ")}
                       </td>
-                      <td className="px-3 py-2 text-right font-medium">REF {Number(s.total_ref).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-medium">${Number(s.total_ref).toFixed(2)}</td>
                       <td className="px-3 py-2 text-xs">
                         {s.payment_status === "credit" ? (
                           <span className="text-yellow-600 font-medium">Credito</span>

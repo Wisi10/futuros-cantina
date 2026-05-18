@@ -229,7 +229,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               <Gift size={14} /> Topes de cortesia por usuario
             </h3>
             <p className="text-[11px] text-stone-500 mb-3">
-              Limite mensual REF que cada admin/gerente puede regalar como cortesia. Vacio = sin limite. Owner siempre sin limite.
+              Limite mensual $ que cada admin/gerente puede regalar como cortesia. Vacio = sin limite. Owner siempre sin limite.
             </p>
             <div className="space-y-1">
               {profiles.filter((p) => p.cantina_role && p.cantina_role !== "staff").map((p) => (
@@ -326,7 +326,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Ajustar costos historicos:</b> override MAC manualmente para reconciliar con inventario fisico.</span></li>
               <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Ver actividad de cada empleado:</b> audit log de quien anulo, quien dio cortesia, quien hizo override de cost.</span></li>
               <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Configurar tasa BCV oficial vs interna:</b> margen de exchange rate (la tasa que cantina usa puede diferir de BCV oficial).</span></li>
-              <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Aprobar gastos {">"} REF X:</b> gastos altos requieren tu aprobacion antes de pago.</span></li>
+              <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Aprobar gastos {">"} $X:</b> gastos altos requieren tu aprobacion antes de pago.</span></li>
               <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Export financiero mensual:</b> reporte cerrado al cierre de mes que admin no puede modificar.</span></li>
               <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Configurar topes de cortesia por staff:</b> cada admin/staff tiene un limite REF/mes en cortesias.</span></li>
               <li className="flex gap-2"><span className="text-brand">•</span> <span><b>Acceso a "Costos" pricing:</b> ver precio de compra a proveedores quizas solo tu/Yusmelly, no Jose Gregorio.</span></li>

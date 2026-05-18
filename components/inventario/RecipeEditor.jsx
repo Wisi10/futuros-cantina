@@ -190,7 +190,7 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                               <tr key={i.key} className="border-t border-stone-100">
                                 <td className="px-3 py-2 text-stone-700">
                                   <div>{i.ingredient_name}</div>
-                                  <div className="text-[10px] text-stone-400">REF {Number(i.ingredient_cost).toFixed(2)} c/u</div>
+                                  <div className="text-[10px] text-stone-400">${Number(i.ingredient_cost).toFixed(2)} c/u</div>
                                 </td>
                                 <td className="px-3 py-2 text-right">
                                   <input
@@ -268,7 +268,7 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                                   className="w-full text-left px-2 py-1.5 hover:bg-white rounded text-sm flex items-center justify-between"
                                 >
                                   <span className="text-stone-700">{p.name}</span>
-                                  <span className="text-[11px] text-stone-400">REF {Number(p.cost_ref || 0).toFixed(2)}</span>
+                                  <span className="text-[11px] text-stone-400">${Number(p.cost_ref || 0).toFixed(2)}</span>
                                 </button>
                               ))
                             )}

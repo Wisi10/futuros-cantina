@@ -156,7 +156,7 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                 </p>
 
                 <p className="text-sm font-bold text-brand">
-                  REF {Number(product.price_ref).toFixed(2)}
+                  ${Number(product.price_ref).toFixed(2)}
                 </p>
 
                 {rate && (

@@ -123,9 +123,9 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
               <div className="bg-stone-50 rounded-lg p-3">
                 <p className="font-medium text-sm">{payingCredit.client_name}</p>
                 <p className="text-xs text-stone-500 mt-1">
-                  Original: REF {Number(payingCredit.original_amount_ref).toFixed(2)} ·
-                  Pagado: REF {Number(payingCredit.paid_amount_ref || 0).toFixed(2)} ·
-                  Pendiente: REF {(Number(payingCredit.original_amount_ref) - Number(payingCredit.paid_amount_ref || 0)).toFixed(2)}
+                  Original: ${Number(payingCredit.original_amount_ref).toFixed(2)} ·
+                  Pagado: ${Number(payingCredit.paid_amount_ref || 0).toFixed(2)} ·
+                  Pendiente: ${(Number(payingCredit.original_amount_ref) - Number(payingCredit.paid_amount_ref || 0)).toFixed(2)}
                 </p>
               </div>
 
@@ -218,7 +218,7 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                           </p>
                         </div>
                         <div className="text-right shrink-0 ml-2">
-                          <p className="text-base font-bold text-brand">REF {g.total.toFixed(2)}</p>
+                          <p className="text-base font-bold text-brand">${g.total.toFixed(2)}</p>
                           <p className="text-xs text-stone-500">total pendiente</p>
                         </div>
                         <span className="text-stone-400 ml-2">{isExpanded ? "▾" : "▸"}</span>
@@ -232,15 +232,15 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
                               <div key={c.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-stone-100 last:border-0">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs text-stone-600">
-                                    Original: REF {Number(c.original_amount_ref).toFixed(2)}
-                                    {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: REF ${Number(c.paid_amount_ref).toFixed(2)}`}
+                                    Original: ${Number(c.original_amount_ref).toFixed(2)}
+                                    {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: $${Number(c.paid_amount_ref).toFixed(2)}`}
                                   </p>
                                   <p className={`text-xs ${ageColor(days)}`}>
                                     {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days}d`}
                                     {c.status === "partial" && " · Parcial"}
                                   </p>
                                 </div>
-                                <p className="text-xs font-bold text-brand whitespace-nowrap">REF {c.outstanding.toFixed(2)}</p>
+                                <p className="text-xs font-bold text-brand whitespace-nowrap">${c.outstanding.toFixed(2)}</p>
                                 <button
                                   onClick={() => openPay(c)}
                                   className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors shrink-0 min-h-[36px]"

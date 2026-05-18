@@ -35,7 +35,7 @@ export default function TopProductsBarChart({ data }) {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx) => `${ctx.parsed.x} u · REF ${totals[ctx.dataIndex]?.toFixed(2)}`,
+          label: (ctx) => `${ctx.parsed.x} u · $${totals[ctx.dataIndex]?.toFixed(2)}`,
         },
       },
     },

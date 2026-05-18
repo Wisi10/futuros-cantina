@@ -184,7 +184,7 @@ export default function MarkRedeemableModal({ user, onClose, onMarked }) {
                           <div className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-medium text-stone-700 truncate">{(p.name || "").trim()}</p>
                             <p className="text-[11px] text-stone-400">
-                              REF {Number(p.price_ref || 0).toFixed(2)} · stock {Number(p.stock_quantity || 0)}
+                              ${Number(p.price_ref || 0).toFixed(2)} · stock {Number(p.stock_quantity || 0)}
                             </p>
                           </div>
                         </button>

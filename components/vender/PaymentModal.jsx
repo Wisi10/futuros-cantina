@@ -216,7 +216,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
     }
     // Mixed
     if (payments.length === 0) return "Agrega al menos un pago";
-    if (paidSum < totalRef - 0.01) return `Falta REF ${(totalRef - paidSum).toFixed(2)} por cubrir`;
+    if (paidSum < totalRef - 0.01) return `Falta $${(totalRef - paidSum).toFixed(2)} por cubrir`;
     if (overpay > 0.01) {
       if (!overpayAction) return "Elige qué hacer con el sobrepago: vuelto o crédito a cuenta";
       if (overpayAction === "credit" && !saleClient?.id) return "Asocia cliente para dejar sobrepago como crédito";
@@ -335,14 +335,14 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                 <span className="text-stone-600 flex items-center gap-1.5">
                   <ProductImage product={item.product} size={20} /> {item.qty}x {item.product.name}
                 </span>
-                <span className="font-medium">REF {(Number(item.product.price_ref) * item.qty).toFixed(2)}</span>
+                <span className="font-medium">${(Number(item.product.price_ref) * item.qty).toFixed(2)}</span>
               </div>
             ))}
           </div>
           <div className="border-t border-stone-100 pt-2">
             <div className="flex justify-between items-baseline">
               <span className="text-sm text-stone-500">Total</span>
-              <span className="text-2xl font-bold text-brand">REF {totalRef.toFixed(2)}</span>
+              <span className="text-2xl font-bold text-brand">${totalRef.toFixed(2)}</span>
             </div>
             {hasTasa && (
               <div className="text-right">
@@ -378,17 +378,17 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
             <div className="bg-stone-50 rounded-lg p-3">
               <div className="flex justify-between text-xs">
                 <span className="text-stone-500">Pagado</span>
-                <span className="font-semibold text-stone-700">REF {paidSum.toFixed(2)}</span>
+                <span className="font-semibold text-stone-700">${paidSum.toFixed(2)}</span>
               </div>
               {remaining > 0.01 ? (
                 <div className="flex justify-between text-sm font-bold mt-1">
                   <span className="text-amber-700">Restante</span>
-                  <span className="text-amber-700">REF {remaining.toFixed(2)}</span>
+                  <span className="text-amber-700">${remaining.toFixed(2)}</span>
                 </div>
               ) : overpay > 0.01 ? (
                 <div className="flex justify-between text-sm font-bold mt-1">
                   <span className="text-blue-700">Sobrepago</span>
-                  <span className="text-blue-700">REF {overpay.toFixed(2)}</span>
+                  <span className="text-blue-700">${overpay.toFixed(2)}</span>
                 </div>
               ) : (
                 <div className="flex justify-between text-sm font-bold mt-1">
@@ -468,7 +468,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                           {m?.label || p.method}
                           {p.reference && <span className="text-stone-400 ml-1">· {p.reference}</span>}
                         </span>
-                        <span className="text-sm font-bold text-stone-800">REF {Number(p.amount_ref).toFixed(2)}</span>
+                        <span className="text-sm font-bold text-stone-800">${Number(p.amount_ref).toFixed(2)}</span>
                         <button onClick={() => removePayment(p.tmpId)} className="text-stone-400 hover:text-red-500 p-0.5">
                           <Trash2 size={12} />
                         </button>
@@ -482,7 +482,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
             {/* Overpay choice */}
             {overpay > 0.01 && (
               <div className="border-t border-stone-100 pt-3 space-y-2">
-                <p className="text-xs font-bold text-stone-700">Que hacer con el sobrepago de REF {overpay.toFixed(2)}?</p>
+                <p className="text-xs font-bold text-stone-700">Que hacer con el sobrepago de ${overpay.toFixed(2)}?</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => setOverpayAction("change")}
                     className={`py-2 px-3 rounded-lg border-2 text-xs font-bold transition-all ${
@@ -512,7 +512,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                   </div>
                 )}
                 {overpayAction === "credit" && saleClient?.id && (
-                  <p className="text-xs text-stone-500">Se acreditara REF {overpay.toFixed(2)} a {saleClient.name}.</p>
+                  <p className="text-xs text-stone-500">Se acreditara ${overpay.toFixed(2)} a {saleClient.name}.</p>
                 )}
                 {!saleClient?.id && overpayAction === null && (
                   <p className="text-[11px] text-stone-400 italic">Asocia cliente para opcion "Credito a cuenta"</p>
@@ -526,7 +526,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
         {isCortesia && saleClient?.id && (
           <div className="bg-gold/5 border border-gold/30 rounded-xl p-4 mb-4">
             <p className="text-stone-700 font-medium">
-              Vas a regalar REF {totalRef.toFixed(2)} a {(saleClient.name || "").trim().replace(/\s+/g, " ")}.
+              Vas a regalar ${totalRef.toFixed(2)} a {(saleClient.name || "").trim().replace(/\s+/g, " ")}.
             </p>
             <p className="text-xs text-stone-500 mt-1">
               No entra dinero a la caja. La venta queda registrada como cortesia. No se otorgan puntos.
@@ -568,7 +568,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                         </div>
                         {clientDebts[c.id] > 0 && (
                           <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                            <AlertCircle size={10} /> Debe REF {clientDebts[c.id].toFixed(2)}
+                            <AlertCircle size={10} /> Debe ${clientDebts[c.id].toFixed(2)}
                           </span>
                         )}
                       </button>
@@ -581,7 +581,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                       <p className="text-sm font-medium text-brand">{(selectedClient.full_name || "?").trim().replace(/\s+/g, " ")}</p>
                       {selectedClient.cedula && <p className="text-xs text-stone-500">CI: {selectedClient.cedula}</p>}
                       {clientDebts[selectedClient.id] > 0 && (
-                        <p className="text-xs text-red-600 mt-0.5">Saldo pendiente: REF {clientDebts[selectedClient.id].toFixed(2)}</p>
+                        <p className="text-xs text-red-600 mt-0.5">Saldo pendiente: ${clientDebts[selectedClient.id].toFixed(2)}</p>
                       )}
                     </div>
                     <button onClick={() => { setSelectedClient(null); setClientSearch(""); }} className="text-xs text-stone-400 hover:text-stone-600">Cambiar</button>

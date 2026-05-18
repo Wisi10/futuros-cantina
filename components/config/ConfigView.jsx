@@ -334,8 +334,8 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                 <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                 <th className="text-center px-3 py-2 font-medium" title="Cuenta para deuda intercompania con el complejo"><SortHeader k="is_cantina" label="Es cantina" align="center" /></th>
                 <th className="text-center px-3 py-2 font-medium"><SortHeader k="active" label="Activo" align="center" /></th>
-                <th className="text-right px-3 py-2 font-medium"><SortHeader k="price" label="Precio REF" align="right" /></th>
-                <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo REF" align="right" /></th>
+                <th className="text-right px-3 py-2 font-medium"><SortHeader k="price" label="Precio $" align="right" /></th>
+                <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo $" align="right" /></th>
                 <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
                 <th className="text-center px-3 py-2 font-medium">Emoji</th>
                 <th className="text-center px-3 py-2 font-medium"><SortHeader k="redeemable" label="Canjeable" align="center" /></th>
@@ -493,7 +493,7 @@ function EditProductModal({ product, onClose, onSave }) {
                 </div>
                 {suggestedPoints > 0 && (
                   <p className="text-[10px] text-stone-400">
-                    Acumular este producto cuesta {suggestedPoints} puntos (REF {(parseFloat(priceRef) || 0).toFixed(2)} x 10)
+                    Acumular este producto cuesta {suggestedPoints} puntos (${(parseFloat(priceRef) || 0).toFixed(2)} x 10)
                   </p>
                 )}
               </div>

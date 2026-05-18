@@ -16,7 +16,7 @@ export default function PuntosView({ user, rate, saleClient }) {
           <Star size={20} className="text-brand" />
           <h1 className="text-lg font-bold text-brand">Puntos</h1>
         </div>
-        <p className="text-xs text-stone-400">Loyalty cantina · 1 REF gastado = 10 pts · caducidad 6 meses</p>
+        <p className="text-xs text-stone-400">Loyalty cantina · $1 gastado = 10 pts · caducidad 6 meses</p>
       </div>
 
       {saleClient && (

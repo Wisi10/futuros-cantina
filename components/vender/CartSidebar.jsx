@@ -82,7 +82,7 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
                       </button>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-bold text-brand">REF {subtotalRef.toFixed(2)}</p>
+                      <p className="text-xs font-bold text-brand">${subtotalRef.toFixed(2)}</p>
                       {hasTasa && (
                         <>
                           <p className="text-[10px] text-stone-600 font-semibold">{formatUSD(subtotalRef, rate)}</p>
@@ -135,17 +135,17 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
             <>
               <div className="flex justify-between items-baseline text-xs text-stone-500 mb-1">
                 <span>Subtotal</span>
-                <span className="font-medium">REF {subtotalRef.toFixed(2)}</span>
+                <span className="font-medium">${subtotalRef.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-baseline text-xs text-green-700 mb-1.5">
                 <span>Descuento {discountName ? `(${discountName})` : ""} -{discountPct}%</span>
-                <span className="font-medium">-REF {discountAmount.toFixed(2)}</span>
+                <span className="font-medium">-${discountAmount.toFixed(2)}</span>
               </div>
             </>
           )}
           <div className="flex justify-between items-baseline">
             <span className="text-xs text-stone-500">Total</span>
-            <span className="text-xl font-bold text-brand">REF {totalRef.toFixed(2)}</span>
+            <span className="text-xl font-bold text-brand">${totalRef.toFixed(2)}</span>
           </div>
           {hasTasa && (
             <div className="text-right space-y-0">

@@ -22,7 +22,7 @@ export default function SalesLineChart({ data }) {
     labels,
     datasets: [
       {
-        label: "REF",
+        label: "USD",
         data: values,
         borderColor: "#8b5cf6",
         backgroundColor: "rgba(139, 92, 246, 0.12)",
@@ -43,13 +43,13 @@ export default function SalesLineChart({ data }) {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx) => `REF ${Number(ctx.parsed.y).toFixed(2)}`,
+          label: (ctx) => `$${Number(ctx.parsed.y).toFixed(2)}`,
         },
       },
     },
     scales: {
       x: { grid: { display: false }, ticks: { font: { size: 10 }, color: "#a8a29e" } },
-      y: { beginAtZero: true, ticks: { font: { size: 10 }, color: "#a8a29e", callback: (v) => `REF ${v}` }, grid: { color: "rgba(0,0,0,0.04)" } },
+      y: { beginAtZero: true, ticks: { font: { size: 10 }, color: "#a8a29e", callback: (v) => `$${v}` }, grid: { color: "rgba(0,0,0,0.04)" } },
     },
   };
 
