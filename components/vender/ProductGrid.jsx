@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { formatBs, formatUSD, ProductImage } from "@/lib/utils";
+import { formatBs, formatREFsec, ProductImage } from "@/lib/utils";
 import { effectiveThreshold } from "@/lib/stockHelpers";
 
 export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5 }) {
@@ -162,10 +162,10 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                 {rate && (
                   <>
                     <p className="text-[10px] text-stone-600 font-semibold">
-                      {formatUSD(product.price_ref, rate)}
+                      {formatREFsec(product.price_ref, rate)}
                     </p>
                     <p className="text-[10px] text-[#a3a3a3]">
-                      {formatBs(product.price_ref, rate.eur)}
+                      {formatBs(product.price_ref, rate.usd)}
                     </p>
                   </>
                 )}

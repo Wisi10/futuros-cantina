@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Minus, Plus, Trash2, ShoppingCart, Gift, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, formatUSD, ProductImage } from "@/lib/utils";
+import { formatBs, formatREFsec, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 
 function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient, onAddRedemption, totalRef, subtotalRef, discountAmount, discountPct, discountName }) {
@@ -85,8 +85,8 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
                       <p className="text-xs font-bold text-brand">${subtotalRef.toFixed(2)}</p>
                       {hasTasa && (
                         <>
-                          <p className="text-[10px] text-stone-600 font-semibold">{formatUSD(subtotalRef, rate)}</p>
-                          <p className="text-[10px] text-stone-400">{formatBs(subtotalRef, rate.eur)}</p>
+                          <p className="text-[10px] text-stone-600 font-semibold">{formatREFsec(subtotalRef, rate)}</p>
+                          <p className="text-[10px] text-stone-400">{formatBs(subtotalRef, rate.usd)}</p>
                         </>
                       )}
                     </div>
@@ -149,8 +149,8 @@ function CartContent({ cart, rate, onUpdateQty, onRemove, onCheckout, saleClient
           </div>
           {hasTasa && (
             <div className="text-right space-y-0">
-              <p className="text-sm text-stone-700 font-bold">{formatUSD(totalRef, rate)}</p>
-              <p className="text-xs text-stone-400">{formatBs(totalRef, rate.eur)}</p>
+              <p className="text-sm text-stone-700 font-bold">{formatREFsec(totalRef, rate)}</p>
+              <p className="text-xs text-stone-400">{formatBs(totalRef, rate.usd)}</p>
             </div>
           )}
         </div>

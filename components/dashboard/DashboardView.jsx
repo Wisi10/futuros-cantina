@@ -55,7 +55,7 @@ export default function DashboardView({ user, rate, products, embedded = false }
 
   // Totals
   const totalRef = sales.reduce((s, v) => s + parseFloat(v.total_ref || 0), 0);
-  const totalBs = rate?.eur ? totalRef * rate.eur : 0;
+  const totalBs = rate?.usd ? totalRef * rate.usd : 0;
   const salesCount = sales.length;
 
   // By method (sprint 7B: lee de cantina_sale_payments + agrega creditos)
@@ -154,7 +154,7 @@ export default function DashboardView({ user, rate, products, embedded = false }
         <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
           <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Ventas hoy</p>
           <p className={`font-normal text-stone-800 ${embedded ? "text-lg" : "text-3xl"}`} style={serif}>{formatREF(totalRef)}</p>
-          <p className="text-[10px] text-stone-400" style={mono}>{formatBs(totalRef, rate?.eur)}</p>
+          <p className="text-[10px] text-stone-400" style={mono}>{formatBs(totalRef, rate?.usd)}</p>
         </div>
         <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
           <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Transacciones</p>

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download, Gift, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatBs, formatUSD, calcUSD, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
+import { formatBs, formatREFsec, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 import * as XLSX from "xlsx";
 
@@ -207,7 +207,7 @@ export default function CajaView({ user, rate }) {
               icon={<DollarSign size={20} />}
               label="Total ventas"
               value={`$${totalRef.toFixed(2)}`}
-              sub={rate ? formatBs(totalRef, rate.eur) : null}
+              sub={rate ? formatBs(totalRef, rate.usd) : null}
               color="text-brand"
             />
             <KPICard
@@ -259,7 +259,7 @@ export default function CajaView({ user, rate }) {
                       <span className="text-[10px] uppercase tracking-wider text-green-700 font-bold">Entró</span>
                     </div>
                     <p className="text-base md:text-lg font-bold text-green-700">${flujo.entradaTotal.toFixed(2)}</p>
-                    {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.entradaTotal, rate.eur)}</p>}
+                    {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.entradaTotal, rate.usd)}</p>}
                   </div>
                   <div className="bg-red-50 border border-red-100 rounded-xl p-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
@@ -267,7 +267,7 @@ export default function CajaView({ user, rate }) {
                       <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold">Vuelto</span>
                     </div>
                     <p className="text-base md:text-lg font-bold text-red-700">${flujo.vueltoTotal.toFixed(2)}</p>
-                    {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.vueltoTotal, rate.eur)}</p>}
+                    {rate && <p className="text-[10px] text-stone-500">{formatBs(flujo.vueltoTotal, rate.usd)}</p>}
                   </div>
                   <div className="bg-brand/5 border border-brand/20 rounded-xl p-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
@@ -275,7 +275,7 @@ export default function CajaView({ user, rate }) {
                       <span className="text-[10px] uppercase tracking-wider text-brand font-bold">Neto</span>
                     </div>
                     <p className="text-base md:text-lg font-bold text-brand">${cajaNeta.toFixed(2)}</p>
-                    {rate && <p className="text-[10px] text-stone-500">{formatUSD(cajaNeta, rate)} · {formatBs(cajaNeta, rate.eur)}</p>}
+                    {rate && <p className="text-[10px] text-stone-500">{formatREFsec(cajaNeta, rate)} · {formatBs(cajaNeta, rate.usd)}</p>}
                   </div>
                 </div>
 
@@ -291,7 +291,7 @@ export default function CajaView({ user, rate }) {
                           <th className="text-left px-3 py-1.5 font-medium">Moneda</th>
                           <th className="text-right px-3 py-1.5 font-medium">Entró</th>
                           <th className="text-right px-3 py-1.5 font-medium">Vuelto</th>
-                          <th className="text-right px-3 py-1.5 font-medium">Neto (REF)</th>
+                          <th className="text-right px-3 py-1.5 font-medium">Neto ($)</th>
                           <th className="text-right px-3 py-1.5 font-medium">Neto (real)</th>
                         </tr>
                       </thead>
@@ -302,7 +302,7 @@ export default function CajaView({ user, rate }) {
                           <td className="px-3 py-2 text-right text-red-600">-{flujo.cashBsVuelto.toFixed(2)}</td>
                           <td className="px-3 py-2 text-right font-bold text-brand">{cashBsNeto.toFixed(2)}</td>
                           <td className="px-3 py-2 text-right font-bold text-stone-700">
-                            {rate ? formatBs(cashBsNeto, rate.eur) : "—"}
+                            {rate ? formatBs(cashBsNeto, rate.usd) : "—"}
                           </td>
                         </tr>
                         <tr className="border-t border-stone-100">
@@ -311,7 +311,7 @@ export default function CajaView({ user, rate }) {
                           <td className="px-3 py-2 text-right text-red-600">-{flujo.cashUsdVuelto.toFixed(2)}</td>
                           <td className="px-3 py-2 text-right font-bold text-brand">{cashUsdNeto.toFixed(2)}</td>
                           <td className="px-3 py-2 text-right font-bold text-stone-700">
-                            {rate ? formatUSD(cashUsdNeto, rate) : "—"}
+                            ${cashUsdNeto.toFixed(2)}
                           </td>
                         </tr>
                         {flujo.digitalTotal > 0 && (
@@ -360,7 +360,7 @@ export default function CajaView({ user, rate }) {
                           ${data.total.toFixed(2)}
                         </td>
                         <td className="px-4 py-2.5 text-right text-stone-400 text-xs">
-                          {method === "credit" ? "—" : rate ? formatBs(data.total, rate.eur) : "—"}
+                          {method === "credit" ? "—" : rate ? formatBs(data.total, rate.usd) : "—"}
                         </td>
                       </tr>
                     ))}

@@ -69,17 +69,14 @@ export default function GastosView({ user, rate }) {
     const amountNum = parseFloat(amount);
     let amountRef = 0, amountBs = null, amountUsd = null;
 
-    if (currency === "REF") {
+    // amount_ref es canonical y guarda USD (label histórico "REF").
+    if (currency === "REF" || currency === "USD") {
       amountRef = amountNum;
-      if (rate?.eur) amountBs = amountNum * rate.eur;
+      if (currency === "USD") amountUsd = amountNum;
+      if (rate?.usd) amountBs = amountNum * rate.usd;
     } else if (currency === "Bs") {
       amountBs = amountNum;
-      amountRef = rate?.eur ? amountNum / rate.eur : 0;
-    } else if (currency === "USD") {
-      amountUsd = amountNum;
-      // rate.eur = Bs per 1 REF, rate.usd = Bs per 1 USD
-      // USD→REF: (amountUsd * bsPerUsd) / bsPerRef
-      amountRef = (rate?.eur && rate?.usd) ? amountNum * (rate.usd / rate.eur) : 0;
+      amountRef = rate?.usd ? amountNum / rate.usd : 0;
     }
 
     try {

@@ -86,7 +86,7 @@ function HeatMap({ sales, loading, rate }) {
                     ? `rgba(184, 150, 62, ${opacity})`
                     : "rgba(0,0,0,0.03)";
                   const tooltip = val > 0
-                    ? `${day} ${fmtHourLabel(h)} — ${formatREF(val)}${rate?.eur ? ` (${formatBs(val, rate.eur)})` : ""}`
+                    ? `${day} ${fmtHourLabel(h)} — ${formatREF(val)}${rate?.eur ? ` (${formatBs(val, rate.usd)})` : ""}`
                     : `${day} ${fmtHourLabel(h)} — Sin ventas`;
                   return (
                     <div
@@ -504,10 +504,10 @@ export default function ReportesContentView({ user, rate }) {
         <>
           {/* KPI Cards — Row 1 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard label="Ventas" value={formatREF(totalSalesRef)} sub={rate?.eur ? formatBs(totalSalesRef, rate.eur) : null}
+            <KpiCard label="Ventas" value={formatREF(totalSalesRef)} sub={rate?.eur ? formatBs(totalSalesRef, rate.usd) : null}
               change={salesChangePct} hasPrev={hasPrevData} partial={isPartialData} count={`${activeSales.length} ventas`} color="text-brand" />
             <KpiCard label="Transacciones" value={activeSales.length} change={countChangePct} hasPrev={hasPrevData} partial={isPartialData} />
-            <KpiCard label="Ticket promedio" value={formatREF(ticketPromedio)} sub={rate?.eur ? formatBs(ticketPromedio, rate.eur) : null}
+            <KpiCard label="Ticket promedio" value={formatREF(ticketPromedio)} sub={rate?.eur ? formatBs(ticketPromedio, rate.usd) : null}
               change={ticketChangePct} hasPrev={hasPrevData} partial={isPartialData} />
             <KpiCard label="Items por venta" value={itemsPorVenta.toFixed(1)} sub="promedio por transaccion" />
           </div>

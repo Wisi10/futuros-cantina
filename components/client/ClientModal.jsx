@@ -460,7 +460,7 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                       <p className="text-[10px] uppercase tracking-[1.5px] text-yellow-700 font-medium mb-2">Creditos pendientes</p>
                       <p className="text-xl font-bold text-yellow-700">{formatREF(Number(profile.pending_credits_ref || 0))}</p>
-                      {rate?.eur && <p className="text-xs text-yellow-600 mt-0.5">{formatBs(Number(profile.pending_credits_ref || 0), rate.eur)}</p>}
+                      {rate?.eur && <p className="text-xs text-yellow-600 mt-0.5">{formatBs(Number(profile.pending_credits_ref || 0), rate.usd)}</p>}
                       <p className="text-xs text-yellow-600 mt-1">{profile.pending_credits_count} credito{profile.pending_credits_count !== 1 ? "s" : ""} abierto{profile.pending_credits_count !== 1 ? "s" : ""}</p>
                     </div>
                   ) : (
