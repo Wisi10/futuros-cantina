@@ -40,7 +40,17 @@ export default function TopProductsBarChart({ data }) {
       },
     },
     scales: {
-      x: { beginAtZero: true, ticks: { font: { size: 10 }, color: "#a8a29e" }, grid: { color: "rgba(0,0,0,0.04)" } },
+      x: {
+        beginAtZero: true,
+        ticks: {
+          font: { size: 10 },
+          color: "#a8a29e",
+          stepSize: 1,
+          precision: 0,
+          callback: (v) => Number.isInteger(v) ? v : null, // skip non-integer ticks
+        },
+        grid: { color: "rgba(0,0,0,0.04)" },
+      },
       y: { ticks: { font: { size: 10 }, color: "#57534e" }, grid: { display: false } },
     },
   };
