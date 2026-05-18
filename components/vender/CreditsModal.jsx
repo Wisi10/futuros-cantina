@@ -72,10 +72,10 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
       const { error: payErr } = await supabase.from("cantina_credit_payments").insert({
         credit_id: payingCredit.id,
         amount_ref: amount,
-        amount_bs: rate?.eur ? amount * rate.eur : null,
+        amount_bs: rate?.usd ? amount * rate.usd : null,
         payment_method: payMethod,
         reference: payRef || null,
-        exchange_rate_bs: rate?.eur || null,
+        exchange_rate_bs: rate?.usd || null,
         notes: null,
         created_by: user?.name || "Cantina",
       });

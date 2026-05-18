@@ -325,7 +325,7 @@ function POSPageInner() {
   const discountPct = Number(saleClient?.discount?.pct || 0);
   const discountAmount = subtotalRef > 0 && discountPct > 0 ? subtotalRef * (discountPct / 100) : 0;
   const totalRef = Math.max(0, subtotalRef - discountAmount);
-  const totalBs = calcBs(totalRef, rate?.eur);
+  const totalBs = calcBs(totalRef, rate?.usd);
 
   // Local date string for sale_date
   const getLocalDate = () => {
@@ -558,7 +558,7 @@ function POSPageInner() {
         payment_status: "paid",
         payment_method: legacyMethod, // 'mixed' | single method | 'cortesia'
         reference: firstRef,
-        exchange_rate_bs: rate?.eur || null,
+        exchange_rate_bs: rate?.usd || null,
         created_by: user?.name || "Cantina",
         client_id: saleClient?.id || null,
         client_name: saleClient?.name || null,
@@ -571,8 +571,8 @@ function POSPageInner() {
         sale_id: result.sale.id,
         payment_method: p.method,
         amount_ref: p.amount_ref,
-        amount_bs: p.method === "cash_bs" && rate?.eur ? Number(p.amount_ref) * rate.eur : null,
-        exchange_rate: rate?.eur || null,
+        amount_bs: p.method === "cash_bs" && rate?.usd ? Number(p.amount_ref) * rate.usd : null,
+        exchange_rate: rate?.usd || null,
         reference: p.reference || null,
         is_change: false,
       }));
@@ -584,8 +584,8 @@ function POSPageInner() {
           sale_id: result.sale.id,
           payment_method: change.method,
           amount_ref: -Math.abs(change.amount),
-          amount_bs: change.method === "cash_bs" && rate?.eur ? -Math.abs(change.amount) * rate.eur : null,
-          exchange_rate: rate?.eur || null,
+          amount_bs: change.method === "cash_bs" && rate?.usd ? -Math.abs(change.amount) * rate.usd : null,
+          exchange_rate: rate?.usd || null,
           reference: null,
           is_change: true,
           notes: "Vuelto al cliente",
@@ -637,7 +637,7 @@ function POSPageInner() {
         items: result.items,
         totalRef,
         totalBs,
-        rate: rate?.eur || null,
+        rate: rate?.usd || null,
         paymentMethod: legacyMethod,
         reference: firstRef,
         payments,
@@ -663,7 +663,7 @@ function POSPageInner() {
         client_id: clientId,
         client_name: clientName,
         notes: notes || null,
-        exchange_rate_bs: rate?.eur || null,
+        exchange_rate_bs: rate?.usd || null,
         created_by: user?.name || "Cantina",
       });
       if (!result) { setProcessing(false); return; }
@@ -694,7 +694,7 @@ function POSPageInner() {
         items: result.items,
         totalRef,
         totalBs,
-        rate: rate?.eur || null,
+        rate: rate?.usd || null,
         paymentMethod: "credit",
         creditClientName: clientName,
       });
