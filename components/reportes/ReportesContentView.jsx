@@ -9,6 +9,7 @@ import SalesLineChart from "./SalesLineChart";
 import TopProductsBarChart from "./TopProductsBarChart";
 import HoursHeatmap from "./HoursHeatmap";
 import TopClientsList from "./TopClientsList";
+import MonthlyTrendChart from "./MonthlyTrendChart";
 import * as XLSX from "xlsx";
 
 // ─── Heat Map Component ────────────────────────────────────
@@ -178,6 +179,8 @@ export default function ReportesContentView({ user, rate }) {
   const [exporting, setExporting] = useState(false);
   const [heatSales, setHeatSales] = useState([]);
   const [heatLoading, setHeatLoading] = useState(true);
+  // Ventas últimos 12 meses (independiente del period selector)
+  const [monthlySales, setMonthlySales] = useState([]);
 
   const [prevSales, setPrevSales] = useState([]);
   const [allTimeSales, setAllTimeSales] = useState([]);
@@ -259,6 +262,18 @@ export default function ReportesContentView({ user, rate }) {
       .order("created_at", { ascending: false });
     setHeatSales(heatData || []);
     setHeatLoading(false);
+
+    // Monthly trend chart: last 12 months (siempre)
+    const startMonth = new Date();
+    startMonth.setMonth(startMonth.getMonth() - 11);
+    startMonth.setDate(1);
+    const startMonthStr = startMonth.toISOString().split("T")[0];
+    const { data: monthlyData } = await supabase
+      .from("cantina_sales")
+      .select("sale_date, total_ref")
+      .gte("sale_date", startMonthStr)
+      .is("voided_at", null);
+    setMonthlySales(monthlyData || []);
     } catch (err) {
       console.error("[REPORTES] loadData error:", err);
       setLoading(false);
@@ -461,7 +476,7 @@ export default function ReportesContentView({ user, rate }) {
         </button>
       </div>
 
-      {/* Period selector */}
+      {/* Period selector + month picker */}
       <div className="flex items-center gap-2 flex-wrap">
         {PERIODS.map((p) => (
           <button key={p.id} onClick={() => setPeriod(p.id)}
@@ -469,6 +484,35 @@ export default function ReportesContentView({ user, rate }) {
               period === p.id ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
             }`}>{p.label}</button>
         ))}
+        {/* Month picker: selecciona un mes específico (último 12) */}
+        <select
+          value=""
+          onChange={(e) => {
+            const m = e.target.value;
+            if (!m) return;
+            const [y, mm] = m.split("-").map(Number);
+            const first = new Date(y, mm - 1, 1);
+            const last = new Date(y, mm, 0);
+            setCustomFrom(first.toISOString().split("T")[0]);
+            setCustomTo(last.toISOString().split("T")[0]);
+            setPeriod("custom");
+          }}
+          className="border border-stone-300 rounded-lg px-2 py-1.5 text-xs bg-white text-stone-700"
+          title="Saltar a un mes específico"
+        >
+          <option value="">Mes específico…</option>
+          {(() => {
+            const opts = [];
+            const t = new Date();
+            const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+            for (let i = 0; i < 12; i++) {
+              const d = new Date(t.getFullYear(), t.getMonth() - i, 1);
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              opts.push(<option key={key} value={key}>{MONTHS[d.getMonth()]} {d.getFullYear()}</option>);
+            }
+            return opts;
+          })()}
+        </select>
         {period === "custom" && (
           <div className="flex items-center gap-2 ml-2">
             <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
@@ -479,6 +523,19 @@ export default function ReportesContentView({ user, rate }) {
           </div>
         )}
       </div>
+
+      {/* Monthly trend (últimos 12 meses) — siempre ON TOP */}
+      <MonthlyTrendChart
+        data={monthlySales}
+        onMonthClick={(monthKey) => {
+          const [y, mm] = monthKey.split("-").map(Number);
+          const first = new Date(y, mm - 1, 1);
+          const last = new Date(y, mm, 0);
+          setCustomFrom(first.toISOString().split("T")[0]);
+          setCustomTo(last.toISOString().split("T")[0]);
+          setPeriod("custom");
+        }}
+      />
 
       {/* Charts (sprint 12) */}
       {chartsLoading ? (

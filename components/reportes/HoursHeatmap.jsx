@@ -2,10 +2,10 @@
 
 const DAYS = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
 const BUCKETS = [
-  { id: 0, label: "10-13" },
-  { id: 1, label: "14-17" },
-  { id: 2, label: "18-20" },
-  { id: 3, label: "21-c" },
+  { id: 0, label: "10am-1pm" },
+  { id: 1, label: "2pm-5pm" },
+  { id: 2, label: "6pm-8pm" },
+  { id: 3, label: "9pm-cierre" },
 ];
 
 function colorFor(value, max) {
