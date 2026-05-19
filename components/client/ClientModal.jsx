@@ -388,7 +388,7 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                       <p className="text-[10px] uppercase tracking-[1.5px] text-stone-500 font-medium flex items-center gap-1">
                         <Percent size={11} /> Descuento cantina
                       </p>
-                      {isAdmin && !editingDiscount && (
+                      {!editingDiscount && (
                         <button
                           onClick={() => setEditingDiscount(true)}
                           className="text-[11px] text-brand hover:underline"
@@ -404,10 +404,10 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                           onChange={async (e) => {
                             const newId = e.target.value || null;
                             setSavingDiscount(true);
-                            const { error } = await supabase
-                              .from("clients")
-                              .update({ cantina_discount_id: newId })
-                              .eq("id", profile.id);
+                            const { error } = await supabase.rpc("set_client_cantina_discount", {
+                              p_client_id: profile.id,
+                              p_discount_id: newId,
+                            });
                             setSavingDiscount(false);
                             if (error) { alert("Error: " + error.message); return; }
                             const { data: refreshed } = await supabase.rpc("get_client_profile", { client_id_param: profile.id });
@@ -473,10 +473,10 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                             const v = parseFloat(limitInput);
                             if (!Number.isFinite(v) || v < 0) { alert("Valor inválido"); return; }
                             setSavingLimit(true);
-                            const { error } = await supabase
-                              .from("clients")
-                              .update({ credit_limit_ref: v })
-                              .eq("id", profile.id);
+                            const { error } = await supabase.rpc("set_client_credit_limit", {
+                              p_client_id: profile.id,
+                              p_limit: v,
+                            });
                             setSavingLimit(false);
                             if (error) { alert("Error: " + error.message); return; }
                             const { data: refreshed } = await supabase.rpc("get_client_profile", { client_id_param: profile.id });
