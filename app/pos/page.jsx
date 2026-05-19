@@ -952,11 +952,13 @@ function POSPageInner() {
                 />
               )}
 
-              {/* Dashboard en Vivo — colapsable, sin doble titulo */}
-              <div className="border-t border-stone-200 shrink-0">
+              {/* Dashboard en Vivo — colapsable. Cuando abre, abre HACIA ABAJO
+                  con max-h limitado y scroll interno, sin comprimir el grid
+                  de productos (que tiene min-h-0 + flex-1 arriba). */}
+              <div className={`border-t border-stone-200 shrink-0 ${showLiveDashboard ? "max-h-[40vh] overflow-y-auto" : ""}`}>
                 <button
                   onClick={() => setShowLiveDashboard(!showLiveDashboard)}
-                  className="w-full px-4 py-1.5 flex items-center justify-end hover:bg-stone-50 transition-colors"
+                  className="w-full px-4 py-1.5 flex items-center justify-end hover:bg-stone-50 transition-colors sticky top-0 bg-white z-10 border-b border-stone-100"
                 >
                   <span className="text-[11px] text-stone-400">{showLiveDashboard ? "Ocultar dashboard" : "Mostrar dashboard"}</span>
                 </button>
