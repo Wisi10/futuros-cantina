@@ -30,6 +30,8 @@ import ClientesView from "@/components/clientes/ClientesView";
 import EventosView from "@/components/eventos/EventosView";
 import StockAlertToast from "@/components/vender/StockAlertToast";
 import DashboardView from "@/components/dashboard/DashboardView";
+import WhatsNewModal from "@/components/shared/WhatsNewModal";
+import { LATEST as LATEST_WHATS_NEW } from "@/lib/whatsNew";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
 function GlobalProfileMount({ user, rate }) {
@@ -97,6 +99,21 @@ function POSPageInner() {
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [showCloseShift, setShowCloseShift] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+
+  // What's new: si la versión guardada en localStorage difiere de la actual,
+  // mostrar modal. Se gatilla cuando el user está cargado.
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const lastSeen = localStorage.getItem("cantina_lastSeenWhatsNew");
+      if (lastSeen !== LATEST_WHATS_NEW.version) setShowWhatsNew(true);
+    } catch {}
+  }, [user]);
+  const dismissWhatsNew = () => {
+    try { localStorage.setItem("cantina_lastSeenWhatsNew", LATEST_WHATS_NEW.version); } catch {}
+    setShowWhatsNew(false);
+  };
   const [saleClient, setSaleClient] = useState(null); // {id, name, points}
 
   // Auth check
@@ -1167,6 +1184,14 @@ function POSPageInner() {
       {showClientModal && (
         <ClientModal rate={rate} user={user} onClose={() => setShowClientModal(false)}
           onAssociateClient={(client) => setSaleClient(client)} />
+      )}
+
+      {showWhatsNew && (
+        <WhatsNewModal
+          release={LATEST_WHATS_NEW}
+          currentUser={{ role: user?.cantinaRole || "staff" }}
+          onDismiss={dismissWhatsNew}
+        />
       )}
 
       <GlobalProfileMount user={user} rate={rate} />
