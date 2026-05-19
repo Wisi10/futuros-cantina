@@ -40,10 +40,13 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
   const timerRef = useRef(null);
 
   const doSearch = useCallback(async (q) => {
-    if (!supabase || !q || q.length < 2) { setSearchResults([]); setSearching(false); return; }
+    // Normalizar: trim + colapsar whitespace múltiple. El RPC matchea
+    // tanto first_name como full_name ("Mauro L" → "Mauro Lunghi").
+    const norm = (q || "").trim().replace(/\s+/g, " ");
+    if (!supabase || norm.length < 2) { setSearchResults([]); setSearching(false); return; }
     setSearching(true);
     try {
-      const { data } = await supabase.rpc("search_clients", { query: q });
+      const { data } = await supabase.rpc("search_clients", { query: norm });
       setSearchResults(data || []);
     } catch { setSearchResults([]); }
     setSearching(false);
@@ -51,7 +54,8 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!searchQuery || searchQuery.length < 2) { setSearchResults([]); return; }
+    const norm = (searchQuery || "").trim().replace(/\s+/g, " ");
+    if (norm.length < 2) { setSearchResults([]); return; }
     timerRef.current = setTimeout(() => doSearch(searchQuery), 300);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [searchQuery, doSearch]);

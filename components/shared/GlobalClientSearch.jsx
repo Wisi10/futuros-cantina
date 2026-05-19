@@ -25,12 +25,18 @@ export default function GlobalClientSearch() {
     }
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
-      const q = query.trim();
-      const { data } = await supabase
+      // Normalizar: trim + colapsar espacios. Si hay tokens múltiples
+      // ("Mauro Lun"), AND-eamos cada token contra first/last/phone/cedula.
+      const norm = query.trim().replace(/\s+/g, " ");
+      const tokens = norm.split(" ").filter(Boolean);
+      let q = supabase
         .from("clients")
         .select("id, first_name, last_name, phone, cedula")
-        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%,cedula.ilike.%${q}%`)
         .limit(8);
+      for (const t of tokens) {
+        q = q.or(`first_name.ilike.%${t}%,last_name.ilike.%${t}%,phone.ilike.%${t}%,cedula.ilike.%${t}%`);
+      }
+      const { data } = await q;
       setResults(data || []);
       setLoading(false);
       setShowDropdown(true);

@@ -67,11 +67,12 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
 
   // Search clients debounce
   const searchClients = useCallback(async (query) => {
-    if (!query || query.length < 2 || !supabase) { setClients([]); return; }
+    const norm = (query || "").trim().replace(/\s+/g, " ");
+    if (norm.length < 2 || !supabase) { setClients([]); return; }
     setSearching(true);
     let data = [];
     try {
-      const res = await supabase.rpc("search_clients", { query });
+      const res = await supabase.rpc("search_clients", { query: norm });
       data = res.data || [];
     } catch (e) { console.error("[CREDIT SEARCH] error:", e); }
     if (data) {
@@ -103,12 +104,13 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
 
   // Loyalty picker
   const searchLoyaltyClients = useCallback(async (query) => {
-    if (!query || query.length < 2 || !supabase) {
+    const norm = (query || "").trim().replace(/\s+/g, " ");
+    if (norm.length < 2 || !supabase) {
       setLoyaltyResults([]); setLoyaltySearching(false); return;
     }
     setLoyaltySearching(true);
     try {
-      const { data } = await supabase.rpc("search_clients", { query });
+      const { data } = await supabase.rpc("search_clients", { query: norm });
       setLoyaltyResults(data || []);
     } catch { setLoyaltyResults([]); }
     setLoyaltySearching(false);
