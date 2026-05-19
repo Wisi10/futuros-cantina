@@ -41,6 +41,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
     } : null
   );
   const [clientDebts, setClientDebts] = useState({});
+  const [clientLimits, setClientLimits] = useState({}); // {clientId: credit_limit_ref}
   const [creditNotes, setCreditNotes] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [manualClientName, setManualClientName] = useState("");
@@ -79,18 +80,25 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
       setClients(data);
       const ids = data.map((c) => c.id);
       if (ids.length > 0) {
-        const { data: credits } = await supabase
-          .from("cantina_credits")
-          .select("client_id, original_amount_ref, paid_amount_ref")
-          .in("client_id", ids)
-          .in("status", ["pending", "partial"]);
-        if (credits) {
-          const debts = {};
-          credits.forEach((c) => {
-            debts[c.client_id] = (debts[c.client_id] || 0) + (Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0));
-          });
-          setClientDebts(debts);
-        }
+        const [creditsRes, limitsRes] = await Promise.all([
+          supabase
+            .from("cantina_credits")
+            .select("client_id, original_amount_ref, paid_amount_ref")
+            .in("client_id", ids)
+            .in("status", ["pending", "partial"]),
+          supabase
+            .from("clients")
+            .select("id, credit_limit_ref")
+            .in("id", ids),
+        ]);
+        const debts = {};
+        (creditsRes.data || []).forEach((c) => {
+          debts[c.client_id] = (debts[c.client_id] || 0) + (Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0));
+        });
+        setClientDebts(debts);
+        const limits = {};
+        (limitsRes.data || []).forEach((c) => { limits[c.id] = Number(c.credit_limit_ref) || 0; });
+        setClientLimits(limits);
       }
     }
     setSearching(false);
@@ -101,6 +109,34 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
     const timer = setTimeout(() => searchClients(clientSearch), 300);
     return () => clearTimeout(timer);
   }, [clientSearch, isCredit, searchClients]);
+
+  // Cargar límite + deuda del cliente seleccionado (cubre el caso en que
+  // viene pre-poblado desde saleClient sin pasar por search_clients).
+  useEffect(() => {
+    if (!isCredit || !selectedClient?.id || !supabase) return;
+    const cid = selectedClient.id;
+    if (clientLimits[cid] != null && clientDebts[cid] != null) return;
+    (async () => {
+      const [creditsRes, limitRes] = await Promise.all([
+        supabase
+          .from("cantina_credits")
+          .select("original_amount_ref, paid_amount_ref")
+          .eq("client_id", cid)
+          .in("status", ["pending", "partial"]),
+        supabase
+          .from("clients")
+          .select("credit_limit_ref")
+          .eq("id", cid)
+          .maybeSingle(),
+      ]);
+      const debt = (creditsRes.data || []).reduce(
+        (s, c) => s + (Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0)),
+        0
+      );
+      setClientDebts((d) => ({ ...d, [cid]: debt }));
+      setClientLimits((l) => ({ ...l, [cid]: Number(limitRes.data?.credit_limit_ref) || 0 }));
+    })();
+  }, [isCredit, selectedClient?.id, clientLimits, clientDebts]);
 
   // Loyalty picker
   const searchLoyaltyClients = useCallback(async (query) => {
@@ -209,6 +245,16 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
     if (isCredit) {
       if (!(selectedClient || (useManualClient && manualClientName.trim()))) {
         return "Selecciona o agrega un cliente para registrar el crédito";
+      }
+      // Verificar tope de crédito si tenemos cliente registrado (no aplica
+      // a "Cliente no registrado" porque no podemos rastrear deuda histórica).
+      if (selectedClient?.id) {
+        const limit = Number(clientLimits[selectedClient.id]) || 0;
+        const debt = Number(clientDebts[selectedClient.id]) || 0;
+        const available = limit - debt;
+        if (limit > 0 && totalRef > available + 0.01) {
+          return `Excede el límite de crédito: disponible $${available.toFixed(2)} (límite $${limit.toFixed(2)}, debe $${debt.toFixed(2)})`;
+        }
       }
       return null;
     }
@@ -537,16 +583,33 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
         )}
 
         {/* CREDIT form */}
-        {isCredit && (
+        {isCredit && (() => {
+          // ¿Saleclient ya viene asociado desde el header? Si sí, ocultar
+          // todo el buscador duplicado y solo mostrar la card del cliente.
+          const isPreSelectedFromHeader = !!(saleClient?.id && selectedClient?.id === saleClient.id);
+          const limit = selectedClient?.id ? (Number(clientLimits[selectedClient.id]) || 0) : 0;
+          const debt = selectedClient?.id ? (Number(clientDebts[selectedClient.id]) || 0) : 0;
+          const available = limit - debt;
+          const exceedsLimit = selectedClient?.id && limit > 0 && totalRef > available + 0.01;
+          return (
           <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 space-y-3">
-            <p className="text-xs font-medium text-stone-500">Seleccionar cliente</p>
-            {!useManualClient && (
+            <p className="text-xs font-medium text-stone-500">Cliente para el crédito</p>
+            {isPreSelectedFromHeader ? (
+              // Cliente ya asociado en el header — vista compacta + cambiar
+              <div className="bg-brand/5 border border-brand/20 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-brand truncate">{(selectedClient.full_name || "?").trim().replace(/\s+/g, " ")}</p>
+                  {selectedClient.cedula && <p className="text-xs text-stone-500">CI: {selectedClient.cedula}</p>}
+                </div>
+                <button onClick={() => { setSelectedClient(null); setClientSearch(""); }} className="text-xs text-stone-500 hover:text-stone-700 px-2 py-1 rounded hover:bg-stone-100">Cambiar</button>
+              </div>
+            ) : !useManualClient ? (
               <>
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input type="text" value={clientSearch}
                     onChange={(e) => { setClientSearch(e.target.value); setSelectedClient(null); }}
-                    placeholder="Buscar por nombre o cedula..."
+                    placeholder="Buscar por nombre o cédula..."
                     className="w-full border border-stone-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-brand focus:outline-none"
                     autoFocus />
                   {searching && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-stone-400" />}
@@ -558,7 +621,6 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                         setSelectedClient(c);
                         setClientSearch("");
                         setClients([]);
-                        // Si no hay saleClient asociado arriba, asociarlo automaticamente para que tambien gane puntos.
                         if (!saleClient?.id && onAssociateClient && c?.id) {
                           onAssociateClient({ id: c.id, name: c.full_name, cedula: c.cedula || null, points: Number(c.loyalty_points || 0) });
                         }
@@ -582,16 +644,12 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                     <div>
                       <p className="text-sm font-medium text-brand">{(selectedClient.full_name || "?").trim().replace(/\s+/g, " ")}</p>
                       {selectedClient.cedula && <p className="text-xs text-stone-500">CI: {selectedClient.cedula}</p>}
-                      {clientDebts[selectedClient.id] > 0 && (
-                        <p className="text-xs text-red-600 mt-0.5">Saldo pendiente: ${clientDebts[selectedClient.id].toFixed(2)}</p>
-                      )}
                     </div>
                     <button onClick={() => { setSelectedClient(null); setClientSearch(""); }} className="text-xs text-stone-400 hover:text-stone-600">Cambiar</button>
                   </div>
                 )}
               </>
-            )}
-            {useManualClient && (
+            ) : (
               <div>
                 <label className="text-xs text-stone-500 block mb-1">Nombre del cliente</label>
                 <input type="text" value={manualClientName}
@@ -601,27 +659,48 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                   autoFocus />
               </div>
             )}
-            <button onClick={() => { setUseManualClient(!useManualClient); setSelectedClient(null); setClientSearch(""); setManualClientName(""); }}
-              className="text-xs text-brand hover:underline">
-              {useManualClient ? "Buscar cliente registrado" : "Cliente no registrado"}
-            </button>
+            {/* Crédito disponible — solo para clientes registrados */}
+            {selectedClient?.id && limit > 0 && (
+              <div className={`rounded-lg p-3 border ${exceedsLimit ? "bg-red-50 border-red-200" : "bg-stone-50 border-stone-200"}`}>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-500">Disponible</span>
+                  <span className={`font-bold ${exceedsLimit ? "text-red-700" : "text-brand"}`}>${available.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-stone-400 mt-0.5">
+                  <span>Límite ${limit.toFixed(2)}</span>
+                  {debt > 0 && <span>Debe ${debt.toFixed(2)}</span>}
+                </div>
+                {exceedsLimit && (
+                  <p className="text-[11px] text-red-700 mt-1.5 flex items-center gap-1">
+                    <AlertCircle size={11} /> Esta venta (${totalRef.toFixed(2)}) excede el disponible
+                  </p>
+                )}
+              </div>
+            )}
+            {!isPreSelectedFromHeader && (
+              <button onClick={() => { setUseManualClient(!useManualClient); setSelectedClient(null); setClientSearch(""); setManualClientName(""); }}
+                className="text-xs text-brand hover:underline">
+                {useManualClient ? "Buscar cliente registrado" : "Cliente no registrado"}
+              </button>
+            )}
             {(selectedClient || (useManualClient && manualClientName.trim())) && (
               <div className="space-y-3 pt-2 border-t border-stone-100">
                 <div>
-                  <label className="text-xs text-stone-500 block mb-1">Fecha limite (opcional)</label>
+                  <label className="text-xs text-stone-500 block mb-1">Fecha límite (opcional)</label>
                   <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
                     className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs text-stone-500 block mb-1">Notas (opcional)</label>
                   <input type="text" value={creditNotes} onChange={(e) => setCreditNotes(e.target.value)}
-                    placeholder="Notas del credito"
+                    placeholder="Notas del crédito"
                     className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
                 </div>
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <div className="bg-white border-t border-stone-200 p-4">

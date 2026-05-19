@@ -9,6 +9,9 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
   const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [savingDiscount, setSavingDiscount] = useState(false);
+  const [editingLimit, setEditingLimit] = useState(false);
+  const [limitInput, setLimitInput] = useState("");
+  const [savingLimit, setSavingLimit] = useState(false);
 
   // Crear cliente nuevo (inline desde el search)
   const [createForm, setCreateForm] = useState({ first_name: "", last_name: "", phone: "", cedula: "", email: "" });
@@ -435,6 +438,73 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                       </p>
                     ) : (
                       <p className="text-xs text-stone-400 mt-1">Sin descuento asignado</p>
+                    )}
+                  </div>
+
+                  {/* Límite de crédito cantina */}
+                  <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[1.5px] text-stone-500 font-medium">
+                        Límite de crédito
+                      </p>
+                      {isAdmin && !editingLimit && (
+                        <button
+                          onClick={() => { setLimitInput(String(Number(profile.credit_limit_ref ?? 50))); setEditingLimit(true); }}
+                          className="text-[11px] text-brand hover:underline"
+                        >
+                          Cambiar
+                        </button>
+                      )}
+                    </div>
+                    {editingLimit ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm font-bold text-stone-500">$</span>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={limitInput}
+                          onChange={(e) => setLimitInput(e.target.value)}
+                          className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none bg-white"
+                          autoFocus
+                        />
+                        <button
+                          onClick={async () => {
+                            const v = parseFloat(limitInput);
+                            if (!Number.isFinite(v) || v < 0) { alert("Valor inválido"); return; }
+                            setSavingLimit(true);
+                            const { error } = await supabase
+                              .from("clients")
+                              .update({ credit_limit_ref: v })
+                              .eq("id", profile.id);
+                            setSavingLimit(false);
+                            if (error) { alert("Error: " + error.message); return; }
+                            const { data: refreshed } = await supabase.rpc("get_client_profile", { client_id_param: profile.id });
+                            if (refreshed?.[0]) setProfile(refreshed[0]);
+                            setEditingLimit(false);
+                          }}
+                          disabled={savingLimit}
+                          className="text-xs bg-brand text-white px-3 py-1.5 rounded-lg hover:bg-brand-dark disabled:opacity-50"
+                        >
+                          {savingLimit ? "..." : "Guardar"}
+                        </button>
+                        <button
+                          onClick={() => setEditingLimit(false)}
+                          disabled={savingLimit}
+                          className="text-xs text-stone-500 hover:underline"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-bold text-stone-700 mt-1">
+                        ${Number(profile.credit_limit_ref ?? 50).toFixed(2)}
+                        {Number(profile.pending_credits_ref || 0) > 0 && (
+                          <span className="text-[11px] text-stone-400 font-normal ml-2">
+                            (debe ${Number(profile.pending_credits_ref).toFixed(2)} · disponible ${(Number(profile.credit_limit_ref ?? 50) - Number(profile.pending_credits_ref || 0)).toFixed(2)})
+                          </span>
+                        )}
+                      </p>
                     )}
                   </div>
 
