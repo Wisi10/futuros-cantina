@@ -1,14 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, Save } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage } from "@/lib/utils";
 
-const REASONS = [
+// Razones separadas según signo del ajuste. Si qty > 0 (entrada de stock,
+// ej. corrección por encontrar más) mostramos motivos de entrada. Si qty < 0
+// mostramos motivos de salida.
+const REASONS_ADD = [
+  "Corrección de conteo (encontré más)",
+  "Devolución de cliente",
+  "Donación recibida",
+  "Error previo corregido",
+  "Otro",
+];
+const REASONS_REMOVE = [
   "Merma",
-  "Perdida",
+  "Pérdida",
   "Robo",
-  "Correccion de conteo",
+  "Vencimiento",
+  "Corrección de conteo (encontré menos)",
+  "Donación/Regalo",
   "Otro",
 ];
 
@@ -21,6 +33,19 @@ export default function StockAdjustModal({ product, user, onClose, onSaved }) {
   const currentStock = Number(product.stock_quantity || 0);
   const qtyNum = parseInt(qty) || 0;
   const newStock = currentStock + qtyNum;
+  const isAdd = qtyNum > 0;
+  const isRemove = qtyNum < 0;
+  const availableReasons = isAdd ? REASONS_ADD : isRemove ? REASONS_REMOVE : [];
+
+  // Reset reason cuando cambia el signo (evita guardar "Robo" en un ajuste +).
+  const prevSignRef = useRef(0);
+  useEffect(() => {
+    const sign = qtyNum > 0 ? 1 : qtyNum < 0 ? -1 : 0;
+    if (sign !== prevSignRef.current) {
+      setReason("");
+      prevSignRef.current = sign;
+    }
+  }, [qtyNum]);
 
   const handleSave = async () => {
     if (!qtyNum || !reason) return;
@@ -84,14 +109,19 @@ export default function StockAdjustModal({ product, user, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-stone-500 block mb-1">Motivo *</label>
+            <label className="text-xs font-medium text-stone-500 block mb-1">
+              {isAdd ? "Motivo de entrada *" : isRemove ? "Motivo de salida *" : "Motivo *"}
+            </label>
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              disabled={qtyNum === 0}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:opacity-50 disabled:bg-stone-50"
             >
-              <option value="">Seleccionar motivo...</option>
-              {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              <option value="">
+                {qtyNum === 0 ? "Primero ingresa una cantidad..." : "Seleccionar motivo..."}
+              </option>
+              {availableReasons.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 
