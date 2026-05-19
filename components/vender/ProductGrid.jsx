@@ -47,14 +47,17 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
     setSearch("");
   };
 
-  // Filter by category + search
-  let filtered = activeCategory
-    ? products.filter((p) => (p.category || "Otro") === activeCategory)
-    : products;
-
-  if (search.trim()) {
+  // Search es GLOBAL: si hay texto, ignora la categoría activa y busca en
+  // todos los productos. Sin texto, filtra por activeCategory como antes.
+  const searchActive = search.trim().length > 0;
+  let filtered;
+  if (searchActive) {
     const q = search.toLowerCase();
-    filtered = filtered.filter((p) => p.name.toLowerCase().includes(q));
+    filtered = products.filter((p) => p.name.toLowerCase().includes(q));
+  } else {
+    filtered = activeCategory
+      ? products.filter((p) => (p.category || "Otro") === activeCategory)
+      : products;
   }
 
   // ── Category Grid (fills entire available space) ──
@@ -106,8 +109,13 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
           ← Categorías
         </button>
         <div className="flex items-center gap-1.5 text-sm text-stone-600 shrink-0">
-          {headerCat ? <ProductImage product={{ photo_url: headerCat.photo_url, emoji: headerCat.emoji }} size={20} /> : <span>🔍</span>}
-          <span className="font-bold text-sm">{activeCategory || "Todos"}</span>
+          {searchActive ? (
+            <><span>🔍</span><span className="font-bold text-sm">Resultados</span></>
+          ) : headerCat ? (
+            <><ProductImage product={{ photo_url: headerCat.photo_url, emoji: headerCat.emoji }} size={20} /><span className="font-bold text-sm">{activeCategory}</span></>
+          ) : (
+            <><span>🔍</span><span className="font-bold text-sm">Todos</span></>
+          )}
           <span className="text-stone-400 text-xs">({filtered.length})</span>
         </div>
         <div className="flex-1 max-w-full md:max-w-xs ml-auto relative">
@@ -116,7 +124,7 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar..."
+            placeholder={activeCategory ? "Buscar en todas las categorías..." : "Buscar..."}
             className="w-full border border-stone-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
           />
         </div>
@@ -151,9 +159,14 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
 
                 <div className="mb-1"><ProductImage product={product} size={32} className="rounded-lg" /></div>
 
-                <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-1 line-clamp-2 w-full">
+                <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-0.5 line-clamp-2 w-full">
                   {product.name}
                 </p>
+                {searchActive && (
+                  <p className="text-[9px] text-stone-400 mb-0.5 line-clamp-1 w-full">
+                    {product.category || "Otro"}
+                  </p>
+                )}
 
                 <p className="text-sm font-bold text-brand">
                   ${Number(product.price_ref).toFixed(2)}
