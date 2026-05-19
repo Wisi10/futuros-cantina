@@ -1,34 +1,81 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-// Para materia prima con unit_size definido, el usuario puede entrar:
-//   - qty directo (unidades), o
-//   - amount (peso/volumen total) y el sistema calcula qty = amount / unit_size.
-// Solo uno de los dos. amount tiene prioridad si está definido.
+// Reglas:
+// - Productos con receta (has_recipe=true) NO se stockean directo: se controlan
+//   ingredientes en Materia Prima y el sistema deriva cuántas porciones hay.
+//   Se filtran del dropdown.
+// - Cantidad: usuario puede llenar qty O peso/volumen total. Si llena
+//   peso/vol y el producto tiene unit_size (o se setea inline), qty = total/size.
+// - Costo: usuario entra COSTO TOTAL del lote; sistema calcula costo/u = total/qty.
+// - Proveedor: dropdown con proveedores históricos + opción "Nuevo".
+// - unit_size/unit_label: si el producto no tiene, se puede setear ad-hoc en
+//   la fila y se persiste al producto al confirmar la entrada.
 function emptyRow() {
-  return { productId: "", qty: "", amount: "", costRef: "" };
+  return {
+    productId: "", qty: "", amount: "", costTotal: "",
+    inlineSize: "", inlineLabel: "",
+  };
 }
 
 export default function RestockForm({ products, user, onRestocked }) {
   const [rows, setRows] = useState([emptyRow()]);
   const [supplier, setSupplier] = useState("");
+  const [newSupplierMode, setNewSupplierMode] = useState(false);
+  const [supplierOptions, setSupplierOptions] = useState([]);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Filtrar productos con receta — esos se manejan vía ingredientes en materia prima.
+  const selectableProducts = products.filter((p) => !p.has_recipe);
+
   const productById = (id) => products.find((p) => p.id === id);
 
-  // qty efectivo: si el usuario llenó amount y el producto tiene unit_size,
-  // calcular qty desde amount. Si no, usar qty directo.
-  function effectiveQty(row) {
+  // Cargar proveedores históricos
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("cantina_restocks")
+        .select("supplier")
+        .not("supplier", "is", null)
+        .order("restock_date", { ascending: false })
+        .limit(500);
+      const distinct = Array.from(new Set((data || []).map(r => (r.supplier || "").trim()).filter(Boolean)));
+      setSupplierOptions(distinct.sort());
+    })();
+  }, []);
+
+  // unit_size efectivo: del producto, o el inline si el producto no tiene.
+  function effectiveUnitSize(row) {
     const product = productById(row.productId);
+    if (product?.unit_size > 0) return Number(product.unit_size);
+    const inline = parseFloat(row.inlineSize);
+    if (Number.isFinite(inline) && inline > 0) return inline;
+    return null;
+  }
+  function effectiveUnitLabel(row) {
+    const product = productById(row.productId);
+    if (product?.unit_label) return product.unit_label;
+    if (row.inlineLabel?.trim()) return row.inlineLabel.trim();
+    return null;
+  }
+  // qty efectivo: si hay amount + unit_size efectivo → calcular. Si no, qty directo.
+  function effectiveQty(row) {
     const amountNum = parseFloat(row.amount);
-    if (Number.isFinite(amountNum) && amountNum > 0 && product?.unit_size > 0) {
-      return amountNum / Number(product.unit_size);
+    const us = effectiveUnitSize(row);
+    if (Number.isFinite(amountNum) && amountNum > 0 && us) {
+      return amountNum / us;
     }
     return parseFloat(row.qty) || 0;
+  }
+  function costPerUnit(row) {
+    const total = parseFloat(row.costTotal) || 0;
+    const qty = effectiveQty(row);
+    if (qty <= 0) return 0;
+    return total / qty;
   }
 
   const updateRow = (i, field, value) => {
@@ -44,9 +91,7 @@ export default function RestockForm({ products, user, onRestocked }) {
 
   const validRows = rows.filter((r) => r.productId && effectiveQty(r) > 0);
 
-  const totalCostRef = validRows.reduce(
-    (sum, r) => sum + effectiveQty(r) * Number(r.costRef || 0), 0
-  );
+  const totalCostRef = validRows.reduce((sum, r) => sum + (parseFloat(r.costTotal) || 0), 0);
 
   const handleSubmit = async () => {
     if (validRows.length === 0) return;
@@ -60,7 +105,8 @@ export default function RestockForm({ products, user, onRestocked }) {
           product_id: r.productId,
           name: product?.name || "?",
           qty,
-          cost_per_unit_ref: Number(r.costRef || 0),
+          cost_per_unit_ref: costPerUnit(r),
+          total_cost_ref: parseFloat(r.costTotal) || 0,
         };
       });
 
@@ -71,7 +117,7 @@ export default function RestockForm({ products, user, onRestocked }) {
           restock_date: date,
           items,
           total_cost_ref: totalCostRef,
-          supplier: supplier || null,
+          supplier: supplier.trim() || null,
           notes: notes || null,
           created_by: user?.name || "Cantina",
         })
@@ -79,8 +125,10 @@ export default function RestockForm({ products, user, onRestocked }) {
         .single();
       if (restockErr) throw restockErr;
 
-      // 2. Insert stock_movements + update products
-      for (const item of items) {
+      // 2. Por cada fila: stock_movement + update product (stock + unit_size si aplica)
+      for (let idx = 0; idx < validRows.length; idx++) {
+        const r = validRows[idx];
+        const item = items[idx];
         const product = productById(item.product_id);
 
         const { error: movErr } = await supabase.from("stock_movements").insert({
@@ -96,10 +144,18 @@ export default function RestockForm({ products, user, onRestocked }) {
         if (movErr) throw movErr;
 
         const newStock = Number(product?.stock_quantity || 0) + item.qty;
+        // Persistir unit_size/unit_label si se setearon inline y el producto no tenía.
+        const updatePayload = { stock_quantity: newStock };
+        if (!product?.unit_size && parseFloat(r.inlineSize) > 0) {
+          updatePayload.unit_size = parseFloat(r.inlineSize);
+        }
+        if (!product?.unit_label && r.inlineLabel?.trim()) {
+          updatePayload.unit_label = r.inlineLabel.trim();
+        }
         // cost_ref es manejado por trigger recompute_product_mac (migration 017).
         const { error: stockErr } = await supabase
           .from("products")
-          .update({ stock_quantity: newStock })
+          .update(updatePayload)
           .eq("id", item.product_id);
         if (stockErr) throw stockErr;
       }
@@ -107,6 +163,7 @@ export default function RestockForm({ products, user, onRestocked }) {
       // Reset form
       setRows([emptyRow()]);
       setSupplier("");
+      setNewSupplierMode(false);
       setNotes("");
       alert("Entrada registrada correctamente");
       onRestocked();
@@ -122,7 +179,7 @@ export default function RestockForm({ products, user, onRestocked }) {
         <div className="px-4 py-3 border-b border-stone-100">
           <h3 className="font-bold text-sm text-stone-700">Formulario de entrada</h3>
           <p className="text-[11px] text-stone-400 mt-0.5">
-            Para materia prima con tamaño definido (ej. 1 kg), podés llenar el peso/volumen total y el sistema calcula las unidades.
+            Productos con receta no se ingresan acá — solo sus ingredientes (Materia Prima). Costo total del lote; el sistema divide.
           </p>
         </div>
 
@@ -130,21 +187,23 @@ export default function RestockForm({ products, user, onRestocked }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
-                <th className="text-left px-3 py-2 font-medium min-w-[180px]">Producto</th>
+                <th className="text-left px-3 py-2 font-medium min-w-[200px]">Producto</th>
                 <th className="text-center px-3 py-2 font-medium w-24">Qty</th>
-                <th className="text-center px-3 py-2 font-medium w-28">Peso / Vol total</th>
-                <th className="text-center px-3 py-2 font-medium w-28">Costo/u $</th>
+                <th className="text-center px-3 py-2 font-medium w-32">Peso / Vol total</th>
+                <th className="text-center px-3 py-2 font-medium w-28">Costo total $</th>
+                <th className="text-center px-3 py-2 font-medium w-24">Costo/u $</th>
                 <th className="w-10"></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => {
                 const product = productById(row.productId);
-                const hasUnit = product?.unit_size > 0 && product?.unit_label;
+                const productHasUnit = product?.unit_size > 0 && product?.unit_label;
                 const eff = effectiveQty(row);
-                const amountFilled = parseFloat(row.amount) > 0;
+                const cpu = costPerUnit(row);
+                const amountFilled = parseFloat(row.amount) > 0 && effectiveUnitSize(row) > 0;
                 return (
-                  <tr key={i} className="border-t border-stone-100">
+                  <tr key={i} className="border-t border-stone-100 align-top">
                     <td className="px-3 py-2">
                       <select
                         value={row.productId}
@@ -152,12 +211,34 @@ export default function RestockForm({ products, user, onRestocked }) {
                         className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                       >
                         <option value="">Seleccionar...</option>
-                        {products.map((p) => (
+                        {selectableProducts.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.emoji || "🍽️"} {p.name} (stock: {Number(p.stock_quantity || 0)})
                           </option>
                         ))}
                       </select>
+                      {/* Inline set de tamaño si el producto no lo tiene */}
+                      {product && !productHasUnit && (
+                        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-stone-500">
+                          <span className="shrink-0">Tamaño:</span>
+                          <input
+                            type="number" step="0.01" min="0"
+                            value={row.inlineSize}
+                            onChange={(e) => updateRow(i, "inlineSize", e.target.value)}
+                            placeholder="1"
+                            className="w-14 border border-stone-300 rounded px-1.5 py-1 text-[11px] text-right"
+                          />
+                          <input
+                            type="text"
+                            value={row.inlineLabel}
+                            onChange={(e) => updateRow(i, "inlineLabel", e.target.value)}
+                            placeholder="kg / u"
+                            maxLength={8}
+                            className="w-14 border border-stone-300 rounded px-1.5 py-1 text-[11px]"
+                          />
+                          <span className="text-stone-400">(se guarda en el producto)</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <input
@@ -173,7 +254,7 @@ export default function RestockForm({ products, user, onRestocked }) {
                       />
                     </td>
                     <td className="px-3 py-2">
-                      {hasUnit ? (
+                      {effectiveUnitSize(row) ? (
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
@@ -184,21 +265,24 @@ export default function RestockForm({ products, user, onRestocked }) {
                             className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-center focus:border-brand focus:outline-none"
                             placeholder="0"
                           />
-                          <span className="text-[11px] text-stone-500 font-medium">{product.unit_label}</span>
+                          <span className="text-[11px] text-stone-500 font-medium">{effectiveUnitLabel(row)}</span>
                         </div>
                       ) : (
-                        <span className="text-[10px] text-stone-300 italic">N/A</span>
+                        <span className="text-[10px] text-stone-300 italic">define tamaño</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       <input
                         type="number"
                         step="0.01"
-                        value={row.costRef}
-                        onChange={(e) => updateRow(i, "costRef", e.target.value)}
+                        value={row.costTotal}
+                        onChange={(e) => updateRow(i, "costTotal", e.target.value)}
                         className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-center focus:border-brand focus:outline-none"
                         placeholder="0.00"
                       />
+                    </td>
+                    <td className="px-3 py-2 text-center text-stone-500 text-xs">
+                      {eff > 0 && cpu > 0 ? `$${cpu.toFixed(2)}` : "—"}
                     </td>
                     <td className="px-3 py-2">
                       <button
@@ -223,17 +307,43 @@ export default function RestockForm({ products, user, onRestocked }) {
         </div>
       </div>
 
-      {/* Supplier, Date & Notes */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Proveedor, Fecha y Notas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Proveedor</label>
-          <input
-            type="text"
-            value={supplier}
-            onChange={(e) => setSupplier(e.target.value)}
-            placeholder="Nombre del proveedor"
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-          />
+          {newSupplierMode || supplierOptions.length === 0 ? (
+            <div className="space-y-1.5">
+              <input
+                type="text"
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
+                placeholder="Nombre del proveedor"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                autoFocus={newSupplierMode}
+              />
+              {supplierOptions.length > 0 && (
+                <button onClick={() => { setNewSupplierMode(false); setSupplier(""); }}
+                  className="text-[11px] text-brand hover:underline">
+                  ← Elegir existente
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <select
+                value={supplier}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") { setNewSupplierMode(true); setSupplier(""); return; }
+                  setSupplier(e.target.value);
+                }}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+              >
+                <option value="">Seleccionar proveedor...</option>
+                {supplierOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                <option value="__new__">+ Nuevo proveedor...</option>
+              </select>
+            </div>
+          )}
         </div>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Fecha de entrada</label>

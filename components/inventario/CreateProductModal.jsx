@@ -4,12 +4,17 @@ import { X, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { generateId, toTitleCase, CANTINA_CATEGORIES } from "@/lib/utils";
 
+const UNIT_LABELS = ["", "u", "kg", "g", "l", "ml", "caja", "paq", "u/caja"];
+
 export default function CreateProductModal({ user, onClose, onCreated }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Bebida");
   const [priceRef, setPriceRef] = useState("");
   const [costRef, setCostRef] = useState("");
   const [emoji, setEmoji] = useState("");
+  // Tamaño físico opcional por unidad (peso/volumen/cantidad)
+  const [unitSize, setUnitSize] = useState("");
+  const [unitLabel, setUnitLabel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,6 +46,7 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
       const nextOrder = Number(maxRow?.[0]?.sort_order || 0) + 1;
       // Insert
       const newId = generateId();
+      const sizeNum = parseFloat(unitSize);
       const { error: insertError } = await supabase.from("products").insert({
         id: newId,
         name: finalName,
@@ -52,6 +58,8 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
         active: true,
         sort_order: nextOrder,
         stock_quantity: 0,
+        unit_size: Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : null,
+        unit_label: unitLabel.trim() || null,
       });
       if (insertError) throw insertError;
       if (onCreated) await onCreated(newId);
@@ -111,7 +119,7 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-                Precio venta REF
+                Precio venta $
               </label>
               <input
                 type="number"
@@ -137,6 +145,39 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
                 className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
               />
             </div>
+          </div>
+
+          {/* Tamaño físico opcional — ej. 1 kg, 500 g, 12 u/caja */}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+              Tamaño por unidad (opcional)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={unitSize}
+                onChange={(e) => setUnitSize(e.target.value)}
+                placeholder="1"
+                className="flex-1 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+              />
+              <input
+                list="unit-labels"
+                type="text"
+                value={unitLabel}
+                onChange={(e) => setUnitLabel(e.target.value)}
+                placeholder="kg / u / caja"
+                maxLength={12}
+                className="w-32 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+              />
+              <datalist id="unit-labels">
+                {UNIT_LABELS.map((l) => <option key={l} value={l} />)}
+              </datalist>
+            </div>
+            <p className="text-[10px] text-stone-400 mt-1">
+              Ej. 1 kg, 500 g, 12 u/caja. Si no aplica, dejar vacío.
+            </p>
           </div>
 
           <div>
