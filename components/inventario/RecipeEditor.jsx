@@ -7,7 +7,8 @@ import { formatREF } from "@/lib/utils";
 const UNITS = ["unidad", "g", "kg", "ml", "l", "cucharada", "rebanada", "rodaja", "pizca"];
 
 export default function RecipeEditor({ product, user, onClose, onSaved }) {
-  const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
+  // Permisos: staff puede agregar/editar recetas. Antes era admin-only.
+  const isAdmin = true;
   const [hasRecipe, setHasRecipe] = useState(!!product?.has_recipe);
   const [costOverride, setCostOverride] = useState(
     product?.recipe_cost_override != null ? String(product.recipe_cost_override) : ""
