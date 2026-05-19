@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase";
 import { calcBs, ProductImage } from "@/lib/utils";
 import SideNav from "@/components/nav/SideNav";
 import RateChip from "@/components/shared/RateChip";
-import GlobalClientSearch from "@/components/shared/GlobalClientSearch";
 import ClientProfileModal from "@/components/clientes/ClientProfileModal";
 import { ClientProfileProvider, useClientProfile } from "@/lib/clientProfileContext";
 import ProductGrid from "@/components/vender/ProductGrid";
@@ -896,14 +895,14 @@ function POSPageInner() {
             </button>
             <button onClick={() => setShowCredits(true)}
               className="hidden md:flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative">
-              <CreditCard size={14} /> Creditos
+              <CreditCard size={14} /> Créditos
               {pendingCreditsCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                   {pendingCreditsCount}
                 </span>
               )}
             </button>
-            <GlobalClientSearch />
+            {/* GlobalClientSearch removido — el botón "Cliente" cubre buscar/abrir perfil/asociar */}
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <ShiftPill
