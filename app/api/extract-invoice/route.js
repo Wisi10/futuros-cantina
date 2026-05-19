@@ -21,19 +21,20 @@ Schema esperado:
     "rif": "string o null" (RIF formato J-XXXXXXXXX-X)
   },
   "invoice_number": "string o null" (numero de factura/control/nota),
-  "invoice_date": "string formato DD/MM/YYYY o null",
+  "invoice_date": "string formato DD/MM/YYYY o null" (SIEMPRE 4 digitos de ano, ver regla 5),
   "payment_terms": "string o null" (CONTADO, CREDITO, etc.),
-  "currency_primary": "USD" | "VES" (moneda predominante de los precios en la factura),
+  "currency_primary": "USD" | "VES" (ver regla 3),
   "bcv_rate": numero o null (tasa Bs por USD impresa en la factura si visible, ej. 486.1955),
   "items": [
     {
-      "code": "string o null" (codigo de producto si visible),
+      "code": "string o null" (codigo de producto si visible, preserva caracteres tal cual: 'PL2,2', 'V0725010206', '003365'),
       "description": "string" (descripcion del producto tal como aparece),
       "quantity": numero,
       "unit_price_usd": numero o null,
       "unit_price_ves": numero o null,
       "line_total_usd": numero o null,
-      "line_total_ves": numero o null
+      "line_total_ves": numero o null,
+      "needs_review": boolean (true si hay ambiguedad en cantidad/precio/codigo)
     }
   ],
   "iva_percent": numero o null (0, 8, 16 segun corresponda),
@@ -43,30 +44,51 @@ Schema esperado:
   "iva_amount_ves": numero o null,
   "total_usd": numero o null,
   "total_ves": numero o null,
-  "notes": "string o null" (observaciones relevantes, ej. 'recibido pero no pagado', 'pagada DD/MM/YY')
+  "notes": "string o null" (anotaciones manuscritas relevantes — ver regla 8),
+  "needs_review": boolean (true si la factura entera tiene ambiguedades significativas)
 }
 
 Reglas IMPORTANTES de extraccion:
 
 1. NUMEROS: Venezuela usa coma decimal (18,00 = 18.00). Devuelve TODOS los numeros con punto decimal (18.00), sin separadores de miles. Ej: "16.122,24" → 16122.24, "1,75" → 1.75, "$11,20" → 11.20.
 
-2. MONEDAS por linea: Si una linea solo muestra precio en USD ($), llena unit_price_usd y line_total_usd, deja los _ves en null. Si solo muestra Bs, llena _ves y deja _usd en null. Si la factura muestra AMBAS columnas (Bs y USD por linea), llena ambas.
+2. NUMEROS AMBIGUOS (CRITICO): Si un valor podria ser tanto miles como decimal (ej. "15,000" — puede ser 15.000 europeo = 15.0 o americano = 15000):
+   - Si la factura tiene "$" o "USD" claro y el rango es razonable como precio unitario (0.50-1000), usa decimal: "15,000" → 15.0.
+   - Si el rango sugiere Bs (precio unitario > 100 con varios miles), usa miles: "15,000" → 15000.
+   - Cuando hay duda, marca needs_review: true en la linea Y en la factura entera. Usa tu mejor interpretacion pero marca la duda.
 
-3. CURRENCY_PRIMARY: Si TODOS los precios estan en USD/$, es "USD". Si TODOS estan en Bs (aunque haya conversion a USD en totales), es "VES". Si la factura tiene precios por linea en ambas columnas, elige la moneda principal (la que el sistema del proveedor usa de base — generalmente USD para Inveca/Serimar/El Condor, USD para tickets).
+3. CURRENCY_PRIMARY (CRITICO):
+   - Si los precios en la factura tienen "$" o "USD" explicito, currency_primary = "USD".
+   - Si los precios son en Bs (con "Bs." o sin simbolo pero claramente Bs), currency_primary = "VES".
+   - **PHRASE TRIGGER**: Si la factura dice "PARA PAGOS EN BOLIVARES APLICA LA TASA DEL BCV" o "Tipo de cambio aplicable" o similar (sugiere que los precios mostrados son la moneda base, no Bs), y NO tiene simbolo Bs explicito al lado de los numeros: currency_primary = "USD" (la factura esta en USD/REF aunque los numeros no tengan $).
+   - Si la factura muestra precio_unit Bs Y precio_unit USD en columnas separadas: currency_primary = "USD" (asumimos USD como base porque el cliente paga en Bs al tipo del dia).
 
-4. CODIGOS: Si el proveedor tiene columna "Codigo" o "Cod." con codigos alfanumericos (PL2,2, V0725010206, 003365), extraelos. Si no hay columna o esta vacia, code es null.
+4. MONEDAS por linea: Si una linea solo muestra precio en USD ($), llena unit_price_usd y line_total_usd, deja los _ves en null. Si solo muestra Bs, llena _ves y deja _usd en null. Si la factura muestra AMBAS columnas (Bs y USD por linea), llena ambas.
 
-5. IVA: Si la factura muestra "IVA 16%" con monto, extrae iva_percent=16 y iva_amount. Si dice "IVA 0%" o no lo muestra, iva_percent=0 o null. NO inventes IVA — solo si aparece.
+5. FECHAS: Acepta CUALQUIER formato visible (DD/MM/YYYY, DD-MM-YYYY, DD/MM/YY, "Dia X Mes Y Ano Z", "23/4/26") y NORMALIZA a DD/MM/YYYY con ano de 4 digitos. Para "26" asume 2026. Para "Dia 29 Mes 04 Ano 26" → "29/04/2026". Si el ano es ambiguo, usa el ano actual del contexto.
 
-6. LINEAS OBSEQUIO: Si una linea tiene precio 0 o esta marcada (OBSEQUIO), extraela igual con su quantity y unit_price=0. NO la elimines.
+6. CODIGOS: Si el proveedor tiene columna "Codigo", "Cod." o "Cant. Codigo" con codigos alfanumericos, extraelos PRESERVANDO caracteres especiales (incluyendo comas, guiones, slashes). Ej: "PL2,2" se queda como "PL2,2" — NO lo conviertas a "PL22". Si no hay columna o esta vacia, code es null.
 
-7. MANUSCRITAS: Si la factura es escrita a mano y algun campo es ambiguo, usa null para ese campo. NO inventes valores.
+7. IVA: Si la factura muestra "IVA 16%" con monto, extrae iva_percent=16 y iva_amount. Si dice "IVA 0%", "(E)" (exento), o no lo muestra, iva_percent=0 o null. NO inventes IVA.
 
-8. SUPPLIER: Razon social completa como aparece en el encabezado (ej. "PRODUCTOS CASANAY C.A.", "Inversiones Refrescolandia, C.A.", "ALIMENTOS SERIMAR, C.A."). Si es manuscrita sin razon social formal, usa el nombre del vendedor o "Sin proveedor".
+8. NOTES — PRIORIDAD MAXIMA a anotaciones manuscritas: Busca con atencion anotaciones manuscritas (en lapicero/marcador) tipicas en facturas venezolanas:
+   - "pagada DD-MM-YY" o "Pagada DD/MM/YY" → incluir en notes (factura ya fue pagada)
+   - "recibido DD-MM-YY" o "Recibido DD/MM/YY" → incluir en notes (entrega confirmada)
+   - "por cobrar" o "POR COBRAR" → incluir en notes (pendiente de pago)
+   - Cualquier nota de pago o entrega manuscrita
+   Estas anotaciones son CRITICAS porque indican el estado de pago real. NO incluyas texto impreso generico (politicas de devolucion, terminos legales).
 
-9. NO INTERPRETES: Si un total no cuadra con la suma de lineas, devuelve los valores TAL COMO APARECEN. El humano corrige despues.
+9. LINEAS OBSEQUIO: Si una linea tiene precio 0 o esta marcada (OBSEQUIO), extraela igual con su quantity y unit_price=0. NO la elimines.
 
-10. Si la imagen NO es una factura/nota de entrega/recibo de compra, responde: {"error": "not_invoice", "reason": "string corto"}.`;
+10. MANUSCRITAS: Si la factura es escrita a mano y algun campo es ambiguo, usa null para ese campo Y marca needs_review: true. NO inventes valores.
+
+11. SUPPLIER: Razon social completa como aparece en el encabezado (ej. "PRODUCTOS CASANAY C.A.", "Inversiones Refrescolandia, C.A.", "ALIMENTOS SERIMAR, C.A."). Si la factura tiene un logo/marca distinto de la razon social (ej. logo dice "GLACIER" pero la razon social es "Corporacion Zhongyuan C.A"), usa la RAZON SOCIAL del encabezado, NO la marca. Si es manuscrita sin razon social formal, usa el nombre del vendedor o "Sin proveedor".
+
+12. RIF: Preserva el formato exacto incluyendo guiones. "J-29622861-2" se queda asi, NO "J29622861-2" ni "J-296228612".
+
+13. NO INTERPRETES: Si un total no cuadra con la suma de lineas, devuelve los valores TAL COMO APARECEN y marca needs_review: true. El humano corrige despues.
+
+14. Si la imagen NO es una factura/nota de entrega/recibo de compra, responde: {"error": "not_invoice", "reason": "string corto"}.`;
 
 // ─── Cleanup JSON wrapping ───────────────────────────────────
 function stripMarkdown(text) {
@@ -75,6 +97,30 @@ function stripMarkdown(text) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
   }
   return cleaned;
+}
+
+// ─── Normalizacion de fecha ──────────────────────────────────
+// Acepta varios formatos comunes en facturas venezolanas y normaliza
+// a DD/MM/YYYY. Devuelve null si no se puede interpretar.
+function normalizeDate(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+
+  // DD/MM/YYYY o DD-MM-YYYY
+  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) {
+    const [, d, mo, y] = m;
+    return `${d.padStart(2, '0')}/${mo.padStart(2, '0')}/${y}`;
+  }
+
+  // DD/MM/YY o DD-MM-YY (asume 2000-2099)
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+  if (m) {
+    const [, d, mo, y] = m;
+    return `${d.padStart(2, '0')}/${mo.padStart(2, '0')}/20${y}`;
+  }
+
+  return null;
 }
 
 // ─── Validacion de shape minimo ──────────────────────────────
@@ -97,9 +143,7 @@ function validateInvoiceResponse(parsed) {
       rif: typeof parsed.supplier?.rif === 'string' ? parsed.supplier.rif.slice(0, 30) : null,
     },
     invoice_number: typeof parsed.invoice_number === 'string' ? parsed.invoice_number.slice(0, 50) : null,
-    invoice_date: typeof parsed.invoice_date === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(parsed.invoice_date)
-      ? parsed.invoice_date
-      : null,
+    invoice_date: normalizeDate(parsed.invoice_date),
     payment_terms: typeof parsed.payment_terms === 'string' ? parsed.payment_terms.slice(0, 50) : null,
     currency_primary: parsed.currency_primary === 'USD' || parsed.currency_primary === 'VES'
       ? parsed.currency_primary
@@ -118,6 +162,7 @@ function validateInvoiceResponse(parsed) {
     total_usd: numOrNull(parsed.total_usd),
     total_ves: numOrNull(parsed.total_ves),
     notes: typeof parsed.notes === 'string' ? parsed.notes.slice(0, 300) : null,
+    needs_review: parsed.needs_review === true,
   };
 
   if (Array.isArray(parsed.items)) {
@@ -129,6 +174,7 @@ function validateInvoiceResponse(parsed) {
       unit_price_ves: numOrNull(it?.unit_price_ves),
       line_total_usd: numOrNull(it?.line_total_usd),
       line_total_ves: numOrNull(it?.line_total_ves),
+      needs_review: it?.needs_review === true,
     }));
   }
 
