@@ -405,6 +405,9 @@ export default function InventarioView({ user }) {
                       <th className="text-left px-3 py-2 font-medium"><SortHeader k="name" label="Producto" /></th>
                       <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="stock" label="Stock" align="right" /></th>
+                      {scope === "materia" && (
+                        <th className="text-right px-3 py-2 font-medium">Tamaño</th>
+                      )}
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="alert" label="Alerta" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo $" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
@@ -422,6 +425,11 @@ export default function InventarioView({ user }) {
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
                         <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>
+                        {scope === "materia" && (
+                          <td className="px-3 py-2 text-right">
+                            <UnitSizeCell product={p} onSaved={loadProducts} />
+                          </td>
+                        )}
                         <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 5}</td>
                         <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
@@ -459,7 +467,7 @@ export default function InventarioView({ user }) {
                     })}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-stone-400 text-xs">
+                        <td colSpan={scope === "materia" ? 9 : 8} className="px-3 py-8 text-center text-stone-400 text-xs">
                           No hay productos con este filtro
                         </td>
                       </tr>
@@ -467,7 +475,7 @@ export default function InventarioView({ user }) {
                   </tbody>
                   <tfoot>
                     {isAdmin && <tr className="border-t-2 border-stone-200 bg-stone-50">
-                      <td colSpan={4} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
+                      <td colSpan={scope === "materia" ? 5 : 4} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
                         Valor total inventario:
                       </td>
                       <td className="px-3 py-2 text-right text-sm font-bold text-brand" colSpan={1}>
@@ -813,5 +821,78 @@ function HistorialView() {
         </div>
       )}
     </div>
+  );
+}
+
+// === Celda inline-editable para tamaño/unidad (peso o volumen) de materia prima ===
+// Muestra "size label" (ej "1 kg") si está set. Click → input inline para editar.
+// Total del stock se muestra abajo en gris (stock_quantity × size label).
+function UnitSizeCell({ product, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [size, setSize] = useState(String(product.unit_size ?? ""));
+  const [label, setLabel] = useState(product.unit_label || "");
+  const [saving, setSaving] = useState(false);
+  const hasInfo = product.unit_size != null && product.unit_label;
+  const stock = Number(product.stock_quantity || 0);
+  const total = hasInfo ? Number(product.unit_size) * stock : null;
+
+  const save = async () => {
+    const sizeNum = parseFloat(size);
+    const labelNorm = label.trim();
+    setSaving(true);
+    const { error } = await supabase
+      .from("products")
+      .update({
+        unit_size: Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : null,
+        unit_label: labelNorm || null,
+      })
+      .eq("id", product.id);
+    setSaving(false);
+    if (error) { alert("Error: " + error.message); return; }
+    setEditing(false);
+    await onSaved?.();
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <input
+          type="number" step="0.01" min="0"
+          value={size}
+          onChange={(e) => setSize(e.target.value)}
+          placeholder="1.0"
+          className="w-16 border border-stone-300 rounded px-1.5 py-1 text-xs text-right"
+          autoFocus
+        />
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="kg / l / g"
+          maxLength={6}
+          className="w-14 border border-stone-300 rounded px-1.5 py-1 text-xs"
+        />
+        <button onClick={save} disabled={saving}
+          className="text-[10px] text-brand hover:underline disabled:opacity-50">
+          {saving ? "..." : "OK"}
+        </button>
+        <button onClick={() => { setEditing(false); setSize(String(product.unit_size ?? "")); setLabel(product.unit_label || ""); }}
+          className="text-[10px] text-stone-400 hover:text-stone-600">✕</button>
+      </div>
+    );
+  }
+  return (
+    <button onClick={() => setEditing(true)} className="text-right hover:bg-stone-50 rounded px-1 py-0.5 w-full">
+      {hasInfo ? (
+        <>
+          <div className="text-xs font-medium text-stone-700">{Number(product.unit_size)} {product.unit_label}</div>
+          {stock > 0 && (
+            <div className="text-[10px] text-stone-400">Σ {total} {product.unit_label}</div>
+          )}
+        </>
+      ) : (
+        <span className="text-[11px] text-stone-300 italic">— set</span>
+      )}
+    </button>
   );
 }
