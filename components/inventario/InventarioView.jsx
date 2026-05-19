@@ -55,6 +55,8 @@ export default function InventarioView({ user }) {
     );
   };
 
+  const [recipesByProduct, setRecipesByProduct] = useState({}); // {productId: [{name, qty, unit}]}
+
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
     let q = supabase.from("products").select("*").eq("active", true).order("stock_quantity", { ascending: true });
@@ -67,6 +69,33 @@ export default function InventarioView({ user }) {
     }
     const { data } = await q;
     if (data) setProducts(data);
+
+    // Cargar recetas si estamos en productos (para mostrar ingredientes inline)
+    if (scope === "productos" && data) {
+      const recipeProductIds = data.filter(p => p.has_recipe).map(p => p.id);
+      if (recipeProductIds.length > 0) {
+        const [recipesRes, rawRes] = await Promise.all([
+          supabase.from("product_recipes").select("product_id, ingredient_id, quantity, unit").in("product_id", recipeProductIds),
+          supabase.from("products").select("id, name").eq("is_cantina", false).eq("category", "Materia Prima"),
+        ]);
+        const rawMap = {};
+        (rawRes.data || []).forEach(r => { rawMap[r.id] = r.name; });
+        const map = {};
+        (recipesRes.data || []).forEach(r => {
+          if (!map[r.product_id]) map[r.product_id] = [];
+          map[r.product_id].push({
+            name: rawMap[r.ingredient_id] || "(?)",
+            qty: Number(r.quantity || 0),
+            unit: r.unit || "",
+          });
+        });
+        setRecipesByProduct(map);
+      } else {
+        setRecipesByProduct({});
+      }
+    } else {
+      setRecipesByProduct({});
+    }
     setLoading(false);
   }, [scope]);
 
@@ -421,7 +450,15 @@ export default function InventarioView({ user }) {
                       return (
                       <tr key={p.id} className={`border-t border-stone-100 ${rowBg(p)}`}>
                         <td className="px-3 py-2 font-medium text-stone-800">
-                          <span className="mr-1.5 inline-flex"><ProductImage product={p} size={20} /></span>{p.name}
+                          <div className="flex items-center gap-1.5">
+                            <ProductImage product={p} size={20} />
+                            <span>{p.name}</span>
+                          </div>
+                          {scope === "productos" && p.has_recipe && recipesByProduct[p.id]?.length > 0 && (
+                            <p className="text-[10px] text-stone-400 mt-0.5 line-clamp-1 max-w-[300px]" title={recipesByProduct[p.id].map(i => `${i.qty}${i.unit ? i.unit : ""} ${i.name}`).join(", ")}>
+                              {recipesByProduct[p.id].map(i => `${i.qty}${i.unit ? i.unit : ""} ${i.name}`).join(", ")}
+                            </p>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
                         <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>

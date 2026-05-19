@@ -239,8 +239,10 @@ export default function CajaView({ user, rate }) {
               color="text-gold"
             />
           </div>
+          </>
+          )}
 
-          {/* Flujo de caja — entradas, vueltos, neto por moneda */}
+          {/* Flujo de caja — visible para todos (staff necesita saber cash en gaveta, vueltos, etc) */}
           {salePayments.length > 0 && (
             <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-stone-100">
@@ -331,6 +333,8 @@ export default function CajaView({ user, rate }) {
             </div>
           )}
 
+          {isAdmin && (
+          <>
           {/* Payment method breakdown */}
           {Object.keys(methodBreakdown).length > 0 && (
             <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
