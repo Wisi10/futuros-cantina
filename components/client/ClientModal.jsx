@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Search, ArrowLeft, User, Gift, Percent, UserPlus, Loader2 } from "lucide-react";
+import { X, Search, ArrowLeft, User, Gift, Percent, UserPlus, Loader2, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, ProductImage } from "@/lib/utils";
+import CreditsModal from "@/components/vender/CreditsModal";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
   const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
@@ -12,6 +13,7 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
   const [editingLimit, setEditingLimit] = useState(false);
   const [limitInput, setLimitInput] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
+  const [showCreditsPay, setShowCreditsPay] = useState(false);
 
   // Crear cliente nuevo (inline desde el search)
   const [createForm, setCreateForm] = useState({ first_name: "", last_name: "", phone: "", cedula: "", email: "" });
@@ -529,16 +531,22 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                     </button>
                   )}
 
-                  {/* Credits */}
+                  {/* Créditos pendientes */}
                   {Number(profile.pending_credits_count || 0) > 0 ? (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                      <p className="text-[10px] uppercase tracking-[1.5px] text-yellow-700 font-medium mb-2">Creditos pendientes</p>
+                      <p className="text-[10px] uppercase tracking-[1.5px] text-yellow-700 font-medium mb-2">Créditos pendientes</p>
                       <p className="text-xl font-bold text-yellow-700">{formatREF(Number(profile.pending_credits_ref || 0))}</p>
-                      {rate?.eur && <p className="text-xs text-yellow-600 mt-0.5">{formatBs(Number(profile.pending_credits_ref || 0), rate.usd)}</p>}
-                      <p className="text-xs text-yellow-600 mt-1">{profile.pending_credits_count} credito{profile.pending_credits_count !== 1 ? "s" : ""} abierto{profile.pending_credits_count !== 1 ? "s" : ""}</p>
+                      {rate?.usd && <p className="text-xs text-yellow-600 mt-0.5">{formatBs(Number(profile.pending_credits_ref || 0), rate.usd)}</p>}
+                      <p className="text-xs text-yellow-600 mt-1">{profile.pending_credits_count} crédito{profile.pending_credits_count !== 1 ? "s" : ""} abierto{profile.pending_credits_count !== 1 ? "s" : ""}</p>
+                      <button
+                        onClick={() => setShowCreditsPay(true)}
+                        className="mt-3 w-full px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-colors min-h-[40px]"
+                      >
+                        <Wallet size={14} /> Ingresar pago
+                      </button>
                     </div>
                   ) : (
-                    <p className="text-xs text-stone-400 text-center">Sin creditos pendientes</p>
+                    <p className="text-xs text-stone-400 text-center">Sin créditos pendientes</p>
                   )}
                 </div>
               )}
@@ -591,6 +599,20 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
           )}
         </div>
       </div>
+
+      {/* Modal de pago de créditos filtrado a este cliente */}
+      {showCreditsPay && profile?.id && (
+        <CreditsModal
+          user={user}
+          rate={rate}
+          clientIdFilter={profile.id}
+          onClose={() => setShowCreditsPay(false)}
+          onUpdated={async () => {
+            const { data: refreshed } = await supabase.rpc("get_client_profile", { client_id_param: profile.id });
+            if (refreshed?.[0]) setProfile(refreshed[0]);
+          }}
+        />
+      )}
     </div>
   );
 }

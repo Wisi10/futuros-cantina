@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { formatREF, PAYMENT_METHODS } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
 
-export default function CreditsModal({ user, rate, onClose, onUpdated }) {
+export default function CreditsModal({ user, rate, onClose, onUpdated, clientIdFilter = null }) {
   const [credits, setCredits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [payingCredit, setPayingCredit] = useState(null);
@@ -17,14 +17,15 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
 
   const loadCredits = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase
+    let q = supabase
       .from("cantina_credits")
       .select("*")
-      .in("status", ["pending", "partial"])
-      .order("created_at", { ascending: true });
+      .in("status", ["pending", "partial"]);
+    if (clientIdFilter) q = q.eq("client_id", clientIdFilter);
+    const { data } = await q.order("created_at", { ascending: true });
     if (data) setCredits(data);
     setLoading(false);
-  }, []);
+  }, [clientIdFilter]);
 
   useEffect(() => { loadCredits(); }, [loadCredits]);
 
