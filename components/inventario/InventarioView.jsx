@@ -129,7 +129,7 @@ export default function InventarioView({ user }) {
   const sinStockCount = products.filter((p) => Number(p.stock_quantity || 0) <= 0).length;
   const stockBajoCount = products.filter((p) => {
     const stock = Number(p.stock_quantity || 0);
-    return stock > 0 && stock <= (p.low_stock_alert || 5);
+    return stock > 0 && stock <= (p.low_stock_alert || 10);
   }).length;
   const valorTotal = products.reduce(
     (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.cost_ref || 0), 0
@@ -144,7 +144,7 @@ export default function InventarioView({ user }) {
       if (kpiFilter === "sin_stock" && Number(p.stock_quantity || 0) > 0) return false;
       if (kpiFilter === "stock_bajo") {
         const stock = Number(p.stock_quantity || 0);
-        if (!(stock > 0 && stock <= (p.low_stock_alert || 5))) return false;
+        if (!(stock > 0 && stock <= (p.low_stock_alert || 10))) return false;
       }
       if (selectedCategory !== "todos" && (p.category || "Otro") !== selectedCategory) return false;
       if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -158,7 +158,7 @@ export default function InventarioView({ user }) {
         case "name": av = (a.name || "").toLowerCase(); bv = (b.name || "").toLowerCase(); break;
         case "category": av = (a.category || "").toLowerCase(); bv = (b.category || "").toLowerCase(); break;
         case "stock": av = Number(a.stock_quantity || 0); bv = Number(b.stock_quantity || 0); break;
-        case "alert": av = Number(a.low_stock_alert || 5); bv = Number(b.low_stock_alert || 5); break;
+        case "alert": av = Number(a.low_stock_alert || 10); bv = Number(b.low_stock_alert || 10); break;
         case "cost": av = Number(a.cost_ref || 0); bv = Number(b.cost_ref || 0); break;
         case "margin": {
           const ma = Number(a.price_ref || 0) > 0 ? ((Number(a.price_ref) - Number(a.cost_ref || 0)) / Number(a.price_ref)) : -Infinity;
@@ -169,8 +169,8 @@ export default function InventarioView({ user }) {
           const sa = Number(a.stock_quantity || 0);
           const sb = Number(b.stock_quantity || 0);
           // sin_stock=0 < bajo=1 < ok=2
-          av = sa <= 0 ? 0 : sa <= (a.low_stock_alert || 5) ? 1 : 2;
-          bv = sb <= 0 ? 0 : sb <= (b.low_stock_alert || 5) ? 1 : 2;
+          av = sa <= 0 ? 0 : sa <= (a.low_stock_alert || 10) ? 1 : 2;
+          bv = sb <= 0 ? 0 : sb <= (b.low_stock_alert || 10) ? 1 : 2;
           break;
         }
         default: return 0;
@@ -189,14 +189,14 @@ export default function InventarioView({ user }) {
   const rowBg = (p) => {
     const stock = Number(p.stock_quantity || 0);
     if (stock <= 0) return "bg-red-50";
-    if (stock <= (p.low_stock_alert || 5)) return "bg-yellow-50";
+    if (stock <= (p.low_stock_alert || 10)) return "bg-yellow-50";
     return "";
   };
 
   const stockBadge = (p) => {
     const stock = Number(p.stock_quantity || 0);
     if (stock <= 0) return <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin stock</span>;
-    if (stock <= (p.low_stock_alert || 5)) return <span className="text-[10px] font-medium text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded-full">Bajo</span>;
+    if (stock <= (p.low_stock_alert || 10)) return <span className="text-[10px] font-medium text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded-full">Bajo</span>;
     return <span className="text-[10px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">OK</span>;
   };
 
@@ -467,7 +467,7 @@ export default function InventarioView({ user }) {
                             <UnitSizeCell product={p} onSaved={loadProducts} />
                           </td>
                         )}
-                        <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 5}</td>
+                        <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 10}</td>
                         <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                         <td className="px-3 py-2 text-center">{stockBadge(p)}</td>

@@ -402,7 +402,7 @@ function EditProductModal({ product, onClose, onSave }) {
   const [costRef, setCostRef] = useState(product.cost_ref?.toString() || "0");
   const [emoji, setEmoji] = useState(product.emoji || "🍽️");
   const [category, setCategory] = useState(product.category || "");
-  const [alert, setAlert] = useState(product.low_stock_alert?.toString() || "5");
+  const [alert, setAlert] = useState(product.low_stock_alert?.toString() || "10");
   const [isRedeemable, setIsRedeemable] = useState(!!product.is_redeemable);
   const [redemptionCost, setRedemptionCost] = useState(product.redemption_cost_points?.toString() || "");
   const [saving, setSaving] = useState(false);
@@ -423,7 +423,7 @@ function EditProductModal({ product, onClose, onSave }) {
       cost_ref: parseFloat(costRef) || 0,
       emoji,
       category,
-      low_stock_alert: parseInt(alert) || 5,
+      low_stock_alert: parseInt(alert) || 10,
       is_redeemable: isRedeemable,
       redemption_cost_points: isRedeemable ? parseInt(redemptionCost) : null,
     });
