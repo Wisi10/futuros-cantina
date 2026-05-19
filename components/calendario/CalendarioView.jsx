@@ -5,12 +5,19 @@ import { supabase } from "@/lib/supabase";
 import EventosView from "@/components/eventos/EventosView";
 
 const ACTIVITY_META = {
-  alquiler:    { label: "Alquiler",    color: "bg-blue-100 text-blue-700 border-blue-200",       icon: Activity },
-  cumpleanos:  { label: "Cumpleaños",  color: "bg-pink-100 text-pink-700 border-pink-200",       icon: Cake },
-  academia:    { label: "Academia",    color: "bg-green-100 text-green-700 border-green-200",    icon: Trophy },
-  torneo:      { label: "Torneo",      color: "bg-purple-100 text-purple-700 border-purple-200", icon: Trophy },
-  evento:      { label: "Evento",      color: "bg-amber-100 text-amber-700 border-amber-200",    icon: Briefcase },
+  alquiler:    { label: "Alquiler",    color: "bg-blue-100 text-blue-700 border-blue-200",       icon: Activity,   hex: "#3b82f6" },
+  cumpleanos:  { label: "Cumpleaños",  color: "bg-pink-100 text-pink-700 border-pink-200",       icon: Cake,       hex: "#ec4899" },
+  academia:    { label: "Academia",    color: "bg-green-100 text-green-700 border-green-200",    icon: Trophy,     hex: "#22c55e" },
+  torneo:      { label: "Torneo",      color: "bg-purple-100 text-purple-700 border-purple-200", icon: Trophy,     hex: "#a855f7" },
+  evento:      { label: "Evento",      color: "bg-amber-100 text-amber-700 border-amber-200",    icon: Briefcase,  hex: "#f59e0b" },
 };
+
+// Altura visual proporcional a la duración. 1h = 64px, +44 por cada hora extra.
+// Bloquea entre 56 y 220 para no romper layout en eventos largos.
+function rowMinHeight(durationHours) {
+  const h = Math.max(0.5, Number(durationHours) || 1);
+  return Math.min(220, Math.max(56, Math.round(64 + (h - 1) * 44)));
+}
 
 const todayISO = () => {
   const d = new Date();
@@ -255,13 +262,20 @@ export default function CalendarioView({ user, rate, onNavigate }) {
                   ) : (
                     <div className="divide-y divide-stone-100">
                       {dayBookings.map((b) => {
-                        const meta = ACTIVITY_META[b.activity_type] || { label: b.activity_type || "—", color: "bg-stone-100 text-stone-700 border-stone-200", icon: Activity };
+                        const meta = ACTIVITY_META[b.activity_type] || { label: b.activity_type || "—", color: "bg-stone-100 text-stone-700 border-stone-200", icon: Activity, hex: "#a8a29e" };
                         const Icon = meta.icon;
+                        const dur = Math.max(0.5, Number(b.duration) || 1);
+                        const minHeight = rowMinHeight(dur);
                         return (
-                          <div key={b.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50/50 transition-colors">
+                          <div
+                            key={b.id}
+                            className="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50/50 transition-colors border-l-4"
+                            style={{ minHeight, borderLeftColor: meta.hex }}
+                          >
                             <div className="text-right shrink-0 w-20">
                               <p className="text-sm font-bold text-stone-800">{fmtHour(b.start_hour)}</p>
                               <p className="text-[10px] text-stone-400">a {fmtEndHour(b.start_hour, b.duration)}</p>
+                              <p className="text-[10px] font-medium mt-0.5" style={{ color: meta.hex }}>{dur}h</p>
                             </div>
                             <div className={`shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center ${meta.color}`}>
                               <Icon size={14} />
