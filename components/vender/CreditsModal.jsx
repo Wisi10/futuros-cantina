@@ -14,6 +14,11 @@ export default function CreditsModal({ user, rate, onClose, onUpdated, clientIdF
   const [payRef, setPayRef] = useState("");
   const [processing, setProcessing] = useState(false);
   const [expandedClient, setExpandedClient] = useState(null);
+  // Pago custom FIFO: distribuye el monto entre los créditos del cliente, oldest first.
+  const [customForClient, setCustomForClient] = useState(null); // {client_id, client_name, total, items[]}
+  const [customAmount, setCustomAmount] = useState("");
+  const [customMethod, setCustomMethod] = useState("");
+  const [customRef, setCustomRef] = useState("");
 
   const loadCredits = useCallback(async () => {
     if (!supabase) return;
@@ -113,6 +118,78 @@ export default function CreditsModal({ user, rate, onClose, onUpdated, clientIdF
   };
 
   const selectedPayMethod = PAYMENT_METHODS.find((m) => m.id === payMethod);
+  const selectedCustomMethod = PAYMENT_METHODS.find((m) => m.id === customMethod);
+
+  const openCustom = (group) => {
+    setCustomForClient(group);
+    setCustomAmount(group.total.toFixed(2));
+    setCustomMethod("");
+    setCustomRef("");
+  };
+
+  const confirmCustomPayment = async () => {
+    if (!customForClient || !customMethod || !customAmount) return;
+    const total = parseFloat(customAmount);
+    if (!Number.isFinite(total) || total <= 0) {
+      alert("Monto inválido");
+      return;
+    }
+    if (total > customForClient.total + 0.01) {
+      alert(`El monto excede el pendiente total ($${customForClient.total.toFixed(2)})`);
+      return;
+    }
+    setProcessing(true);
+    try {
+      // FIFO: ordenar créditos oldest first y distribuir
+      const sorted = [...customForClient.items].sort(
+        (a, b) => (a.created_at || "").localeCompare(b.created_at || "")
+      );
+      let remaining = total;
+      for (const credit of sorted) {
+        if (remaining <= 0.005) break;
+        const outstanding = Number(credit.outstanding);
+        if (outstanding <= 0) continue;
+        const apply = Math.min(remaining, outstanding);
+
+        const { data: paymentRow, error: payErr } = await supabase
+          .from("cantina_credit_payments")
+          .insert({
+            credit_id: credit.id,
+            amount_ref: apply,
+            amount_bs: rate?.usd ? apply * rate.usd : null,
+            payment_method: customMethod,
+            reference: customRef || null,
+            exchange_rate_bs: rate?.usd || null,
+            notes: total !== outstanding ? "Pago custom FIFO" : null,
+            created_by: user?.name || "Cantina",
+          })
+          .select("id")
+          .single();
+        if (payErr) throw payErr;
+
+        const newPaid = Number(credit.paid_amount_ref || 0) + apply;
+        const newStatus = newPaid >= Number(credit.original_amount_ref) - 0.005 ? "paid" : "partial";
+        const { error: upErr } = await supabase
+          .from("cantina_credits")
+          .update({ paid_amount_ref: newPaid, status: newStatus, updated_at: new Date().toISOString() })
+          .eq("id", credit.id);
+        if (upErr) throw upErr;
+
+        if (paymentRow?.id) {
+          try {
+            await supabase.rpc("award_loyalty_for_credit_payment", { p_payment_id: paymentRow.id });
+          } catch (e) { console.error("[LOYALTY] credit payment award error:", e); }
+        }
+        remaining -= apply;
+      }
+      setCustomForClient(null);
+      await loadCredits();
+      if (onUpdated) onUpdated();
+    } catch (err) {
+      alert("Error registrando pago: " + err.message);
+    }
+    setProcessing(false);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
@@ -129,6 +206,81 @@ export default function CreditsModal({ user, rate, onClose, onUpdated, clientIdF
             <p className="text-sm text-stone-400 animate-pulse text-center py-8">Cargando...</p>
           ) : credits.length === 0 ? (
             <p className="text-sm text-stone-400 text-center py-8">No hay creditos pendientes</p>
+          ) : customForClient ? (
+            /* Custom FIFO payment form */
+            <div className="space-y-4">
+              <button onClick={() => setCustomForClient(null)} className="text-xs text-brand hover:underline">&larr; Volver a la lista</button>
+              <div className="bg-stone-50 rounded-lg p-3">
+                <p className="font-medium text-sm">{customForClient.client_name}</p>
+                <p className="text-xs text-stone-500 mt-1">
+                  {customForClient.items.length} crédito{customForClient.items.length !== 1 ? "s" : ""} pendiente{customForClient.items.length !== 1 ? "s" : ""} ·
+                  Total: ${customForClient.total.toFixed(2)}
+                </p>
+                <p className="text-[11px] text-stone-400 mt-0.5">El monto se aplica primero al crédito más antiguo (FIFO).</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-stone-500 block mb-1">Monto a pagar ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                  autoFocus
+                />
+                <div className="flex gap-1.5 mt-1.5">
+                  <button onClick={() => setCustomAmount((customForClient.total / 2).toFixed(2))}
+                    className="text-[11px] px-2 py-1 bg-stone-100 hover:bg-stone-200 rounded text-stone-600">
+                    50%
+                  </button>
+                  <button onClick={() => setCustomAmount(customForClient.total.toFixed(2))}
+                    className="text-[11px] px-2 py-1 bg-stone-100 hover:bg-stone-200 rounded text-stone-600">
+                    Todo
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-stone-500 block mb-1.5">Método de pago</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {PAYMENT_METHODS.filter(m => m.id !== "cortesia").map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setCustomMethod(m.id); setCustomRef(""); }}
+                      className={`flex items-center justify-center gap-2 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                        customMethod === m.id
+                          ? "border-brand bg-brand/5 text-brand"
+                          : "border-stone-200 text-stone-600 hover:border-stone-300"
+                      }`}
+                    >
+                      <span>{m.icon}</span> {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedCustomMethod?.needsRef && (
+                <div>
+                  <label className="text-xs font-medium text-stone-500 block mb-1">Referencia</label>
+                  <input
+                    type="text"
+                    value={customRef}
+                    onChange={(e) => setCustomRef(e.target.value)}
+                    placeholder="Número de referencia"
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={confirmCustomPayment}
+                disabled={processing || !customMethod || !customAmount}
+                className="w-full py-3 rounded-xl bg-brand text-white font-bold text-sm disabled:opacity-30 hover:bg-brand-dark transition-all flex items-center justify-center gap-2"
+              >
+                {processing ? <><Loader2 size={16} className="animate-spin" /> Procesando...</> : `Confirmar pago $${parseFloat(customAmount || 0).toFixed(2)}`}
+              </button>
+            </div>
           ) : payingCredit ? (
             /* Payment form */
             <div className="space-y-4">
@@ -216,26 +368,37 @@ export default function CreditsModal({ user, rate, onClose, onUpdated, clientIdF
 
                 return groupList.map((g) => {
                   const isExpanded = expandedClient === g.key;
+                  const canCustom = !!g.client_id; // FIFO solo para clientes registrados
                   return (
                     <div key={g.key} className={`${ageBg(g.oldestDays)} rounded-lg overflow-hidden`}>
-                      <button
-                        onClick={() => setExpandedClient(isExpanded ? null : g.key)}
-                        className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-black/5"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-stone-800 truncate">
-                            <ClientLink clientId={g.client_id} name={g.client_name} />
-                          </p>
-                          <p className={`text-xs mt-0.5 ${ageColor(g.oldestDays)}`}>
-                            {g.items.length} credito{g.items.length !== 1 ? "s" : ""} · mas antiguo {g.oldestDays === 0 ? "hoy" : g.oldestDays === 1 ? "ayer" : `hace ${g.oldestDays}d`}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <p className="text-base font-bold text-brand">${g.total.toFixed(2)}</p>
-                          <p className="text-xs text-stone-500">total pendiente</p>
-                        </div>
-                        <span className="text-stone-400 ml-2">{isExpanded ? "▾" : "▸"}</span>
-                      </button>
+                      <div className="w-full px-3 py-2.5 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => setExpandedClient(isExpanded ? null : g.key)}
+                          className="flex-1 min-w-0 text-left flex items-center justify-between gap-2 hover:opacity-80"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-stone-800 truncate">
+                              <ClientLink clientId={g.client_id} name={g.client_name} />
+                            </p>
+                            <p className={`text-xs mt-0.5 ${ageColor(g.oldestDays)}`}>
+                              {g.items.length} crédito{g.items.length !== 1 ? "s" : ""} · más antiguo {g.oldestDays === 0 ? "hoy" : g.oldestDays === 1 ? "ayer" : `hace ${g.oldestDays}d`}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-base font-bold text-brand">${g.total.toFixed(2)}</p>
+                            <p className="text-xs text-stone-500">total pendiente</p>
+                          </div>
+                          <span className="text-stone-400">{isExpanded ? "▾" : "▸"}</span>
+                        </button>
+                        {canCustom && (
+                          <button
+                            onClick={() => openCustom(g)}
+                            className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand-dark transition-colors shrink-0 min-h-[40px] whitespace-nowrap"
+                          >
+                            💰 Pagar
+                          </button>
+                        )}
+                      </div>
 
                       {isExpanded && (
                         <div className="bg-white/60 border-t border-stone-200 px-3 py-2 space-y-1.5">
