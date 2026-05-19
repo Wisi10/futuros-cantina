@@ -68,17 +68,21 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
     setProcessing(true);
 
     try {
-      // 1. Insert payment
-      const { error: payErr } = await supabase.from("cantina_credit_payments").insert({
-        credit_id: payingCredit.id,
-        amount_ref: amount,
-        amount_bs: rate?.usd ? amount * rate.usd : null,
-        payment_method: payMethod,
-        reference: payRef || null,
-        exchange_rate_bs: rate?.usd || null,
-        notes: null,
-        created_by: user?.name || "Cantina",
-      });
+      // 1. Insert payment (devuelve el id para premiar loyalty)
+      const { data: paymentRow, error: payErr } = await supabase
+        .from("cantina_credit_payments")
+        .insert({
+          credit_id: payingCredit.id,
+          amount_ref: amount,
+          amount_bs: rate?.usd ? amount * rate.usd : null,
+          payment_method: payMethod,
+          reference: payRef || null,
+          exchange_rate_bs: rate?.usd || null,
+          notes: null,
+          created_by: user?.name || "Cantina",
+        })
+        .select("id")
+        .single();
       if (payErr) throw payErr;
 
       // 2. Update credit
@@ -89,6 +93,14 @@ export default function CreditsModal({ user, rate, onClose, onUpdated }) {
         .update({ paid_amount_ref: newPaid, status: newStatus, updated_at: new Date().toISOString() })
         .eq("id", payingCredit.id);
       if (upErr) throw upErr;
+
+      // 3. Loyalty: premiar puntos por este pago (no bloqueante).
+      // Bug #10: puntos acumulan cuando se paga, no cuando se vende a crédito.
+      if (paymentRow?.id) {
+        try {
+          await supabase.rpc("award_loyalty_for_credit_payment", { p_payment_id: paymentRow.id });
+        } catch (e) { console.error("[LOYALTY] credit payment award error:", e); }
+      }
 
       setPayingCredit(null);
       await loadCredits();

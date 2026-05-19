@@ -668,12 +668,9 @@ function POSPageInner() {
       });
       if (!result) { setProcessing(false); return; }
 
-      // Loyalty: award points on credit sales too (non-blocking)
-      try {
-        if (result.sale?.client_id) {
-          await supabase.rpc("award_loyalty_points", { sale_id_param: result.sale.id });
-        }
-      } catch (e) { console.error("[LOYALTY] award error:", e); }
+      // Loyalty: NO se acumulan puntos cuando la venta es a crédito.
+      // Los puntos se otorgan cuando el cliente paga (cantina_credit_payments)
+      // vía RPC award_loyalty_for_credit_payment.
 
       const { error: creditError } = await supabase.from("cantina_credits").insert({
         client_id: clientId || "manual",
