@@ -71,6 +71,19 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
       ...c,
       outstanding: Math.max(0, Number(c.original_amount_ref) - Number(c.paid_amount_ref || 0)),
     }));
+
+    // Items pedidos de cada venta originaria
+    const saleIds = enriched.map((c) => c.sale_id).filter(Boolean);
+    if (saleIds.length > 0) {
+      const { data: sales } = await supabase
+        .from("cantina_sales")
+        .select("id, items")
+        .in("id", saleIds);
+      const itemsBySale = Object.fromEntries((sales || []).map((s) => [s.id, s.items]));
+      enriched.forEach((c) => {
+        c.order_items = Array.isArray(itemsBySale[c.sale_id]) ? itemsBySale[c.sale_id] : [];
+      });
+    }
     setCredits(enriched);
 
     // Pagos (abonos) — join al credit_id
@@ -525,8 +538,9 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                         .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))
                         .map((cr) => {
                           const days = daysSince(cr.created_at);
+                          const orderItems = Array.isArray(cr.order_items) ? cr.order_items : [];
                           return (
-                            <div key={cr.id} className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                            <div key={cr.id} className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs text-stone-700">
                                   Original: <span className="font-medium">{formatREF(cr.original_amount_ref)}</span>
@@ -534,18 +548,31 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                                     <> · Pagado: <span className="font-medium">{formatREF(cr.paid_amount_ref)}</span></>
                                   )}
                                 </p>
-                                <p className={`text-[11px] ${ageColor(days)}`}>
+                                {orderItems.length > 0 && (
+                                  <p className="text-xs text-stone-500 mt-0.5">
+                                    <span className="text-stone-400">Pidió: </span>
+                                    {orderItems.map((it, i) => (
+                                      <span key={i}>
+                                        {i > 0 && <span className="text-stone-300"> · </span>}
+                                        {it.qty}× {it.name}
+                                      </span>
+                                    ))}
+                                  </p>
+                                )}
+                                <p className={`text-[11px] mt-0.5 ${ageColor(days)}`}>
                                   {fmtDate(cr.created_at)} · {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days}d`}
                                   {cr.status === "partial" && " · Parcial"}
                                 </p>
                               </div>
-                              <p className="text-sm font-bold text-brand whitespace-nowrap">{formatREF(cr.outstanding)}</p>
-                              <button
-                                onClick={() => openPayCredit(cr)}
-                                className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors shrink-0 min-h-[36px]"
-                              >
-                                Cobrar
-                              </button>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <p className="text-sm font-bold text-brand whitespace-nowrap">{formatREF(cr.outstanding)}</p>
+                                <button
+                                  onClick={() => openPayCredit(cr)}
+                                  className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors min-h-[36px]"
+                                >
+                                  Cobrar
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
