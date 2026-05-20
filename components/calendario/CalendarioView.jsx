@@ -272,10 +272,13 @@ export default function CalendarioView({ user, rate, onNavigate }) {
                             className="px-4 py-2.5 flex items-center gap-3 hover:bg-stone-50/50 transition-colors border-l-4"
                             style={{ minHeight, borderLeftColor: meta.hex }}
                           >
-                            <div className="text-right shrink-0 w-20">
-                              <p className="text-sm font-bold text-stone-800">{fmtHour(b.start_hour)}</p>
-                              <p className="text-[10px] text-stone-400">a {fmtEndHour(b.start_hour, b.duration)}</p>
-                              <p className="text-[10px] font-medium mt-0.5" style={{ color: meta.hex }}>{dur}h</p>
+                            <div className="text-right shrink-0 w-28">
+                              <p className="text-xl font-bold text-stone-800 leading-tight">
+                                {fmtHour(b.start_hour)}
+                                <span className="text-stone-400 font-normal mx-1">–</span>
+                                {fmtEndHour(b.start_hour, b.duration)}
+                              </p>
+                              <p className="text-xs font-semibold mt-1" style={{ color: meta.hex }}>{dur}h</p>
                             </div>
                             <div className={`shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center ${meta.color}`}>
                               <Icon size={14} />
