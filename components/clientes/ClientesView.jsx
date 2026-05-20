@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Search, Plus, Users, Merge, Star } from "lucide-react";
+import { Search, Plus, Users, Merge, Star, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF } from "@/lib/utils";
 import { avatarColor, avatarInitials, relativeFromNow, daysSince, formatVePhone } from "@/lib/clientHelpers";
 import ClientProfileModal from "./ClientProfileModal";
 import ClientFormModal from "./ClientFormModal";
 import MergeDuplicatesModal from "./MergeDuplicatesModal";
+import DeudoresView from "./DeudoresView";
 import PuntosView from "@/components/puntos/PuntosView";
 
 const FILTERS = [
@@ -26,8 +27,8 @@ const SORTS = [
   { id: "most_cortesia", label: "Mas cortesias" },
 ];
 
-export default function ClientesView({ user, rate, saleClient }) {
-  const [subTab, setSubTab] = useState("lista");
+export default function ClientesView({ user, rate, saleClient, initialSubTab, onNavigateToVender }) {
+  const [subTab, setSubTab] = useState(initialSubTab === "deudores" || initialSubTab === "puntos" ? initialSubTab : "lista");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("recent");
@@ -86,7 +87,9 @@ export default function ClientesView({ user, rate, saleClient }) {
 
   const [showRankings, setShowRankings] = useState(false);
 
-  if (subTab === "puntos") {
+  const debtorsCountAll = kpis.debtorsCount || 0;
+
+  if (subTab === "puntos" || subTab === "deudores") {
     return (
       <div className="h-full flex flex-col overflow-hidden bg-brand-cream-light">
         <div className="px-3 md:px-6 pt-3 md:pt-6 shrink-0">
@@ -94,17 +97,14 @@ export default function ClientesView({ user, rate, saleClient }) {
             <Users size={20} className="text-brand" />
             <h1 className="text-lg font-bold text-brand">Clientes</h1>
           </div>
-          <div className="flex gap-1 border-b border-stone-200">
-            <button onClick={() => setSubTab("lista")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-transparent text-stone-500 hover:text-stone-700 flex items-center gap-1.5">
-              <Users size={12} /> Lista
-            </button>
-            <button onClick={() => setSubTab("puntos")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-brand text-brand flex items-center gap-1.5">
-              <Star size={12} /> Puntos
-            </button>
-          </div>
+          <SubTabStrip subTab={subTab} setSubTab={setSubTab} debtorsCount={debtorsCountAll} />
         </div>
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <PuntosView user={user} rate={rate} saleClient={saleClient} />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {subTab === "puntos" ? (
+            <PuntosView user={user} rate={rate} saleClient={saleClient} />
+          ) : (
+            <DeudoresView user={user} rate={rate} onNavigateToVender={onNavigateToVender} />
+          )}
         </div>
       </div>
     );
@@ -137,14 +137,7 @@ export default function ClientesView({ user, rate, saleClient }) {
           </div>
         </div>
 
-        <div className="flex gap-1 border-b border-stone-200">
-          <button onClick={() => setSubTab("lista")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-brand text-brand flex items-center gap-1.5">
-            <Users size={12} /> Lista
-          </button>
-          <button onClick={() => setSubTab("puntos")} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 border-transparent text-stone-500 hover:text-stone-700 flex items-center gap-1.5">
-            <Star size={12} /> Puntos
-          </button>
-        </div>
+        <SubTabStrip subTab={subTab} setSubTab={setSubTab} debtorsCount={kpis.debtorsCount} />
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
           <div className="bg-white border border-stone-200 rounded-xl p-3">
@@ -292,6 +285,30 @@ export default function ClientesView({ user, rate, saleClient }) {
           onMerged={() => load()}
         />
       )}
+    </div>
+  );
+}
+
+function SubTabStrip({ subTab, setSubTab, debtorsCount = 0 }) {
+  const base = "px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 flex items-center gap-1.5";
+  const active = "border-brand text-brand";
+  const inactive = "border-transparent text-stone-500 hover:text-stone-700";
+  return (
+    <div className="flex gap-1 border-b border-stone-200">
+      <button onClick={() => setSubTab("lista")} className={`${base} ${subTab === "lista" ? active : inactive}`}>
+        <Users size={12} /> Lista
+      </button>
+      <button onClick={() => setSubTab("deudores")} className={`${base} ${subTab === "deudores" ? active : inactive} relative`}>
+        <Wallet size={12} /> Deudores
+        {debtorsCount > 0 && (
+          <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            {debtorsCount}
+          </span>
+        )}
+      </button>
+      <button onClick={() => setSubTab("puntos")} className={`${base} ${subTab === "puntos" ? active : inactive}`}>
+        <Star size={12} /> Puntos
+      </button>
     </div>
   );
 }

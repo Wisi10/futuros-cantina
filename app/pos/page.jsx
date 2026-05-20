@@ -12,7 +12,6 @@ import ProductGrid from "@/components/vender/ProductGrid";
 import CartSidebar from "@/components/vender/CartSidebar";
 import PaymentModal from "@/components/vender/PaymentModal";
 import SuccessScreen from "@/components/vender/SuccessScreen";
-import CreditsModal from "@/components/vender/CreditsModal";
 import ConfigView from "@/components/config/ConfigView";
 import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
@@ -91,8 +90,10 @@ function POSPageInner() {
   }, [cart]);
 
   // Credits state
-  const [showCredits, setShowCredits] = useState(false);
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
+  // Subtab inicial al entrar a "clientes" desde el header (botón Créditos).
+  // Se consume una sola vez por ClientesView via `initialSubTab` y luego se resetea.
+  const [clientesInitialSubTab, setClientesInitialSubTab] = useState(null);
 
   // Shift state
   const [activeShift, setActiveShift] = useState(null);
@@ -910,7 +911,11 @@ function POSPageInner() {
               className="flex items-center gap-1 px-2 md:px-3 py-1.5 md:py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors">
               <User size={14} /> <span className="hidden sm:inline">Cliente</span>
             </button>
-            <button onClick={() => setShowCredits(true)}
+            <button
+              onClick={() => {
+                setClientesInitialSubTab("deudores");
+                setActiveTab("clientes");
+              }}
               className="hidden md:flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors relative">
               <CreditCard size={14} /> Créditos
               {pendingCreditsCount > 0 && (
@@ -1051,7 +1056,19 @@ function POSPageInner() {
 
         {activeTab === "clientes" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <ClientesView user={user} rate={rate} saleClient={saleClient} />
+            <ClientesView
+              key={clientesInitialSubTab || "default"}
+              user={user}
+              rate={rate}
+              saleClient={saleClient}
+              initialSubTab={clientesInitialSubTab}
+              onNavigateToVender={(client) => {
+                if (client) setSaleClient(client);
+                setClientesInitialSubTab(null);
+                setActiveTab("vender");
+                loadPendingCreditsCount();
+              }}
+            />
           </div>
         )}
 
@@ -1145,15 +1162,6 @@ function POSPageInner() {
           canVoid={canVoid}
           saleTimestamp={lastSaleTime}
           onVoidSale={handleVoidSale}
-        />
-      )}
-
-      {showCredits && (
-        <CreditsModal
-          user={user}
-          rate={rate}
-          onClose={() => setShowCredits(false)}
-          onUpdated={loadPendingCreditsCount}
         />
       )}
 
