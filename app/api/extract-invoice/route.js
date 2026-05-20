@@ -57,11 +57,11 @@ Reglas IMPORTANTES de extraccion:
    - Si el rango sugiere Bs (precio unitario > 100 con varios miles), usa miles: "15,000" → 15000.
    - Cuando hay duda, marca needs_review: true en la linea Y en la factura entera. Usa tu mejor interpretacion pero marca la duda.
 
-3. CURRENCY_PRIMARY (CRITICO):
-   - Si los precios en la factura tienen "$" o "USD" explicito, currency_primary = "USD".
-   - Si los precios son en Bs (con "Bs." o sin simbolo pero claramente Bs), currency_primary = "VES".
-   - **PHRASE TRIGGER**: Si la factura dice "PARA PAGOS EN BOLIVARES APLICA LA TASA DEL BCV" o "Tipo de cambio aplicable" o similar (sugiere que los precios mostrados son la moneda base, no Bs), y NO tiene simbolo Bs explicito al lado de los numeros: currency_primary = "USD" (la factura esta en USD/REF aunque los numeros no tengan $).
-   - Si la factura muestra precio_unit Bs Y precio_unit USD en columnas separadas: currency_primary = "USD" (asumimos USD como base porque el cliente paga en Bs al tipo del dia).
+3. CURRENCY_PRIMARY (CRITICO — sigue ESTRICTAMENTE estas reglas en orden):
+   - REGLA A: Si VES algun simbolo "$" o palabra "USD" en cualquier parte de los precios o totales (incluyendo "57$", "$15.00", "Total $"), currency_primary = "USD". El $ tiene prioridad absoluta.
+   - REGLA B: Si la factura muestra DOS columnas de precio (una Bs Y otra USD) lado a lado en cada linea, currency_primary = "USD" (la USD es la base; la Bs es conversion del dia). Aplica aunque los precios en Bs sean los mas grandes/prominentes.
+   - REGLA C: Si la factura dice "PARA PAGOS EN BOLIVARES APLICA LA TASA DEL BCV" o "Tipo de cambio aplicable" o "Tipo de Cambio BCV" o similar (la factura esta en USD aunque los numeros no tengan $ explicito): currency_primary = "USD".
+   - REGLA D: Solo si NINGUNA de las reglas A/B/C aplica Y los precios son claramente Bs (con "Bs." al lado o totales en miles muy grandes tipicos de Bs venezolanos): currency_primary = "VES".
 
 4. MONEDAS por linea: Si una linea solo muestra precio en USD ($), llena unit_price_usd y line_total_usd, deja los _ves en null. Si solo muestra Bs, llena _ves y deja _usd en null. Si la factura muestra AMBAS columnas (Bs y USD por linea), llena ambas.
 
@@ -82,7 +82,12 @@ Reglas IMPORTANTES de extraccion:
 
 10. MANUSCRITAS: Si la factura es escrita a mano y algun campo es ambiguo, usa null para ese campo Y marca needs_review: true. NO inventes valores.
 
-11. SUPPLIER: Razon social completa como aparece en el encabezado (ej. "PRODUCTOS CASANAY C.A.", "Inversiones Refrescolandia, C.A.", "ALIMENTOS SERIMAR, C.A."). Si la factura tiene un logo/marca distinto de la razon social (ej. logo dice "GLACIER" pero la razon social es "Corporacion Zhongyuan C.A"), usa la RAZON SOCIAL del encabezado, NO la marca. Si es manuscrita sin razon social formal, usa el nombre del vendedor o "Sin proveedor".
+11. SUPPLIER (CRITICO — NO confundir con cliente):
+   - El supplier/proveedor es QUIEN VENDE (la empresa que emite la factura). Su nombre aparece en el ENCABEZADO de la factura, generalmente junto al logo y arriba de todo.
+   - El CLIENTE es QUIEN COMPRA. Aparece en campos etiquetados "Cliente:", "Razon Social:", "Para:", "Nombre o Razon Social:". El cliente NUNCA es el supplier.
+   - Las razones sociales del cliente tipicas: "FUTUROS SPORTS COMPLEX", "Futuros Sports", "COMPLEX", "Cantina Futuros Complex", "FUTUROS VINOTINTO", "Futuro Sports", "CANTINA". Si ves alguno de estos en un campo etiquetado como cliente, NO los uses como supplier — son el cliente.
+   - Si la factura tiene un logo/marca distinto de la razon social (ej. logo "GLACIER" pero razon social "Corporacion Zhongyuan C.A"), usa la RAZON SOCIAL.
+   - Si es manuscrita sin razon social del proveedor (solo nombre vendedor manuscrito), usa ese nombre. Si NO hay nada que identifique al proveedor, usa "Sin proveedor".
 
 12. RIF: Preserva el formato exacto incluyendo guiones. "J-29622861-2" se queda asi, NO "J29622861-2" ni "J-296228612".
 
