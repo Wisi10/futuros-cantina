@@ -393,7 +393,10 @@ export default function RestockForm({ products, user, onRestocked }) {
       </div>
 
       {invoiceModalOpen && (
-        <InvoiceUploadModal onClose={() => setInvoiceModalOpen(false)} />
+        <InvoiceUploadModal
+          products={products}
+          onClose={() => setInvoiceModalOpen(false)}
+        />
       )}
     </div>
   );

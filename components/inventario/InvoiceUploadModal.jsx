@@ -1,6 +1,7 @@
 "use client";
-import { useState, useRef } from "react";
-import { X, Upload, Loader2, AlertTriangle, Camera, FileText, CheckCircle2 } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { X, Upload, Loader2, AlertTriangle, Camera, FileText, CheckCircle2, Link2, HelpCircle } from "lucide-react";
+import { findMatches, formatScore } from "@/lib/productMatcher";
 
 // Resize una imagen para que el lado mayor no pase de MAX_DIM, devuelve base64 JPEG.
 // Las facturas tipicas son fotos de 3-8MB; ~1600px de lado mayor + JPEG quality 0.85
@@ -38,7 +39,7 @@ async function resizeToBase64(file) {
   });
 }
 
-export default function InvoiceUploadModal({ onClose }) {
+export default function InvoiceUploadModal({ products = [], onClose }) {
   const [stage, setStage] = useState("idle"); // idle | resizing | extracting | done | error
   const [imagePreview, setImagePreview] = useState(null);
   const [extracted, setExtracted] = useState(null);
@@ -155,7 +156,7 @@ export default function InvoiceUploadModal({ onClose }) {
           )}
 
           {stage === "done" && extracted && (
-            <ExtractedPreview data={extracted} imageUrl={imagePreview} />
+            <ExtractedPreview data={extracted} imageUrl={imagePreview} products={products} />
           )}
         </div>
 
@@ -181,9 +182,18 @@ export default function InvoiceUploadModal({ onClose }) {
 }
 
 // ─── Preview read-only ───────────────────────────────────────
-function ExtractedPreview({ data, imageUrl }) {
+function ExtractedPreview({ data, imageUrl, products }) {
   const showUsd = data.currency_primary === "USD" || data.total_usd != null;
   const showVes = data.currency_primary === "VES" || data.total_ves != null;
+
+  // Calcula matches contra catalogo para cada item. useMemo evita recalcular
+  // en cada render (products puede ser grande).
+  const itemMatches = useMemo(() => {
+    return data.items.map((it) => findMatches(it.description, products, 3, 0.2));
+  }, [data.items, products]);
+
+  const itemsWithMatch = itemMatches.filter((m) => m.length > 0).length;
+  const itemsNoMatch = data.items.length - itemsWithMatch;
 
   return (
     <div className="space-y-4">
@@ -220,14 +230,18 @@ function ExtractedPreview({ data, imageUrl }) {
 
       {/* Items */}
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-        <div className="px-4 py-2 bg-stone-50 text-xs font-medium text-stone-500 uppercase tracking-wider">
-          {data.items.length} {data.items.length === 1 ? "ítem" : "ítems"}
+        <div className="px-4 py-2 bg-stone-50 text-xs font-medium text-stone-500 uppercase tracking-wider flex justify-between">
+          <span>{data.items.length} {data.items.length === 1 ? "ítem" : "ítems"}</span>
+          <span className="normal-case font-normal">
+            <span className="text-green-600">{itemsWithMatch} con match</span>
+            {itemsNoMatch > 0 && <> · <span className="text-stone-500">{itemsNoMatch} sin match</span></>}
+          </span>
         </div>
         <table className="w-full text-sm">
           <thead className="bg-stone-50 text-stone-500 text-xs">
             <tr>
               <th className="text-left px-3 py-2 font-medium">Código</th>
-              <th className="text-left px-3 py-2 font-medium">Descripción</th>
+              <th className="text-left px-3 py-2 font-medium">Descripción / Match catálogo</th>
               <th className="text-center px-3 py-2 font-medium">Cant.</th>
               {showUsd && <th className="text-right px-3 py-2 font-medium">Precio $</th>}
               {showUsd && <th className="text-right px-3 py-2 font-medium">Total $</th>}
@@ -236,22 +250,27 @@ function ExtractedPreview({ data, imageUrl }) {
             </tr>
           </thead>
           <tbody>
-            {data.items.map((it, i) => (
-              <tr key={i} className={`border-t border-stone-100 ${it.needs_review ? "bg-amber-50/40" : ""}`}>
-                <td className="px-3 py-2 text-xs text-stone-500 font-mono">{it.code || "—"}</td>
-                <td className="px-3 py-2">
-                  {it.description}
-                  {it.needs_review && (
-                    <AlertTriangle size={12} className="inline-block ml-1.5 text-amber-500" />
-                  )}
-                </td>
-                <td className="px-3 py-2 text-center">{it.quantity}</td>
-                {showUsd && <td className="px-3 py-2 text-right">{it.unit_price_usd != null ? `$${it.unit_price_usd.toFixed(2)}` : "—"}</td>}
-                {showUsd && <td className="px-3 py-2 text-right font-medium">{it.line_total_usd != null ? `$${it.line_total_usd.toFixed(2)}` : "—"}</td>}
-                {showVes && <td className="px-3 py-2 text-right">{it.unit_price_ves != null ? `Bs ${it.unit_price_ves.toLocaleString("es-VE")}` : "—"}</td>}
-                {showVes && <td className="px-3 py-2 text-right font-medium">{it.line_total_ves != null ? `Bs ${it.line_total_ves.toLocaleString("es-VE")}` : "—"}</td>}
-              </tr>
-            ))}
+            {data.items.map((it, i) => {
+              const matches = itemMatches[i] || [];
+              const best = matches[0];
+              return (
+                <tr key={i} className={`border-t border-stone-100 ${it.needs_review ? "bg-amber-50/40" : ""}`}>
+                  <td className="px-3 py-2 text-xs text-stone-500 font-mono align-top">{it.code || "—"}</td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="flex items-start gap-1">
+                      <span>{it.description}</span>
+                      {it.needs_review && <AlertTriangle size={12} className="text-amber-500 mt-0.5 shrink-0" />}
+                    </div>
+                    <MatchHint best={best} extras={matches.slice(1)} />
+                  </td>
+                  <td className="px-3 py-2 text-center align-top">{it.quantity}</td>
+                  {showUsd && <td className="px-3 py-2 text-right align-top">{it.unit_price_usd != null ? `$${it.unit_price_usd.toFixed(2)}` : "—"}</td>}
+                  {showUsd && <td className="px-3 py-2 text-right font-medium align-top">{it.line_total_usd != null ? `$${it.line_total_usd.toFixed(2)}` : "—"}</td>}
+                  {showVes && <td className="px-3 py-2 text-right align-top">{it.unit_price_ves != null ? `Bs ${it.unit_price_ves.toLocaleString("es-VE")}` : "—"}</td>}
+                  {showVes && <td className="px-3 py-2 text-right font-medium align-top">{it.line_total_ves != null ? `Bs ${it.line_total_ves.toLocaleString("es-VE")}` : "—"}</td>}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -276,6 +295,29 @@ function ExtractedPreview({ data, imageUrl }) {
           <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
           <span><span className="font-medium">Nota:</span> {data.notes}</span>
         </div>
+      )}
+    </div>
+  );
+}
+
+function MatchHint({ best, extras }) {
+  if (!best) {
+    return (
+      <div className="text-[11px] text-stone-400 mt-0.5 flex items-center gap-1">
+        <HelpCircle size={10} /> Sin match — crear producto nuevo
+      </div>
+    );
+  }
+  const scoreColor = best.score >= 0.7 ? "text-green-600" : best.score >= 0.5 ? "text-amber-600" : "text-stone-500";
+  return (
+    <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-1">
+      <Link2 size={10} className={scoreColor} />
+      <span className={`font-medium ${scoreColor}`}>{formatScore(best.score)}</span>
+      <span>{best.product.name}</span>
+      {extras.length > 0 && (
+        <span className="text-stone-400" title={extras.map((e) => `${formatScore(e.score)} ${e.product.name}`).join("\n")}>
+          (+{extras.length} más)
+        </span>
       )}
     </div>
   );
