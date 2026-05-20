@@ -48,13 +48,18 @@ export default function ClientesView({ user, rate, saleClient, initialSubTab, on
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.rpc("get_cantina_clients_summary", {
-      p_search: debouncedSearch || null,
-      p_filter: filter,
-      p_sort: sort,
-      p_limit: 5000,
-      p_offset: 0,
-    });
+    // .range fuerza a PostgREST a saltar su cap default de 1000 filas
+    // (sin esto, get_cantina_clients_summary devuelve solo los primeros 1000
+    // clientes aunque p_limit=5000). Hay 1278+ clientes en producción.
+    const { data } = await supabase
+      .rpc("get_cantina_clients_summary", {
+        p_search: debouncedSearch || null,
+        p_filter: filter,
+        p_sort: sort,
+        p_limit: 5000,
+        p_offset: 0,
+      })
+      .range(0, 4999);
     setRows(data || []);
     setLoading(false);
   }, [debouncedSearch, filter, sort]);
