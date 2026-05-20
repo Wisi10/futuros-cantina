@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, ChevronUp, Camera, Upload, Plus, Trash2, ArrowUpDown, History } from "lucide-react";
+import { Package, Search, AlertTriangle, PackageX, DollarSign, Truck, ChevronDown, ChevronUp, Camera, Upload, Plus, Trash2, ArrowUpDown, History, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/utils";
 import StockAdjustModal from "./StockAdjustModal";
@@ -8,8 +8,9 @@ import RestockForm from "./RestockForm";
 import CreateProductModal from "./CreateProductModal";
 import RecipeEditor from "./RecipeEditor";
 import DeleteProductModal from "./DeleteProductModal";
+import PorPagarView from "./PorPagarView";
 
-export default function InventarioView({ user }) {
+export default function InventarioView({ user, rate }) {
   const [scope, setScope] = useState("productos"); // "productos" | "materia" | "eventos"
   const [subTab, setSubTab] = useState("stock");
   const [products, setProducts] = useState([]);
@@ -310,6 +311,14 @@ export default function InventarioView({ user }) {
             }`}
           >
             <History size={14} /> Historial
+          </button>
+          <button
+            onClick={() => setSubTab("por_pagar")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              subTab === "por_pagar" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+            }`}
+          >
+            <FileText size={14} /> Por Pagar
           </button>
         </div>
       </div>
@@ -679,6 +688,12 @@ export default function InventarioView({ user }) {
       {subTab === "historial" && (
         <div className="flex-1 overflow-auto px-6 pb-6">
           <HistorialView />
+        </div>
+      )}
+
+      {subTab === "por_pagar" && (
+        <div className="flex-1 overflow-auto px-6 pb-6">
+          <PorPagarView user={user} rate={rate} />
         </div>
       )}
 
