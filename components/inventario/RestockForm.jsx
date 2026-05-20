@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import InvoiceUploadModal from "./InvoiceUploadModal";
 
 // Reglas:
 // - Productos con receta (has_recipe=true) NO se stockean directo: se controlan
@@ -21,6 +22,7 @@ function emptyRow() {
 }
 
 export default function RestockForm({ products, user, onRestocked }) {
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [rows, setRows] = useState([emptyRow()]);
   const [supplier, setSupplier] = useState("");
   const [newSupplierMode, setNewSupplierMode] = useState(false);
@@ -176,11 +178,20 @@ export default function RestockForm({ products, user, onRestocked }) {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-stone-100">
-          <h3 className="font-bold text-sm text-stone-700">Formulario de entrada</h3>
-          <p className="text-[11px] text-stone-400 mt-0.5">
-            Productos con receta no se ingresan acá — solo sus ingredientes (Materia Prima). Costo total del lote; el sistema divide.
-          </p>
+        <div className="px-4 py-3 border-b border-stone-100 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-sm text-stone-700">Formulario de entrada</h3>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              Productos con receta no se ingresan acá — solo sus ingredientes (Materia Prima). Costo total del lote; el sistema divide.
+            </p>
+          </div>
+          <button
+            onClick={() => setInvoiceModalOpen(true)}
+            className="shrink-0 px-3 py-1.5 bg-gradient-to-r from-brand to-brand-dark text-white rounded-lg text-xs font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            title="Subir foto de factura y dejar que Claude Vision extraiga los datos"
+          >
+            <Sparkles size={13} /> Subir factura
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -380,6 +391,10 @@ export default function RestockForm({ products, user, onRestocked }) {
           {saving ? <><Loader2 size={16} className="animate-spin" /> Procesando...</> : "Confirmar entrada"}
         </button>
       </div>
+
+      {invoiceModalOpen && (
+        <InvoiceUploadModal onClose={() => setInvoiceModalOpen(false)} />
+      )}
     </div>
   );
 }
