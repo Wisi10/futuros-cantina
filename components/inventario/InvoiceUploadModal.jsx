@@ -1,7 +1,9 @@
 "use client";
 import { useState, useRef, useMemo, useEffect } from "react";
-import { X, Upload, Loader2, AlertTriangle, Camera, FileText, CheckCircle2, Link2, HelpCircle, Calendar, CreditCard, Clock } from "lucide-react";
+import { X, Upload, Loader2, AlertTriangle, Camera, FileText, CheckCircle2, HelpCircle, Calendar, CreditCard, Clock, Plus, Search, Check } from "lucide-react";
 import { findMatches, formatScore } from "@/lib/productMatcher";
+import { supabase } from "@/lib/supabase";
+import { generateId, toTitleCase, CANTINA_CATEGORIES } from "@/lib/utils";
 
 // Estado de pago inferido de la factura ("CREDITO" / "Pague Antes" / "POR COBRAR"
 // → pendiente. "CONTADO" / nada → pagado).
@@ -247,11 +249,14 @@ export default function InvoiceUploadModal({ products = [], onClose }) {
   );
 }
 
-// ─── Editor (paso 7: editable) ───────────────────────────────
+// ─── Editor (paso 7: editable, paso 8: product picker) ───────
 function ExtractedEditor({ draft, onUpdate, imageUrl, products }) {
   const data = draft;
   const showUsd = data.currency_primary === "USD" || data.total_usd != null;
   const showVes = data.currency_primary === "VES" || data.total_ves != null;
+
+  // State: cual fila esta usando el picker (null = ninguna)
+  const [pickerForRow, setPickerForRow] = useState(null);
 
   // Calcula matches contra catalogo para cada item. useMemo evita recalcular
   // en cada render (products puede ser grande).
@@ -259,8 +264,26 @@ function ExtractedEditor({ draft, onUpdate, imageUrl, products }) {
     return data.items.map((it) => findMatches(it.description, products, 3, 0.2));
   }, [data.items, products]);
 
-  const itemsWithMatch = itemMatches.filter((m) => m.length > 0).length;
-  const itemsNoMatch = data.items.length - itemsWithMatch;
+  // Auto-bind: items con match score >= 0.75 se ligan automaticamente al
+  // producto del catalogo. Solo corre una vez por item (cuando todavia no
+  // hay selected_product_id).
+  useEffect(() => {
+    const newItems = data.items.map((it, i) => {
+      if (it.selected_product_id !== null) return it; // ya bound o ya negado
+      const best = itemMatches[i]?.[0];
+      if (best && best.score >= 0.75) {
+        return { ...it, selected_product_id: best.product.id };
+      }
+      return it;
+    });
+    if (newItems.some((it, i) => it.selected_product_id !== data.items[i].selected_product_id)) {
+      onUpdate({ items: newItems });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemMatches]);
+
+  const itemsBound = data.items.filter((it) => it.selected_product_id).length;
+  const itemsUnbound = data.items.length - itemsBound;
 
   // Helpers para editar items
   const updateItem = (idx, patch) => {
@@ -272,6 +295,13 @@ function ExtractedEditor({ draft, onUpdate, imageUrl, products }) {
   const removeItem = (idx) => {
     if (data.items.length <= 1) return;
     onUpdate({ items: data.items.filter((_, i) => i !== idx) });
+  };
+
+  // Cuando el ProductPicker devuelve un producto (existente o recien creado)
+  const handlePickerResult = (productId) => {
+    if (pickerForRow == null) return;
+    updateItem(pickerForRow, { selected_product_id: productId });
+    setPickerForRow(null);
   };
 
   // Total recalculado dinamicamente. Si include_iva_in_cost, costo = price * (1 + iva/100).
@@ -353,8 +383,8 @@ function ExtractedEditor({ draft, onUpdate, imageUrl, products }) {
         <div className="px-4 py-2 bg-stone-50 text-xs font-medium text-stone-500 uppercase tracking-wider flex justify-between">
           <span>{data.items.length} {data.items.length === 1 ? "ítem" : "ítems"}</span>
           <span className="normal-case font-normal">
-            <span className="text-green-600">{itemsWithMatch} con match</span>
-            {itemsNoMatch > 0 && <> · <span className="text-stone-500">{itemsNoMatch} sin match</span></>}
+            <span className="text-green-600">{itemsBound} con producto</span>
+            {itemsUnbound > 0 && <> · <span className="text-amber-700">{itemsUnbound} sin producto</span></>}
           </span>
         </div>
         <table className="w-full text-sm">
@@ -397,7 +427,13 @@ function ExtractedEditor({ draft, onUpdate, imageUrl, products }) {
                         <X size={12} />
                       </button>
                     </div>
-                    <MatchHint best={best} extras={matches.slice(1)} />
+                    <ProductBinding
+                      item={it}
+                      bestMatch={best}
+                      products={products}
+                      onOpenPicker={() => setPickerForRow(i)}
+                      onUnbind={() => updateItem(i, { selected_product_id: null })}
+                    />
                   </td>
                   <td className="px-2 py-1.5 text-center align-top">
                     <input
@@ -486,7 +522,261 @@ function ExtractedEditor({ draft, onUpdate, imageUrl, products }) {
 
       {/* Sección de pago */}
       <PaymentSection draft={data} onUpdate={onUpdate} />
+
+      {/* Picker modal (paso 8) */}
+      {pickerForRow != null && (
+        <ProductPickerModal
+          products={products}
+          initialQuery={data.items[pickerForRow]?.description || ""}
+          matches={itemMatches[pickerForRow] || []}
+          onClose={() => setPickerForRow(null)}
+          onSelect={handlePickerResult}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── ProductBinding: muestra el estado de ligadura del item con un producto ──
+function ProductBinding({ item, bestMatch, products, onOpenPicker, onUnbind }) {
+  const bound = item.selected_product_id ? products.find((p) => p.id === item.selected_product_id) : null;
+
+  if (bound) {
+    return (
+      <div className="mt-0.5 flex items-center gap-1 flex-wrap">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 border border-green-300 rounded text-[11px] text-green-800 font-medium">
+          <Check size={10} /> {bound.name}
+        </span>
+        <button onClick={onOpenPicker} className="text-[11px] text-stone-500 hover:text-brand underline-offset-2 hover:underline">
+          cambiar
+        </button>
+        <button onClick={onUnbind} className="text-[11px] text-stone-400 hover:text-red-500" title="Desligar producto">
+          <X size={10} />
+        </button>
+      </div>
+    );
+  }
+
+  // Unbound
+  if (bestMatch) {
+    return (
+      <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+        <span className="text-stone-500">Sugerencia:</span>
+        <span className="text-stone-700">{bestMatch.product.name}</span>
+        <span className="text-stone-400">{formatScore(bestMatch.score)}</span>
+        <button
+          onClick={onOpenPicker}
+          className="px-1.5 py-0.5 bg-stone-100 hover:bg-stone-200 rounded text-stone-600 transition-colors"
+        >
+          Seleccionar / crear
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-0.5 flex items-center gap-1.5 text-[11px]">
+      <HelpCircle size={10} className="text-amber-600" />
+      <span className="text-amber-700">Sin match</span>
+      <button
+        onClick={onOpenPicker}
+        className="px-1.5 py-0.5 bg-brand text-white rounded hover:opacity-90 transition-opacity"
+      >
+        Buscar / Crear
+      </button>
+    </div>
+  );
+}
+
+// ─── ProductPickerModal: buscar existente o crear nuevo ──────
+function ProductPickerModal({ products, initialQuery, matches, onClose, onSelect }) {
+  const [query, setQuery] = useState(initialQuery);
+  const [mode, setMode] = useState("search"); // search | create
+  const [creating, setCreating] = useState(false);
+
+  // Create form state
+  const [createName, setCreateName] = useState(initialQuery);
+  const [createCategory, setCreateCategory] = useState("Bebida");
+  const [createPriceRef, setCreatePriceRef] = useState("");
+  const [createIsCantina, setCreateIsCantina] = useState(true);
+  const [createError, setCreateError] = useState("");
+
+  // Search results: trigram score si hay query, sino lista alfabetica
+  const searchResults = useMemo(() => {
+    if (!query.trim()) {
+      return [...products].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 50);
+    }
+    return findMatches(query, products, 50, 0.1).map((m) => m.product);
+  }, [query, products]);
+
+  const handleCreate = async () => {
+    if (!createName.trim() || Number(createPriceRef) <= 0) {
+      setCreateError("Nombre y precio venta requeridos");
+      return;
+    }
+    setCreating(true);
+    setCreateError("");
+    try {
+      const finalName = toTitleCase(createName);
+      // Dup check
+      const { data: existing } = await supabase
+        .from("products")
+        .select("id, name")
+        .ilike("name", finalName)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        setCreateError(`Ya existe "${existing[0].name}". Usa el existente.`);
+        setCreating(false);
+        return;
+      }
+      const { data: maxRow } = await supabase
+        .from("products")
+        .select("sort_order")
+        .order("sort_order", { ascending: false })
+        .limit(1);
+      const nextOrder = Number(maxRow?.[0]?.sort_order || 0) + 1;
+      const newId = generateId();
+      const { error: insertError } = await supabase.from("products").insert({
+        id: newId,
+        name: finalName,
+        category: createCategory,
+        price_ref: Number(createPriceRef),
+        cost_ref: 0,
+        is_cantina: createIsCantina,
+        active: true,
+        sort_order: nextOrder,
+        stock_quantity: 0,
+      });
+      if (insertError) throw insertError;
+      onSelect(newId); // cierra picker y bindea el item
+    } catch (e) {
+      setCreateError("Error: " + e.message);
+    }
+    setCreating(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200">
+          <h3 className="font-bold text-sm text-stone-800">Seleccionar o crear producto</h3>
+          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded"><X size={16} /></button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-stone-100">
+          <button
+            onClick={() => setMode("search")}
+            className={`px-3 py-2 text-sm rounded-t-lg ${mode === "search" ? "bg-brand text-white" : "text-stone-600 hover:bg-stone-100"}`}
+          >
+            <Search size={12} className="inline mr-1.5" /> Existente
+          </button>
+          <button
+            onClick={() => setMode("create")}
+            className={`px-3 py-2 text-sm rounded-t-lg ${mode === "create" ? "bg-brand text-white" : "text-stone-600 hover:bg-stone-100"}`}
+          >
+            <Plus size={12} className="inline mr-1.5" /> Crear nuevo
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-5 min-h-0">
+          {mode === "search" && (
+            <div className="space-y-2">
+              <input
+                type="text"
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar producto..."
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              />
+              {matches.length > 0 && !query && (
+                <div className="text-xs text-stone-500 mt-2">Sugerencias para esta línea:</div>
+              )}
+              <div className="space-y-1 max-h-[50vh] overflow-auto">
+                {matches.length > 0 && !query && matches.map((m) => (
+                  <ProductRow key={m.product.id} product={m.product} score={m.score} onSelect={onSelect} />
+                ))}
+                {searchResults.length === 0 && (
+                  <div className="text-sm text-stone-400 text-center py-6">Sin resultados</div>
+                )}
+                {searchResults.map((p) => (
+                  <ProductRow key={p.id} product={p} onSelect={onSelect} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mode === "create" && (
+            <div className="space-y-3">
+              <EditField label="Nombre" value={createName} onChange={setCreateName} placeholder="ej. Coca Cola Bombita 355ml" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-stone-500 text-xs mb-0.5">Categoría</div>
+                  <select
+                    value={createCategory}
+                    onChange={(e) => setCreateCategory(e.target.value)}
+                    className="w-full bg-white border border-stone-300 rounded px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
+                  >
+                    {(CANTINA_CATEGORIES || ["Bebida", "Comida", "Snacks", "Otro"]).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <EditField
+                  label="Precio venta $REF"
+                  type="number"
+                  step="0.01"
+                  value={createPriceRef}
+                  onChange={setCreatePriceRef}
+                  placeholder="0.00"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={createIsCantina}
+                  onChange={(e) => setCreateIsCantina(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Producto de cantina (se vende en POS)</span>
+              </label>
+              <p className="text-xs text-stone-400">
+                El costo se calcula automáticamente cuando confirmes la entrada (trigger MAC). No hace falta llenarlo aquí.
+              </p>
+              {createError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{createError}</div>
+              )}
+              <button
+                onClick={handleCreate}
+                disabled={creating || !createName.trim() || Number(createPriceRef) <= 0}
+                className="w-full px-4 py-2 bg-brand text-white rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-brand-dark flex items-center justify-center gap-2"
+              >
+                {creating ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : <><Plus size={14} /> Crear y usar</>}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductRow({ product, score, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(product.id)}
+      className="w-full text-left px-3 py-2 rounded-lg hover:bg-stone-100 transition-colors flex items-center justify-between gap-2 border border-transparent hover:border-stone-200"
+    >
+      <span className="text-sm text-stone-800">
+        {product.emoji ? `${product.emoji} ` : ""}{product.name}
+      </span>
+      <span className="flex items-center gap-2 text-xs text-stone-400 shrink-0">
+        <span>{product.category}</span>
+        <span>stock: {product.stock_quantity ?? 0}</span>
+        {score != null && <span className="text-brand font-medium">{formatScore(score)}</span>}
+      </span>
+    </button>
   );
 }
 
@@ -577,28 +867,6 @@ function PaymentSection({ draft, onUpdate }) {
   );
 }
 
-function MatchHint({ best, extras }) {
-  if (!best) {
-    return (
-      <div className="text-[11px] text-stone-400 mt-0.5 flex items-center gap-1">
-        <HelpCircle size={10} /> Sin match — crear producto nuevo
-      </div>
-    );
-  }
-  const scoreColor = best.score >= 0.7 ? "text-green-600" : best.score >= 0.5 ? "text-amber-600" : "text-stone-500";
-  return (
-    <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-1">
-      <Link2 size={10} className={scoreColor} />
-      <span className={`font-medium ${scoreColor}`}>{formatScore(best.score)}</span>
-      <span>{best.product.name}</span>
-      {extras.length > 0 && (
-        <span className="text-stone-400" title={extras.map((e) => `${formatScore(e.score)} ${e.product.name}`).join("\n")}>
-          (+{extras.length} más)
-        </span>
-      )}
-    </div>
-  );
-}
 
 function EditField({ label, value, onChange, placeholder, type = "text", step }) {
   return (
