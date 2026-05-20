@@ -33,10 +33,18 @@ import WhatsNewModal from "@/components/shared/WhatsNewModal";
 import { LATEST as LATEST_WHATS_NEW } from "@/lib/whatsNew";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
-function GlobalProfileMount({ user, rate }) {
+function GlobalProfileMount({ user, rate, onStartCreditSale }) {
   const { profileId, close } = useClientProfile();
   if (!profileId) return null;
-  return <ClientProfileModal clientId={profileId} user={user} onClose={close} />;
+  return (
+    <ClientProfileModal
+      clientId={profileId}
+      user={user}
+      rate={rate}
+      onClose={close}
+      onStartCreditSale={onStartCreditSale}
+    />
+  );
 }
 
 export default function POSPage() {
@@ -1026,7 +1034,14 @@ function POSPageInner() {
 
         {activeTab === "reportes" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <ReportesView user={user} rate={rate} />
+            <ReportesView
+              user={user}
+              rate={rate}
+              onNavigateToDeudores={() => {
+                setClientesInitialSubTab("deudores");
+                setActiveTab("clientes");
+              }}
+            />
           </div>
         )}
 
@@ -1202,7 +1217,16 @@ function POSPageInner() {
         />
       )}
 
-      <GlobalProfileMount user={user} rate={rate} />
+      <GlobalProfileMount
+        user={user}
+        rate={rate}
+        onStartCreditSale={(client) => {
+          if (client) setSaleClient(client);
+          setClientesInitialSubTab(null);
+          setActiveTab("vender");
+          loadPendingCreditsCount();
+        }}
+      />
     </div>
   );
 }

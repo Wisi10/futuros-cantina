@@ -9,7 +9,7 @@ const SUBTABS = [
   { id: "gastos",   label: "Gastos",   icon: Receipt   },
 ];
 
-export default function ReportesView({ user, rate }) {
+export default function ReportesView({ user, rate, onNavigateToDeudores }) {
   const [active, setActive] = useState("reportes");
 
   return (
@@ -35,7 +35,7 @@ export default function ReportesView({ user, rate }) {
       </div>
 
       <div className="flex-1 min-h-0 border-t border-stone-200">
-        {active === "reportes" && <ReportesContentView user={user} rate={rate} />}
+        {active === "reportes" && <ReportesContentView user={user} rate={rate} onNavigateToDeudores={onNavigateToDeudores} />}
         {active === "gastos" && <GastosView user={user} rate={rate} />}
       </div>
     </div>

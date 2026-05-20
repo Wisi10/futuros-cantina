@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart3, Download, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { METHOD_LABELS, PAYMENT_METHODS, formatREF, formatBs } from "@/lib/utils";
-import CreditsModal from "@/components/vender/CreditsModal";
 import ClientProfileModal from "@/components/clientes/ClientProfileModal";
 import SalesLineChart from "./SalesLineChart";
 import TopProductsBarChart from "./TopProductsBarChart";
@@ -165,7 +164,7 @@ function getPeriodDates(period, customFrom, customTo) {
   return { from: customFrom || todayStr, to: customTo || todayStr };
 }
 
-export default function ReportesContentView({ user, rate }) {
+export default function ReportesContentView({ user, rate, onNavigateToDeudores }) {
   const [period, setPeriod] = useState("hoy");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -175,7 +174,6 @@ export default function ReportesContentView({ user, rate }) {
   const [expenses, setExpenses] = useState([]);
   const [credits, setCredits] = useState([]);
   const [products, setProducts] = useState([]);
-  const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [heatSales, setHeatSales] = useState([]);
   const [heatLoading, setHeatLoading] = useState(true);
@@ -747,8 +745,10 @@ export default function ReportesContentView({ user, rate }) {
             <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
                 <h2 className="font-bold text-sm text-stone-700">Creditos pendientes</h2>
-                <button onClick={() => setShowCreditsModal(true)}
-                  className="text-xs text-brand hover:underline">Ver todos</button>
+                {onNavigateToDeudores && (
+                  <button onClick={onNavigateToDeudores}
+                    className="text-xs text-brand hover:underline">Ver todos en Deudores</button>
+                )}
               </div>
               <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
                 <thead>
@@ -825,10 +825,6 @@ export default function ReportesContentView({ user, rate }) {
           {/* ─── Heat Map: Ventas ultimos 30 dias ─── */}
           <HeatMap sales={heatSales} loading={heatLoading} rate={rate} />
         </>
-      )}
-
-      {showCreditsModal && (
-        <CreditsModal user={user} rate={rate} onClose={() => setShowCreditsModal(false)} onUpdated={loadData} />
       )}
 
       {profileClientId && (

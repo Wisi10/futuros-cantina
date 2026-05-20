@@ -3,9 +3,9 @@ import { useState, useMemo } from "react";
 import { X, DollarSign, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-// Modal para registrar pago contra un restock pendiente.
-// Mirror del pattern de CreditsModal (pagos contra ventas a crédito)
-// pero del lado proveedor.
+// Modal para registrar pago contra un restock pendiente (lado proveedor).
+// Mismo pattern canónico que cantina_credits/cantina_credit_payments del
+// lado cliente: deuda en $REF locked + tabla pagos 1:N.
 
 const PAYMENT_METHODS = [
   { id: "transferencia", label: "Transferencia" },

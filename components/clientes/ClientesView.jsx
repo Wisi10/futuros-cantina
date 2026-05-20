@@ -262,8 +262,13 @@ export default function ClientesView({ user, rate, saleClient, initialSubTab, on
         <ClientProfileModal
           clientId={profileId}
           user={user}
+          rate={rate}
           onClose={() => setProfileId(null)}
           onUpdated={load}
+          onStartCreditSale={onNavigateToVender ? (client) => {
+            setProfileId(null);
+            onNavigateToVender(client);
+          } : null}
         />
       )}
 

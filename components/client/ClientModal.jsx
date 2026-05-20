@@ -3,9 +3,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Search, ArrowLeft, User, Gift, Percent, UserPlus, Loader2, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, formatBs, ProductImage } from "@/lib/utils";
-import CreditsModal from "@/components/vender/CreditsModal";
+import { useClientProfile } from "@/lib/clientProfileContext";
 
 export default function ClientModal({ rate, user, onClose, onAssociateClient, initialClientId }) {
+  const { open: openGlobalProfile } = useClientProfile();
   const isAdmin = user?.cantinaRole === "gerente" || user?.cantinaRole === "owner" || user?.cantinaRole === "admin";
   const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [editingDiscount, setEditingDiscount] = useState(false);
@@ -13,7 +14,6 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
   const [editingLimit, setEditingLimit] = useState(false);
   const [limitInput, setLimitInput] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
-  const [showCreditsPay, setShowCreditsPay] = useState(false);
 
   // Crear cliente nuevo (inline desde el search)
   const [createForm, setCreateForm] = useState({ first_name: "", last_name: "", phone: "", cedula: "", email: "" });
@@ -539,10 +539,15 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
                       {rate?.usd && <p className="text-xs text-yellow-600 mt-0.5">{formatBs(Number(profile.pending_credits_ref || 0), rate.usd)}</p>}
                       <p className="text-xs text-yellow-600 mt-1">{profile.pending_credits_count} crédito{profile.pending_credits_count !== 1 ? "s" : ""} abierto{profile.pending_credits_count !== 1 ? "s" : ""}</p>
                       <button
-                        onClick={() => setShowCreditsPay(true)}
+                        onClick={() => {
+                          if (profile?.id) {
+                            onClose();
+                            openGlobalProfile(profile.id);
+                          }
+                        }}
                         className="mt-3 w-full px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-colors min-h-[40px]"
                       >
-                        <Wallet size={14} /> Ingresar pago
+                        <Wallet size={14} /> Ver créditos &amp; abonar
                       </button>
                     </div>
                   ) : (
@@ -600,19 +605,6 @@ export default function ClientModal({ rate, user, onClose, onAssociateClient, in
         </div>
       </div>
 
-      {/* Modal de pago de créditos filtrado a este cliente */}
-      {showCreditsPay && profile?.id && (
-        <CreditsModal
-          user={user}
-          rate={rate}
-          clientIdFilter={profile.id}
-          onClose={() => setShowCreditsPay(false)}
-          onUpdated={async () => {
-            const { data: refreshed } = await supabase.rpc("get_client_profile", { client_id_param: profile.id });
-            if (refreshed?.[0]) setProfile(refreshed[0]);
-          }}
-        />
-      )}
     </div>
   );
 }
