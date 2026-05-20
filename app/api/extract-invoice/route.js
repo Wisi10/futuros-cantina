@@ -58,10 +58,11 @@ Reglas IMPORTANTES de extraccion:
    - Cuando hay duda, marca needs_review: true en la linea Y en la factura entera. Usa tu mejor interpretacion pero marca la duda.
 
 3. CURRENCY_PRIMARY (CRITICO — sigue ESTRICTAMENTE estas reglas en orden):
-   - REGLA A: Si VES algun simbolo "$" o palabra "USD" en cualquier parte de los precios o totales (incluyendo "57$", "$15.00", "Total $"), currency_primary = "USD". El $ tiene prioridad absoluta.
-   - REGLA B: Si la factura muestra DOS columnas de precio (una Bs Y otra USD) lado a lado en cada linea, currency_primary = "USD" (la USD es la base; la Bs es conversion del dia). Aplica aunque los precios en Bs sean los mas grandes/prominentes.
-   - REGLA C: Si la factura dice "PARA PAGOS EN BOLIVARES APLICA LA TASA DEL BCV" o "Tipo de cambio aplicable" o "Tipo de Cambio BCV" o similar (la factura esta en USD aunque los numeros no tengan $ explicito): currency_primary = "USD".
-   - REGLA D: Solo si NINGUNA de las reglas A/B/C aplica Y los precios son claramente Bs (con "Bs." al lado o totales en miles muy grandes tipicos de Bs venezolanos): currency_primary = "VES".
+   - REGLA A: Si VES algun simbolo "$" o palabra "USD" en cualquier parte de los precios o totales (incluyendo "57$" al final, "$15.00", "Total $", "$. " en headers de columna, "EN USD"), currency_primary = "USD". El $ tiene prioridad ABSOLUTA — busca tambien $ pegado a numeros al final ("15.2$").
+   - REGLA B: Si la factura muestra DOS columnas de precio (una Bs Y otra USD) lado a lado en cada linea, currency_primary = "USD" (la USD es la base; la Bs es conversion del dia).
+   - REGLA C: Si la factura tiene un campo o header "Tasa BCV" / "Tipo de cambio" / "BCV" (aunque este vacio) o dice "PARA PAGOS EN BOLIVARES APLICA LA TASA DEL BCV": currency_primary = "USD" (la presencia de ese campo indica que la factura usa USD como base y se convierte a Bs).
+   - REGLA D: Si TODOS los precios son claramente Bs (con "Bs." al lado, "Bs" en headers, o totales en miles muy grandes tipicos de Bs venezolanos como 50000+ por linea) y NO hay $ ni Tasa BCV visible: currency_primary = "VES".
+   - DEFAULT: Si ninguna regla aplica claramente y hay duda, default a "USD" (proveedores de cantina venezolana son mayoritariamente USD-base). Marca needs_review: true en este caso.
 
 4. MONEDAS por linea: Si una linea solo muestra precio en USD ($), llena unit_price_usd y line_total_usd, deja los _ves en null. Si solo muestra Bs, llena _ves y deja _usd en null. Si la factura muestra AMBAS columnas (Bs y USD por linea), llena ambas.
 
