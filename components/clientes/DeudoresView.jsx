@@ -129,6 +129,21 @@ export default function DeudoresView({ user, rate, onNavigateToVender }) {
       });
     }
 
+    // 5. Items pedidos (de la venta originaria) para cada crédito
+    const saleIds = credits.map((c) => c.sale_id).filter(Boolean);
+    if (saleIds.length > 0) {
+      const { data: sales } = await supabase
+        .from("cantina_sales")
+        .select("id, items")
+        .in("id", saleIds);
+      const itemsBySale = Object.fromEntries((sales || []).map((s) => [s.id, s.items]));
+      groupList.forEach((g) => {
+        g.items.forEach((it) => {
+          it.order_items = Array.isArray(itemsBySale[it.sale_id]) ? itemsBySale[it.sale_id] : [];
+        });
+      });
+    }
+
     setDebtors(groupList);
     setLoading(false);
   }, []);
@@ -502,25 +517,39 @@ export default function DeudoresView({ user, rate, onNavigateToVender }) {
                       .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))
                       .map((c) => {
                         const days = daysSince(c.created_at) || 0;
+                        const orderItems = Array.isArray(c.order_items) ? c.order_items : [];
                         return (
-                          <div key={c.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-stone-100 last:border-0">
+                          <div key={c.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-stone-100 last:border-0">
                             <div className="flex-1 min-w-0">
                               <p className="text-xs text-stone-600">
                                 Original: {formatREF(c.original_amount_ref)}
                                 {Number(c.paid_amount_ref || 0) > 0 && ` · Pagado: ${formatREF(c.paid_amount_ref)}`}
                               </p>
-                              <p className={`text-xs ${ageColor(days)}`}>
+                              {orderItems.length > 0 && (
+                                <p className="text-xs text-stone-500 mt-0.5">
+                                  <span className="text-stone-400">Pidió: </span>
+                                  {orderItems.map((it, i) => (
+                                    <span key={i}>
+                                      {i > 0 && <span className="text-stone-300"> · </span>}
+                                      {it.qty}× {it.name}
+                                    </span>
+                                  ))}
+                                </p>
+                              )}
+                              <p className={`text-xs mt-0.5 ${ageColor(days)}`}>
                                 {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days}d`}
                                 {c.status === "partial" && " · Parcial"}
                               </p>
                             </div>
-                            <p className="text-xs font-bold text-brand whitespace-nowrap">{formatREF(c.outstanding)}</p>
-                            <button
-                              onClick={() => openPayCredit(c, g)}
-                              className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors shrink-0 min-h-[40px]"
-                            >
-                              Cobrar
-                            </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <p className="text-xs font-bold text-brand whitespace-nowrap">{formatREF(c.outstanding)}</p>
+                              <button
+                                onClick={() => openPayCredit(c, g)}
+                                className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors min-h-[40px]"
+                              >
+                                Cobrar
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
