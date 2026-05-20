@@ -32,6 +32,34 @@ const PAYMENT_METHODS = [
   { id: "cash_bs", label: "Efectivo Bs" },
 ];
 
+// Convierte el precio unitario de un item a REF (=USD equiv).
+// Regla:
+// - Si hay unit_price_usd, ese es el costo en REF.
+// - Si solo hay unit_price_ves y tasa BCV, convierte: REF = Bs / tasa.
+// - Si esta marcado include_iva_in_cost, multiplica por (1 + iva/100).
+// Devuelve 0 si no hay datos suficientes.
+function itemCostRef(item, draft) {
+  let priceRef = 0;
+  if (item.unit_price_usd != null && Number.isFinite(item.unit_price_usd)) {
+    priceRef = Number(item.unit_price_usd);
+  } else if (item.unit_price_ves != null && draft.bcv_rate > 0) {
+    priceRef = Number(item.unit_price_ves) / Number(draft.bcv_rate);
+  }
+  if (draft.include_iva_in_cost && draft.iva_percent) {
+    priceRef *= 1 + Number(draft.iva_percent) / 100;
+  }
+  return priceRef;
+}
+
+// Convierte fecha DD/MM/YYYY a ISO YYYY-MM-DD para columnas DATE.
+function parseInvoiceDate(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
 // Resize una imagen para que el lado mayor no pase de MAX_DIM, devuelve base64 JPEG.
 // Las facturas tipicas son fotos de 3-8MB; ~1600px de lado mayor + JPEG quality 0.85
 // las baja a ~300-500KB sin perder legibilidad para Claude Vision.
@@ -68,8 +96,8 @@ async function resizeToBase64(file) {
   });
 }
 
-export default function InvoiceUploadModal({ products = [], onClose }) {
-  const [stage, setStage] = useState("idle"); // idle | resizing | extracting | done | error
+export default function InvoiceUploadModal({ products = [], user, onClose, onConfirmed }) {
+  const [stage, setStage] = useState("idle"); // idle | resizing | extracting | done | saving | error
   const [imagePreview, setImagePreview] = useState(null);
   const [extracted, setExtracted] = useState(null);
   const [draft, setDraft] = useState(null); // copia editable del extracted (paso 7)
@@ -145,8 +173,132 @@ export default function InvoiceUploadModal({ products = [], onClose }) {
     setStage("idle");
     setImagePreview(null);
     setExtracted(null);
+    setDraft(null);
     setErrorMsg(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ─── Confirmar entrada → escribe a Supabase ────────────────
+  const handleConfirm = async () => {
+    if (!draft) return;
+
+    // Validacion 1: todos los items deben tener producto seleccionado
+    const unbound = draft.items.filter((it) => !it.selected_product_id);
+    if (unbound.length > 0) {
+      alert(`Hay ${unbound.length} ítem${unbound.length === 1 ? "" : "s"} sin producto seleccionado. Liga cada línea a un producto del catálogo o crea uno nuevo.`);
+      return;
+    }
+
+    // Validacion 2: cantidades y costos positivos
+    for (const it of draft.items) {
+      if (Number(it.quantity || 0) <= 0) {
+        alert(`Item "${it.description}" tiene cantidad ${it.quantity}. Corrígela.`);
+        return;
+      }
+      const costRef = itemCostRef(it, draft);
+      if (!(costRef >= 0)) {
+        alert(`Item "${it.description}" tiene costo inválido. Revisa precios y tasa BCV.`);
+        return;
+      }
+    }
+
+    // Validacion 3: si va a crédito y no hay supplier, advertir
+    if (!draft.supplier_name.trim()) {
+      const ok = confirm("No has puesto nombre del proveedor. ¿Continuar igual?");
+      if (!ok) return;
+    }
+
+    setStage("saving");
+    try {
+      // 1. Build items payload (formato compatible con RestockForm existente)
+      const items = draft.items.map((it) => {
+        const costPerUnitRef = itemCostRef(it, draft);
+        return {
+          product_id: it.selected_product_id,
+          name: products.find((p) => p.id === it.selected_product_id)?.name || it.description,
+          qty: Number(it.quantity || 0),
+          cost_per_unit_ref: costPerUnitRef,
+          total_cost_ref: costPerUnitRef * Number(it.quantity || 0),
+        };
+      });
+
+      const totalCostRef = items.reduce((s, it) => s + it.total_cost_ref, 0);
+      const restockDate = parseInvoiceDate(draft.invoice_date) || todayISO();
+      const dueDate = draft.payment_status === "pending" && draft.due_date ? draft.due_date : null;
+      const isPaid = draft.payment_status === "paid";
+
+      // 2. Insert cantina_restocks
+      const { data: restock, error: restockErr } = await supabase
+        .from("cantina_restocks")
+        .insert({
+          restock_date: restockDate,
+          items,
+          total_cost_ref: totalCostRef,
+          supplier: draft.supplier_name.trim() || null,
+          notes: [
+            draft.invoice_number ? `Factura Nº ${draft.invoice_number}` : null,
+            draft.supplier_rif ? `RIF ${draft.supplier_rif}` : null,
+            draft.notes,
+          ].filter(Boolean).join(" · ") || null,
+          created_by: user?.name || "Cantina",
+          payment_status: draft.payment_status,
+          paid_amount_ref: isPaid ? totalCostRef : 0,
+          payment_terms: draft.payment_terms || null,
+          due_date: dueDate,
+        })
+        .select()
+        .single();
+      if (restockErr) throw restockErr;
+
+      // 3. Stock movements + update products (uno por item)
+      for (const item of items) {
+        const product = products.find((p) => p.id === item.product_id);
+
+        const { error: movErr } = await supabase.from("stock_movements").insert({
+          product_id: item.product_id,
+          product_name: item.name,
+          movement_type: "restock",
+          quantity: item.qty,
+          reference_id: restock.id,
+          cost_ref: item.cost_per_unit_ref,
+          notes: `Factura ${draft.supplier_name || "?"}${draft.invoice_number ? ` Nº${draft.invoice_number}` : ""}`,
+          created_by: user?.name || "Cantina",
+        });
+        if (movErr) throw movErr;
+
+        const newStock = Number(product?.stock_quantity || 0) + item.qty;
+        const { error: stockErr } = await supabase
+          .from("products")
+          .update({ stock_quantity: newStock })
+          .eq("id", item.product_id);
+        if (stockErr) throw stockErr;
+      }
+
+      // 4. Si pagado: insert cantina_restock_payments con la tasa del día
+      if (isPaid) {
+        const exchangeRate = draft.payment_exchange_rate || draft.bcv_rate || null;
+        const amountBs = exchangeRate ? totalCostRef * Number(exchangeRate) : null;
+        const { error: payErr } = await supabase.from("cantina_restock_payments").insert({
+          restock_id: restock.id,
+          amount_ref: totalCostRef,
+          amount_bs: amountBs,
+          payment_method: draft.payment_method,
+          reference: draft.payment_reference || null,
+          exchange_rate_bs: exchangeRate,
+          paid_at: draft.paid_at || todayISO(),
+          notes: null,
+          created_by: user?.name || "Cantina",
+        });
+        if (payErr) throw payErr;
+      }
+
+      // 5. Done
+      alert(`Entrada registrada${isPaid ? " y pagada" : " (a crédito)"} ✓`);
+      if (onConfirmed) onConfirmed();
+    } catch (err) {
+      setStage("error");
+      setErrorMsg(`Error al guardar: ${err.message || err}`);
+    }
   };
 
   return (
@@ -231,17 +383,47 @@ export default function InvoiceUploadModal({ products = [], onClose }) {
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-stone-200 bg-stone-50 rounded-b-2xl">
           <div className="text-xs text-stone-500">
-            {stage === "done" && "Vista preliminar (read-only). En el próximo paso podrás editar y confirmar."}
+            {stage === "done" && draft && (
+              <>
+                {draft.items.filter((it) => !it.selected_product_id).length > 0
+                  ? `${draft.items.filter((it) => !it.selected_product_id).length} ítem(s) sin producto — liga cada línea antes de confirmar`
+                  : `${draft.items.length} ítem(s) listos para entrar a inventario`}
+              </>
+            )}
+            {stage === "saving" && "Guardando..."}
           </div>
           <div className="flex gap-2">
             {stage === "done" && (
-              <button onClick={reset} className="px-4 py-2 bg-stone-200 hover:bg-stone-300 rounded-lg text-sm">
+              <button
+                onClick={reset}
+                disabled={stage === "saving"}
+                className="px-4 py-2 bg-stone-200 hover:bg-stone-300 rounded-lg text-sm disabled:opacity-50"
+              >
                 Subir otra
               </button>
             )}
-            <button onClick={onClose} className="px-4 py-2 bg-stone-700 text-white hover:bg-stone-800 rounded-lg text-sm">
+            <button
+              onClick={onClose}
+              disabled={stage === "saving"}
+              className="px-4 py-2 bg-stone-700 text-white hover:bg-stone-800 rounded-lg text-sm disabled:opacity-50"
+            >
               Cerrar
             </button>
+            {stage === "done" && draft && (
+              <button
+                onClick={handleConfirm}
+                disabled={draft.items.some((it) => !it.selected_product_id) || stage === "saving"}
+                className="px-5 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-sm font-bold disabled:opacity-40 flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={14} />
+                Confirmar entrada
+              </button>
+            )}
+            {stage === "saving" && (
+              <button disabled className="px-5 py-2 bg-brand text-white rounded-lg text-sm font-bold flex items-center gap-1.5 opacity-70">
+                <Loader2 size={14} className="animate-spin" /> Guardando...
+              </button>
+            )}
           </div>
         </div>
       </div>
