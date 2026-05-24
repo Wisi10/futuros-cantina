@@ -177,10 +177,10 @@ export default function DashboardView({ user, rate, products, embedded = false }
         <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
           <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Tasa</p>
           <p className={`font-normal text-stone-800 ${embedded ? "text-base" : "text-2xl"}`} style={serif}>
-            {rate?.eur ? `Bs ${rate.eur.toFixed(2)}` : "—"}
+            {rate?.usd ? `Bs ${rate.usd.toFixed(2)}` : "—"}
           </p>
           <p className="text-[10px] text-stone-400" style={mono}>
-            {rate?.usd ? `USD ${rate.usd.toFixed(2)}` : ""}
+            {rate?.eur ? `REF ${rate.eur.toFixed(2)}` : ""}
           </p>
         </div>
       </div>
