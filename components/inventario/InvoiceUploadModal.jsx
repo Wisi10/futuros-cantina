@@ -3,7 +3,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { X, Upload, Loader2, AlertTriangle, Camera, FileText, CheckCircle2, HelpCircle, Calendar, CreditCard, Clock, Plus, Search, Check } from "lucide-react";
 import { findMatches, formatScore } from "@/lib/productMatcher";
 import { supabase } from "@/lib/supabase";
-import { generateId, toTitleCase, CANTINA_CATEGORIES } from "@/lib/utils";
+import { generateId, toTitleCase, CANTINA_CATEGORIES, loadProductCategoryNames } from "@/lib/utils";
 
 // Estado de pago inferido de la factura ("CREDITO" / "Pague Antes" / "POR COBRAR"
 // → pendiente. "CONTADO" / nada → pagado).
@@ -778,10 +778,22 @@ function ProductPickerModal({ products, initialQuery, matches, onClose, onSelect
 
   // Create form state
   const [createName, setCreateName] = useState(initialQuery);
+  const [categories, setCategories] = useState(CANTINA_CATEGORIES);
   const [createCategory, setCreateCategory] = useState("Bebida");
   const [createPriceRef, setCreatePriceRef] = useState("");
   const [createIsCantina, setCreateIsCantina] = useState(true);
   const [createError, setCreateError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    loadProductCategoryNames(supabase).then((cats) => {
+      if (!alive) return;
+      setCategories(cats);
+      if (!cats.includes(createCategory)) setCreateCategory(cats[0] || "Otro");
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Search results: trigram score si hay query, sino lista alfabetica
   const searchResults = useMemo(() => {
@@ -900,7 +912,7 @@ function ProductPickerModal({ products, initialQuery, matches, onClose, onSelect
                     onChange={(e) => setCreateCategory(e.target.value)}
                     className="w-full bg-white border border-stone-300 rounded px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
                   >
-                    {(CANTINA_CATEGORIES || ["Bebida", "Comida", "Snacks", "Otro"]).map((c) => (
+                    {categories.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>

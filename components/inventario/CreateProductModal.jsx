@@ -1,14 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { generateId, toTitleCase, CANTINA_CATEGORIES } from "@/lib/utils";
+import { generateId, toTitleCase, CANTINA_CATEGORIES, loadProductCategoryNames } from "@/lib/utils";
 
 const UNIT_LABELS = ["", "u", "kg", "g", "l", "ml", "caja", "paq", "u/caja"];
 
 export default function CreateProductModal({ user, onClose, onCreated }) {
   const [name, setName] = useState("");
+  const [categories, setCategories] = useState(CANTINA_CATEGORIES);
   const [category, setCategory] = useState("Bebida");
+
+  useEffect(() => {
+    let alive = true;
+    loadProductCategoryNames(supabase).then((cats) => {
+      if (!alive) return;
+      setCategories(cats);
+      if (!cats.includes(category)) setCategory(cats[0] || "Otro");
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [priceRef, setPriceRef] = useState("");
   const [costRef, setCostRef] = useState("");
   const [emoji, setEmoji] = useState("");
@@ -112,7 +124,7 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
               onChange={(e) => setCategory(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none bg-white"
             >
-              {CANTINA_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
