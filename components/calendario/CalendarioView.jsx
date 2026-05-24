@@ -6,7 +6,11 @@ import EventosView from "@/components/eventos/EventosView";
 
 const OPERATING_HOURS = { start: 8, end: 22 };
 const ROW_HEIGHT = 56;
-const COL_WIDTH = 124;
+// Column width calibrado para que las 6 canchas + hora-col entren en un
+// viewport tablet de 768px (después de los 48px de px-6 del wrapper):
+// 44 + 6×108 = 692, deja ~28px de slack.
+const COL_WIDTH = 108;
+const HOUR_COL_WIDTH = 44;
 const HEADER_HEIGHT = 44;
 
 const ACTIVITY_META = {
@@ -175,7 +179,7 @@ export default function CalendarioView({ user, rate, onNavigate }) {
                 <div className="overflow-auto flex-1">
                   <div className="min-w-max">
                     <div className="flex border-b border-stone-200 sticky top-0 bg-white z-30" style={{ height: HEADER_HEIGHT }}>
-                      <div className="flex-shrink-0 bg-stone-50 border-r border-stone-200 flex items-center justify-center text-[10px] text-stone-400 font-medium sticky left-0 z-40" style={{ width: 52 }}>
+                      <div className="flex-shrink-0 bg-stone-50 border-r border-stone-200 flex items-center justify-center text-[10px] text-stone-400 font-medium sticky left-0 z-40" style={{ width: HOUR_COL_WIDTH }}>
                         Hora
                       </div>
                       {courts.map((c) => (
@@ -200,7 +204,7 @@ export default function CalendarioView({ user, rate, onNavigate }) {
                         <div key={hour} className="flex border-b border-stone-100 last:border-b-0" style={{ height: ROW_HEIGHT }}>
                           <div
                             className="flex-shrink-0 bg-stone-50 border-r border-stone-200 flex items-start pt-1 justify-center text-[10px] font-medium text-stone-400 sticky left-0 z-20"
-                            style={{ width: 52 }}
+                            style={{ width: HOUR_COL_WIDTH }}
                           >
                             {shortTime}
                           </div>
