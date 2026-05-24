@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2, CheckCircle, Split } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, formatREFsec, PAYMENT_METHODS, METHOD_LABELS, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
@@ -22,6 +22,8 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
   const [pendingMethod, setPendingMethod] = useState(null); // selected method waiting for amount input
   const [pendingAmount, setPendingAmount] = useState("");
   const [pendingRef, setPendingRef] = useState("");
+  // null = aún no escogió; "full" = pagar todo en un método; "split" = dividir entre varios
+  const [paymentChoice, setPaymentChoice] = useState(null);
 
   // Overpay handling
   const [overpayAction, setOverpayAction] = useState(null); // 'change' | 'credit'
@@ -185,7 +187,10 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
   // Mixed payments helpers
   const startAddPayment = (methodId) => {
     setPendingMethod(methodId);
-    setPendingAmount(remaining > 0 ? remaining.toFixed(2) : "0");
+    // En modo "split" el staff escribe el monto manualmente para dividir;
+    // en modo "full" (o cuando ya hay pagos cargados) pre-llenamos con el resto.
+    const prefill = paymentChoice === "split" ? "" : (remaining > 0 ? remaining.toFixed(2) : "0");
+    setPendingAmount(prefill);
     setPendingRef("");
   };
 
@@ -222,7 +227,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
 
   const switchToCredit = () => {
     setMode("credit");
-    setPayments([]); cancelAddPayment(); setOverpayAction(null);
+    setPayments([]); cancelAddPayment(); setOverpayAction(null); setPaymentChoice(null);
   };
 
   const switchToCortesia = () => {
@@ -231,13 +236,19 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
       return;
     }
     setMode("cortesia");
-    setPayments([]); cancelAddPayment(); setOverpayAction(null);
+    setPayments([]); cancelAddPayment(); setOverpayAction(null); setPaymentChoice(null);
   };
 
   const switchToMixed = () => {
     setMode("mixed");
     setSelectedClient(null); setManualClientName(""); setUseManualClient(false);
   };
+
+  // Si el staff elimina todos los pagos y no quedan pendientes, devolver la
+  // opción de re-elegir Total / Dividir para no atrapar al usuario en split.
+  useEffect(() => {
+    if (payments.length === 0 && !pendingMethod) setPaymentChoice(null);
+  }, [payments.length, pendingMethod]);
 
   // canConfirm + razon: si no se puede, explicar al staff por que (mejor que un boton mudo)
   const confirmBlockReason = (() => {
@@ -446,16 +457,45 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
               )}
             </div>
 
-            {/* Method picker (when no pending) */}
-            {!pendingMethod && remaining > 0.01 && (
-              <div className="grid grid-cols-2 gap-2">
-                {MIXED_METHODS.map((m) => (
-                  <button key={m.id} onClick={() => startAddPayment(m.id)} disabled={processing}
-                    className="flex items-center gap-2 py-3 px-3 rounded-lg border-2 border-stone-200 bg-white text-sm font-medium text-stone-700 hover:border-brand hover:bg-brand/5 transition-all">
-                    <span className="text-xl">{m.icon}</span>
-                    <span>{m.label}</span>
+            {/* Paso 1: elegir Pagar Total o Dividir cuando aún no hay pagos */}
+            {!pendingMethod && remaining > 0.01 && payments.length === 0 && paymentChoice === null && (
+              <div className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">¿Cómo va a pagar?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setPaymentChoice("full")} disabled={processing}
+                    className="flex items-center justify-center gap-2 py-4 px-3 rounded-lg border-2 border-brand bg-brand/5 text-brand text-sm font-bold hover:bg-brand/10 transition-all">
+                    <CheckCircle size={16} />
+                    <span>Pagar Total<br /><span className="text-xs font-normal">${totalRef.toFixed(2)}</span></span>
                   </button>
-                ))}
+                  <button onClick={() => setPaymentChoice("split")} disabled={processing}
+                    className="flex items-center justify-center gap-2 py-4 px-3 rounded-lg border-2 border-stone-300 bg-white text-stone-700 text-sm font-bold hover:border-brand hover:bg-brand/5 transition-all">
+                    <Split size={16} />
+                    <span>Dividir Pago<br /><span className="text-xs font-normal text-stone-500">varios métodos</span></span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Paso 2: grid de métodos (cuando ya eligió Total/Dividir o cuando está mid-flow) */}
+            {!pendingMethod && remaining > 0.01 && (paymentChoice !== null || payments.length > 0) && (
+              <div className="space-y-2">
+                {paymentChoice === "split" && payments.length === 0 && (
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="uppercase tracking-wider text-stone-500 font-bold flex items-center gap-1">
+                      <Split size={10} /> Dividiendo · escribe el monto de cada parte
+                    </span>
+                    <button onClick={() => setPaymentChoice(null)} className="text-stone-400 hover:text-stone-600 normal-case tracking-normal underline">cambiar</button>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  {MIXED_METHODS.map((m) => (
+                    <button key={m.id} onClick={() => startAddPayment(m.id)} disabled={processing}
+                      className="flex items-center gap-2 py-3 px-3 rounded-lg border-2 border-stone-200 bg-white text-sm font-medium text-stone-700 hover:border-brand hover:bg-brand/5 transition-all">
+                      <span className="text-xl">{m.icon}</span>
+                      <span>{m.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
