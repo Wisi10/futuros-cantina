@@ -29,6 +29,7 @@ import ClientesView from "@/components/clientes/ClientesView";
 import EventosView from "@/components/eventos/EventosView";
 import StockAlertToast from "@/components/vender/StockAlertToast";
 import DashboardView from "@/components/dashboard/DashboardView";
+import GlobalClientSearch from "@/components/shared/GlobalClientSearch";
 import WhatsNewModal from "@/components/shared/WhatsNewModal";
 import { LATEST as LATEST_WHATS_NEW } from "@/lib/whatsNew";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
@@ -934,7 +935,7 @@ function POSPageInner() {
                 </span>
               )}
             </button>
-            {/* GlobalClientSearch removido — el botón "Cliente" cubre buscar/abrir perfil/asociar */}
+            <GlobalClientSearch />
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <ShiftPill
@@ -1071,7 +1072,7 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "clientes" && canAdmin && (
+        {activeTab === "clientes" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ClientesView
               key={clientesInitialSubTab || "default"}
