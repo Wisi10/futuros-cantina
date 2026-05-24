@@ -1,13 +1,21 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Users, Eye, Lightbulb, Check, X, Loader2, Power, AlertTriangle, Gift, Key } from "lucide-react";
+import { Shield, Users, Eye, Lightbulb, Check, X, Loader2, Power, AlertTriangle, Gift, Key, Monitor, Smartphone, Tablet, Laptop, RotateCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const TABS = [
   { id: "permisos", label: "Permisos", icon: Users },
   { id: "sistema", label: "Sistema", icon: Power },
   { id: "verComo", label: "Ver como", icon: Eye },
+  { id: "layouts", label: "Layouts", icon: Monitor },
   { id: "ideas", label: "Ideas", icon: Lightbulb },
+];
+
+// Tamaños reales de dispositivos típicos. width × height del viewport.
+const DEVICE_PRESETS = [
+  { id: "phone",  label: "Phone",  icon: Smartphone, width: 375,  height: 667,  hint: "iPhone SE / 8" },
+  { id: "tablet", label: "Tablet", icon: Tablet,     width: 768,  height: 1024, hint: "iPad clásico" },
+  { id: "laptop", label: "Laptop", icon: Laptop,     width: 1280, height: 800,  hint: "13\" estándar" },
 ];
 
 export default function AdminView({ user, onImpersonate, impersonatedRole }) {
@@ -19,6 +27,9 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
   const [killswitchSalesLoading, setKillswitchSalesLoading] = useState(false);
   const [resetPinFor, setResetPinFor] = useState(null);
   const [newPin, setNewPin] = useState("");
+  // Vista responsive: device elegido + bust cache del iframe
+  const [device, setDevice] = useState("tablet");
+  const [iframeKey, setIframeKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -308,6 +319,69 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               Owner es tu rol real. Para volver, usa el banner amarillo arriba.
             </p>
           </div>
+        </div>
+      )}
+
+      {tab === "layouts" && (
+        <div className="space-y-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+            Previsualiza cómo se ve el sistema en distintos tamaños de pantalla. El iframe carga la app real con tu sesión activa — interactúa con el POS adentro como si fuera ese dispositivo. Útil para verificar layouts antes de probar en el dispositivo físico.
+          </div>
+
+          <div className="bg-white rounded-xl border border-stone-200 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {DEVICE_PRESETS.map((d) => {
+                const Icon = d.icon;
+                const active = device === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => setDevice(d.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-bold transition-colors ${
+                      active ? "border-brand bg-brand/5 text-brand" : "border-stone-200 hover:border-stone-300 text-stone-600"
+                    }`}
+                  >
+                    <Icon size={16} />
+                    <div className="text-left leading-tight">
+                      <div>{d.label}</div>
+                      <div className="text-[10px] font-normal text-stone-400">{d.width}×{d.height}</div>
+                    </div>
+                  </button>
+                );
+              })}
+              <span className="text-[10px] text-stone-400 hidden md:inline">· {DEVICE_PRESETS.find((d) => d.id === device)?.hint}</span>
+              <button
+                onClick={() => setIframeKey((k) => k + 1)}
+                className="ml-auto p-2 rounded-lg border border-stone-200 hover:bg-stone-50 text-stone-500"
+                title="Recargar preview"
+              >
+                <RotateCw size={14} />
+              </button>
+            </div>
+          </div>
+
+          {(() => {
+            const d = DEVICE_PRESETS.find((p) => p.id === device);
+            if (!d) return null;
+            return (
+              <div className="bg-stone-100 rounded-xl p-4 flex justify-center">
+                <div
+                  className="bg-stone-900 rounded-2xl p-2 shadow-xl"
+                  style={{ width: d.width + 16 }}
+                >
+                  <iframe
+                    key={iframeKey}
+                    src="/pos"
+                    title={`Preview ${d.label}`}
+                    style={{ width: d.width, height: d.height, border: 0, borderRadius: 8, background: "white", display: "block" }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+          <p className="text-[10px] text-stone-400 text-center">
+            Nota: el iframe comparte tu sesión local. Si tocas Cerrar sesión adentro, te desloguea de la ventana principal también.
+          </p>
         </div>
       )}
 
