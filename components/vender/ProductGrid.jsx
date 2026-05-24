@@ -155,7 +155,7 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                 key={product.id}
                 onClick={() => !outOfStock && onAdd(product)}
                 disabled={outOfStock}
-                className={`relative bg-white rounded-xl border-2 p-2.5 flex flex-col items-center text-center transition-all ${
+                className={`relative bg-white rounded-xl border-2 p-2 flex flex-col items-center text-center transition-all ${
                   outOfStock
                     ? "opacity-40 cursor-not-allowed border-[#e5e5e5] pointer-events-none"
                     : "border-[#e5e5e5] hover:border-brand hover:shadow-md active:scale-[0.97] cursor-pointer"
@@ -168,43 +168,43 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                   </div>
                 )}
 
-                <div className="mb-2"><ProductImage product={product} size={96} className="rounded-lg" /></div>
+                <div className="mb-1"><ProductImage product={product} size={128} className="rounded-lg" /></div>
 
-                <p className="font-semibold text-[12px] text-stone-800 leading-tight mb-1 line-clamp-2 w-full text-center">
+                <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-0.5 line-clamp-2 w-full text-center">
                   {product.name}
                 </p>
                 {searchActive && (
-                  <p className="text-[9px] text-stone-400 mb-0.5 line-clamp-1 w-full">
+                  <p className="text-[8px] text-stone-400 line-clamp-1 w-full">
                     {product.category || "Otro"}
                   </p>
                 )}
 
                 {/* Precios side-by-side: principal ($ USD o REF según toggle) + Bs */}
-                <div className="flex items-baseline justify-center gap-2 w-full">
-                  <span className="text-sm font-bold text-brand">
+                <div className="flex items-baseline justify-center gap-1.5 w-full leading-none">
+                  <span className="text-[13px] font-bold text-brand">
                     {displayCurrency === "ref"
                       ? `REF ${(calcREFsec(product.price_ref, rate) ?? 0).toFixed(2)}`
                       : `$${Number(product.price_ref).toFixed(2)}`}
                   </span>
                   {rate && (
-                    <span className="text-[11px] text-stone-500 font-medium">
+                    <span className="text-[10px] text-stone-500 font-medium">
                       · {formatBs(product.price_ref, rate.usd)}
                     </span>
                   )}
                 </div>
 
                 {/* Stock badge */}
-                <div className="mt-1.5">
+                <div className="mt-1">
                   {outOfStock ? (
-                    <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#fef2f2] text-[#dc2626]">
+                    <span className="inline-block text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#fef2f2] text-[#dc2626]">
                       Sin stock
                     </span>
                   ) : lowStock ? (
-                    <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#fef3c7] text-[#d97706]">
+                    <span className="inline-block text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#fef3c7] text-[#d97706]">
                       Quedan {stock}
                     </span>
                   ) : (
-                    <span className="inline-block text-[9px] font-medium px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#16a34a]">
+                    <span className="inline-block text-[8px] font-medium px-1.5 py-0.5 rounded-full bg-[#dcfce7] text-[#16a34a]">
                       stk {stock}
                     </span>
                   )}
