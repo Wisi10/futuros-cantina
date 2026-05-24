@@ -67,6 +67,8 @@ function POSPageInner() {
   // Vender state
   const [screen, setScreen] = useState("pos");
   const [products, setProducts] = useState([]);
+  // Mapa { product_id: total_qty } últimos 30d. Vacío hasta que carga.
+  const [popularity, setPopularity] = useState({});
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [showStockToast, setShowStockToast] = useState(false);
   const [cart, setCart] = useState(() => {
@@ -146,13 +148,21 @@ function POSPageInner() {
   // Data loading
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase
-      .from("products")
-      .select("*")
-      .eq("is_cantina", true)
-      .eq("active", true)
-      .order("sort_order");
-    if (data) setProducts(data);
+    const [{ data: prods }, { data: popRows }] = await Promise.all([
+      supabase
+        .from("products")
+        .select("*")
+        .eq("is_cantina", true)
+        .eq("active", true)
+        .order("sort_order"),
+      supabase.rpc("get_product_popularity", { p_days: 30 }),
+    ]);
+    if (prods) setProducts(prods);
+    if (popRows) {
+      const map = {};
+      popRows.forEach((r) => { map[r.product_id] = Number(r.total_qty) || 0; });
+      setPopularity(map);
+    }
     setLoading(false);
   }, []);
 
@@ -1027,6 +1037,7 @@ function POSPageInner() {
                   onAdd={addToCart}
                   lowStockThreshold={lowStockThreshold}
                   displayCurrency={displayCurrency}
+                  popularity={popularity}
                 />
               )}
 

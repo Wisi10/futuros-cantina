@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import { formatBs, calcREFsec, ProductImage } from "@/lib/utils";
 import { effectiveThreshold } from "@/lib/stockHelpers";
 
-export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5, displayCurrency = "usd" }) {
+export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5, displayCurrency = "usd", popularity = {} }) {
   const [view, setView] = useState("categories");
   const [activeCategory, setActiveCategory] = useState(null);
   const [search, setSearch] = useState("");
@@ -50,15 +50,26 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
   // Search es GLOBAL: si hay texto, ignora la categoría activa y busca en
   // todos los productos. Sin texto, filtra por activeCategory como antes.
   const searchActive = search.trim().length > 0;
-  let filtered;
-  if (searchActive) {
-    const q = search.toLowerCase();
-    filtered = products.filter((p) => p.name.toLowerCase().includes(q));
-  } else {
-    filtered = activeCategory
+  const filteredRaw = useMemo(() => {
+    if (searchActive) {
+      const q = search.toLowerCase();
+      return products.filter((p) => p.name.toLowerCase().includes(q));
+    }
+    return activeCategory
       ? products.filter((p) => (p.category || "Otro") === activeCategory)
       : products;
-  }
+  }, [products, searchActive, search, activeCategory]);
+
+  // Orden: más pedidos (últimos 30d) primero, alfabético como tiebreak.
+  // Productos sin ventas en la ventana caen al final.
+  const filtered = useMemo(() => {
+    return [...filteredRaw].sort((a, b) => {
+      const aQty = popularity[a.id] || 0;
+      const bQty = popularity[b.id] || 0;
+      if (bQty !== aQty) return bQty - aQty;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [filteredRaw, popularity]);
 
   // ── Category Grid (fills entire available space) ──
   if (view === "categories") {
