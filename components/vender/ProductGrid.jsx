@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { formatBs, formatREFsec, ProductImage } from "@/lib/utils";
+import { formatBs, calcREFsec, ProductImage } from "@/lib/utils";
 import { effectiveThreshold } from "@/lib/stockHelpers";
 
-export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5 }) {
+export default function ProductGrid({ products, cart, rate, onAdd, lowStockThreshold = 5, displayCurrency = "usd" }) {
   const [view, setView] = useState("categories");
   const [activeCategory, setActiveCategory] = useState(null);
   const [search, setSearch] = useState("");
@@ -157,9 +157,9 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                   </div>
                 )}
 
-                <div className="mb-1.5"><ProductImage product={product} size={64} className="rounded-lg" /></div>
+                <div className="mb-2"><ProductImage product={product} size={96} className="rounded-lg" /></div>
 
-                <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-0.5 line-clamp-2 w-full">
+                <p className="font-semibold text-[12px] text-stone-800 leading-tight mb-1 line-clamp-2 w-full text-center">
                   {product.name}
                 </p>
                 {searchActive && (
@@ -168,20 +168,19 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                   </p>
                 )}
 
-                <p className="text-sm font-bold text-brand">
-                  ${Number(product.price_ref).toFixed(2)}
-                </p>
-
-                {rate && (
-                  <>
-                    <p className="text-[10px] text-stone-600 font-semibold">
-                      {formatREFsec(product.price_ref, rate)}
-                    </p>
-                    <p className="text-[10px] text-[#a3a3a3]">
-                      {formatBs(product.price_ref, rate.usd)}
-                    </p>
-                  </>
-                )}
+                {/* Precios side-by-side: principal ($ USD o REF según toggle) + Bs */}
+                <div className="flex items-baseline justify-center gap-2 w-full">
+                  <span className="text-sm font-bold text-brand">
+                    {displayCurrency === "ref"
+                      ? `REF ${(calcREFsec(product.price_ref, rate) ?? 0).toFixed(2)}`
+                      : `$${Number(product.price_ref).toFixed(2)}`}
+                  </span>
+                  {rate && (
+                    <span className="text-[11px] text-stone-500 font-medium">
+                      · {formatBs(product.price_ref, rate.usd)}
+                    </span>
+                  )}
+                </div>
 
                 {/* Stock badge */}
                 <div className="mt-1.5">

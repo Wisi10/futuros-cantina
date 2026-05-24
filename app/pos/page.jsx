@@ -98,6 +98,16 @@ function POSPageInner() {
     localStorage.setItem("cantina_cart", JSON.stringify(cart));
   }, [cart]);
 
+  // Moneda principal mostrada en la UI (USD por default, REF opcional).
+  // Persistida para que el staff no la cambie cada sesión.
+  const [displayCurrency, setDisplayCurrency] = useState(() => {
+    if (typeof window === "undefined") return "usd";
+    return localStorage.getItem("cantina_display_currency") || "usd";
+  });
+  useEffect(() => {
+    localStorage.setItem("cantina_display_currency", displayCurrency);
+  }, [displayCurrency]);
+
   // Credits state
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
   // Subtab inicial al entrar a "clientes" desde el header (botón Créditos).
@@ -959,6 +969,23 @@ function POSPageInner() {
             <GlobalClientSearch />
           </div>
           <div className="flex items-center gap-2 md:gap-3">
+            {/* Toggle moneda principal: $ ↔ REF (afecta precios mostrados en POS) */}
+            <div className="hidden sm:flex items-center bg-stone-100 rounded-full p-0.5 text-[11px] font-bold">
+              <button
+                onClick={() => setDisplayCurrency("usd")}
+                className={`px-2.5 py-1 rounded-full transition-colors ${
+                  displayCurrency === "usd" ? "bg-brand text-white shadow" : "text-stone-500 hover:text-stone-700"
+                }`}
+                title="Mostrar precios en dólares"
+              >$</button>
+              <button
+                onClick={() => setDisplayCurrency("ref")}
+                className={`px-2.5 py-1 rounded-full transition-colors ${
+                  displayCurrency === "ref" ? "bg-brand text-white shadow" : "text-stone-500 hover:text-stone-700"
+                }`}
+                title="Mostrar precios en REF"
+              >REF</button>
+            </div>
             <ShiftPill
               shift={activeShift}
               onClick={() => activeShift ? setShowCloseShift(true) : setShowOpenShift(true)}
@@ -999,6 +1026,7 @@ function POSPageInner() {
                   rate={rate}
                   onAdd={addToCart}
                   lowStockThreshold={lowStockThreshold}
+                  displayCurrency={displayCurrency}
                 />
               )}
 
