@@ -2,7 +2,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { X, Plus, Trash2, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatREF } from "@/lib/utils";
 
 const UNITS = ["unidad", "g", "kg", "ml", "l", "cucharada", "rebanada", "rodaja", "pizca"];
 
@@ -53,10 +52,6 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
   }, [product.id]);
 
   useEffect(() => { load(); }, [load]);
-
-  const totalCost = useMemo(() => {
-    return ingredients.reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.ingredient_cost || 0)), 0);
-  }, [ingredients]);
 
   const filteredRaw = useMemo(() => {
     const q = pickerSearch.trim().toLowerCase();
@@ -180,53 +175,43 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                             <th className="text-left px-3 py-2">Ingrediente</th>
                             <th className="text-right px-3 py-2 w-16">Cant</th>
                             <th className="text-left px-3 py-2 w-24">Unidad</th>
-                            <th className="text-right px-3 py-2 w-20">Subtotal</th>
                             {isAdmin && <th className="w-8"></th>}
                           </tr>
                         </thead>
                         <tbody>
-                          {ingredients.map((i) => {
-                            const subtotal = Number(i.quantity || 0) * Number(i.ingredient_cost || 0);
-                            return (
-                              <tr key={i.key} className="border-t border-stone-100">
-                                <td className="px-3 py-2 text-stone-700">
-                                  <div>{i.ingredient_name}</div>
-                                  <div className="text-[10px] text-stone-400">${Number(i.ingredient_cost).toFixed(2)} c/u</div>
+                          {ingredients.map((i) => (
+                            <tr key={i.key} className="border-t border-stone-100">
+                              <td className="px-3 py-2 text-stone-700">{i.ingredient_name}</td>
+                              <td className="px-3 py-2 text-right">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={i.quantity}
+                                  onChange={(e) => updateRow(i.key, { quantity: e.target.value })}
+                                  disabled={!isAdmin}
+                                  className="w-14 border border-stone-200 rounded px-1.5 py-1 text-right text-xs focus:outline-none focus:border-brand"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <select
+                                  value={i.unit}
+                                  onChange={(e) => updateRow(i.key, { unit: e.target.value })}
+                                  disabled={!isAdmin}
+                                  className="w-full border border-stone-200 rounded px-1.5 py-1 text-xs bg-white"
+                                >
+                                  {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                              </td>
+                              {isAdmin && (
+                                <td className="px-2 py-2 text-right">
+                                  <button onClick={() => removeRow(i.key)} className="text-stone-400 hover:text-red-500 p-1">
+                                    <Trash2 size={12} />
+                                  </button>
                                 </td>
-                                <td className="px-3 py-2 text-right">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={i.quantity}
-                                    onChange={(e) => updateRow(i.key, { quantity: e.target.value })}
-                                    disabled={!isAdmin}
-                                    className="w-14 border border-stone-200 rounded px-1.5 py-1 text-right text-xs focus:outline-none focus:border-brand"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <select
-                                    value={i.unit}
-                                    onChange={(e) => updateRow(i.key, { unit: e.target.value })}
-                                    disabled={!isAdmin}
-                                    className="w-full border border-stone-200 rounded px-1.5 py-1 text-xs bg-white"
-                                  >
-                                    {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                                  </select>
-                                </td>
-                                <td className="px-3 py-2 text-right text-stone-700 font-medium">
-                                  {formatREF(subtotal)}
-                                </td>
-                                {isAdmin && (
-                                  <td className="px-2 py-2 text-right">
-                                    <button onClick={() => removeRow(i.key)} className="text-stone-400 hover:text-red-500 p-1">
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                            );
-                          })}
+                              )}
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     )}
@@ -266,10 +251,9 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                                 <button
                                   key={p.id}
                                   onClick={() => addIngredient(p)}
-                                  className="w-full text-left px-2 py-1.5 hover:bg-white rounded text-sm flex items-center justify-between"
+                                  className="w-full text-left px-2 py-1.5 hover:bg-white rounded text-sm text-stone-700"
                                 >
-                                  <span className="text-stone-700">{p.name}</span>
-                                  <span className="text-[11px] text-stone-400">${Number(p.cost_ref || 0).toFixed(2)}</span>
+                                  {p.name}
                                 </button>
                               ))
                             )}
@@ -279,26 +263,6 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                     </div>
                   )}
 
-                  <div className="bg-stone-50 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-stone-500">Costo calculado</span>
-                      <span className="font-bold text-stone-800">{formatREF(totalCost)}</span>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-stone-500 shrink-0">Override (opcional):</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={costOverride}
-                          onChange={(e) => setCostOverride(e.target.value)}
-                          placeholder="—"
-                          className="flex-1 border border-stone-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-brand"
-                        />
-                      </div>
-                    )}
-                  </div>
                 </>
               )}
             </>
