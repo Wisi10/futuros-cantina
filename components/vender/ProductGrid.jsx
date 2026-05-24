@@ -70,10 +70,10 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
               <button
                 key={cat}
                 onClick={() => handleCategoryTap(cat)}
-                className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
-                style={{ padding: "22px 14px", minHeight: 124 }}
+                className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
+                style={{ padding: "26px 14px", minHeight: 180 }}
               >
-                <ProductImage product={{ photo_url: data.photo_url, emoji: data.emoji }} size={36} className="rounded-lg" />
+                <ProductImage product={{ photo_url: data.photo_url, emoji: data.emoji }} size={72} className="rounded-lg" />
                 <span className="text-[14px] font-bold text-[#1a1a1a]">{cat}</span>
                 <span className="text-[10px] text-[#a3a3a3]">{data.count} productos</span>
               </button>
@@ -82,10 +82,10 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
             {/* Ver todos */}
             <button
               onClick={handleShowAll}
-              className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
-              style={{ padding: "22px 14px", minHeight: 124 }}
+              className="bg-white rounded-2xl border-2 border-[#e5e5e5] flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:border-brand hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97]"
+              style={{ padding: "26px 14px", minHeight: 180 }}
             >
-              <span className="text-[32px] leading-none">🔍</span>
+              <span className="text-[64px] leading-none">🔍</span>
               <span className="text-[14px] font-bold text-[#1a1a1a]">Ver todos</span>
               <span className="text-[10px] text-[#a3a3a3]">{products.length} productos</span>
             </button>
@@ -157,7 +157,7 @@ export default function ProductGrid({ products, cart, rate, onAdd, lowStockThres
                   </div>
                 )}
 
-                <div className="mb-1"><ProductImage product={product} size={32} className="rounded-lg" /></div>
+                <div className="mb-1.5"><ProductImage product={product} size={64} className="rounded-lg" /></div>
 
                 <p className="font-semibold text-[11px] text-stone-800 leading-tight mb-0.5 line-clamp-2 w-full">
                   {product.name}
