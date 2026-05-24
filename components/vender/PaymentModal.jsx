@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2, CheckCircle, Split } from "lucide-react";
+import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2, CheckCircle, Split, FileText, Receipt } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, formatREFsec, PAYMENT_METHODS, METHOD_LABELS, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
@@ -11,8 +11,37 @@ const MIXED_METHODS = PAYMENT_METHODS.filter((m) => !m.exclusive);
 function round2(n) { return Math.round(Number(n) * 100) / 100; }
 
 export default function PaymentModal({ cart, rate, processing, saleClient, userRole, onAssociateClient, onConfirm, onConfirmCredit, onBack }) {
-  const totalRef = round2(cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0));
+  const subtotalRef = round2(cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0));
   const hasTasa = !!rate;
+
+  // IVA / IGTF toggles. Rates from app_settings (admin-editable en Config).
+  const [hasFactura, setHasFactura] = useState(false);
+  const [hasIgtf, setHasIgtf] = useState(false);
+  const [ivaRate, setIvaRate] = useState(16);
+  const [igtfRate, setIgtfRate] = useState(3);
+
+  useEffect(() => {
+    if (!supabase) return;
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("key, value")
+        .in("key", ["cantina_iva_rate_pct", "cantina_igtf_rate_pct"]);
+      (data || []).forEach((r) => {
+        const v = Number(r.value?.value);
+        if (!Number.isFinite(v) || v < 0) return;
+        if (r.key === "cantina_iva_rate_pct") setIvaRate(v);
+        if (r.key === "cantina_igtf_rate_pct") setIgtfRate(v);
+      });
+    })();
+  }, []);
+
+  // Si Factura se apaga, IGTF también (IGTF aplica solo en venta con factura).
+  useEffect(() => { if (!hasFactura && hasIgtf) setHasIgtf(false); }, [hasFactura, hasIgtf]);
+
+  const ivaAmount = hasFactura ? round2(subtotalRef * ivaRate / 100) : 0;
+  const igtfAmount = hasIgtf && hasFactura ? round2((subtotalRef + ivaAmount) * igtfRate / 100) : 0;
+  const totalRef = round2(subtotalRef + ivaAmount + igtfAmount);
 
   // Mode: mixed (default) | credit | cortesia
   const [mode, setMode] = useState("mixed");
@@ -317,7 +346,17 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
     }
     const distinctMethods = [...new Set(finalPayments.map((p) => p.method))];
     const legacy = distinctMethods.length === 1 ? distinctMethods[0] : "mixed";
-    onConfirm({ payments: finalPayments, change, legacy_method: legacy });
+    onConfirm({
+      payments: finalPayments,
+      change,
+      legacy_method: legacy,
+      tax: {
+        has_factura: hasFactura,
+        iva_amount_ref: ivaAmount,
+        igtf_amount_ref: igtfAmount,
+        total_with_tax_ref: totalRef,
+      },
+    });
   };
 
   return (
@@ -398,7 +437,26 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
               </div>
             ))}
           </div>
-          <div className="border-t border-stone-100 pt-2">
+          <div className="border-t border-stone-100 pt-2 space-y-1">
+            {hasFactura && (
+              <>
+                <div className="flex justify-between items-baseline text-sm">
+                  <span className="text-stone-500">Subtotal</span>
+                  <span className="text-stone-700">${subtotalRef.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-baseline text-sm">
+                  <span className="text-stone-500">IVA ({ivaRate}%)</span>
+                  <span className="text-stone-700">${ivaAmount.toFixed(2)}</span>
+                </div>
+                {hasIgtf && (
+                  <div className="flex justify-between items-baseline text-sm">
+                    <span className="text-stone-500">IGTF ({igtfRate}%)</span>
+                    <span className="text-stone-700">${igtfAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="border-t border-stone-100 pt-1" />
+              </>
+            )}
             <div className="flex justify-between items-baseline">
               <span className="text-sm text-stone-500">Total</span>
               <span className="text-2xl font-bold text-brand">${totalRef.toFixed(2)}</span>
@@ -410,6 +468,41 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
               </div>
             )}
           </div>
+
+          {/* Toggles Factura/IGTF (solo en pago, no en credito/cortesia) */}
+          {isMixed && (
+            <div className="border-t border-stone-100 pt-3 mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setHasFactura((v) => !v)}
+                disabled={processing}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-bold transition-all ${
+                  hasFactura
+                    ? "border-brand bg-brand/5 text-brand"
+                    : "border-stone-200 bg-white text-stone-500 hover:border-stone-300"
+                }`}
+              >
+                <FileText size={14} />
+                Factura · IVA {ivaRate}%
+                {hasFactura && <CheckCircle size={12} className="ml-auto" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setHasIgtf((v) => !v)}
+                disabled={processing || !hasFactura}
+                title={!hasFactura ? "Activa Factura primero (IGTF aplica solo con factura)" : ""}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-bold transition-all ${
+                  hasIgtf
+                    ? "border-brand bg-brand/5 text-brand"
+                    : "border-stone-200 bg-white text-stone-500 hover:border-stone-300"
+                } ${!hasFactura ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                <Receipt size={14} />
+                IGTF {igtfRate}% · USD
+                {hasIgtf && <CheckCircle size={12} className="ml-auto" />}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Mode tabs */}

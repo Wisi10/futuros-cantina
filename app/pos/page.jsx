@@ -562,6 +562,16 @@ function POSPageInner() {
     const change = saleData?.change || null;
     const legacyMethod = saleData?.legacy_method || null;
     const isCortesiaSale = legacyMethod === "cortesia";
+    const tax = saleData?.tax || null;
+    const ivaAmountRef = tax ? Number(tax.iva_amount_ref || 0) : 0;
+    const igtfAmountRef = tax ? Number(tax.igtf_amount_ref || 0) : 0;
+    const hasFactura = !!tax?.has_factura;
+    // Si PaymentModal envió un total con impuestos, lo respetamos (el desglose ahí
+    // ya consideró IVA/IGTF). Si no, caemos al cálculo base subtotal - descuento.
+    const finalTotalRef = tax?.total_with_tax_ref != null
+      ? Number(tax.total_with_tax_ref)
+      : totalRef;
+    const finalTotalBs = rate?.usd ? finalTotalRef * rate.usd : null;
 
     // Defense in depth: cortesia is admin-only and requires saleClient
     if (isCortesiaSale) {
@@ -588,6 +598,13 @@ function POSPageInner() {
         created_by: user?.name || "Cantina",
         client_id: saleClient?.id || null,
         client_name: saleClient?.name || null,
+        iva_amount_ref: ivaAmountRef,
+        igtf_amount_ref: igtfAmountRef,
+        has_factura: hasFactura,
+        // Override del total ya calculado en executeSale (base = subtotal - descuento).
+        // Esto incluye los impuestos para reflejar lo que efectivamente cobró el staff.
+        total_ref: finalTotalRef,
+        total_bs: finalTotalBs,
       });
       if (!result) { setProcessing(false); return; }
 
@@ -662,8 +679,12 @@ function POSPageInner() {
       setLastSale({
         saleNumber: result.sale.sale_number,
         items: result.items,
-        totalRef,
-        totalBs,
+        subtotalRef: totalRef,
+        ivaAmountRef,
+        igtfAmountRef,
+        hasFactura,
+        totalRef: finalTotalRef,
+        totalBs: finalTotalBs,
         rate: rate?.usd || null,
         paymentMethod: legacyMethod,
         reference: firstRef,

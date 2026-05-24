@@ -48,6 +48,26 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
             ))}
           </div>
           <div className="border-t border-stone-200 pt-2 space-y-1">
+            {sale.hasFactura && (
+              <>
+                <div className="flex justify-between text-xs text-stone-500">
+                  <span>Subtotal</span>
+                  <span>${Number(sale.subtotalRef || 0).toFixed(2)}</span>
+                </div>
+                {Number(sale.ivaAmountRef || 0) > 0 && (
+                  <div className="flex justify-between text-xs text-stone-500">
+                    <span>IVA</span>
+                    <span>${Number(sale.ivaAmountRef).toFixed(2)}</span>
+                  </div>
+                )}
+                {Number(sale.igtfAmountRef || 0) > 0 && (
+                  <div className="flex justify-between text-xs text-stone-500">
+                    <span>IGTF</span>
+                    <span>${Number(sale.igtfAmountRef).toFixed(2)}</span>
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-sm text-stone-500">Total</span>
               <span className="font-bold text-brand">${sale.totalRef.toFixed(2)}</span>

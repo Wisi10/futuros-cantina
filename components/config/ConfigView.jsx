@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown } from "lucide-react";
+import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown, Receipt } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
@@ -13,6 +13,7 @@ const SECTIONS = [
   { id: "descuentos",  name: "Descuentos",     icon: Percent },
   { id: "empleados",   name: "Empleados",      icon: Users },
   { id: "stock",       name: "Umbral stock",   icon: Package },
+  { id: "impuestos",   name: "Impuestos",      icon: Receipt },
   { id: "productos",   name: "Productos",      icon: ShoppingBag },
 ];
 
@@ -79,6 +80,12 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   const [stockThresholdInput, setStockThresholdInput] = useState("");
   const [stockThresholdSaved, setStockThresholdSaved] = useState(null);
   const [savingThreshold, setSavingThreshold] = useState(false);
+  // Impuestos
+  const [ivaInput, setIvaInput] = useState("");
+  const [ivaSaved, setIvaSaved] = useState(null);
+  const [igtfInput, setIgtfInput] = useState("");
+  const [igtfSaved, setIgtfSaved] = useState(null);
+  const [savingTax, setSavingTax] = useState(false);
   const [usdInput, setUsdInput] = useState("");
   const [savingRate, setSavingRate] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -114,7 +121,35 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       setStockThresholdSaved(v);
       setStockThresholdInput(String(v));
     })();
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("key, value")
+        .in("key", ["cantina_iva_rate_pct", "cantina_igtf_rate_pct"]);
+      (data || []).forEach((r) => {
+        const v = Number(r.value?.value);
+        if (!Number.isFinite(v)) return;
+        if (r.key === "cantina_iva_rate_pct") { setIvaSaved(v); setIvaInput(String(v)); }
+        if (r.key === "cantina_igtf_rate_pct") { setIgtfSaved(v); setIgtfInput(String(v)); }
+      });
+    })();
   }, [loadProducts, loadRateHistory]);
+
+  const saveTaxRate = async (key, input, setSaved) => {
+    if (savingTax) return;
+    const n = Number(input);
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      alert("Ingresa un porcentaje entre 0 y 100");
+      return;
+    }
+    setSavingTax(true);
+    const { error } = await supabase.from("app_settings").upsert({
+      key, value: { value: n }, updated_by: user?.name || "Cantina",
+    }, { onConflict: "key" });
+    setSavingTax(false);
+    if (error) { alert("Error: " + error.message); return; }
+    setSaved(n);
+  };
 
   const saveStockThreshold = async () => {
     if (savingThreshold) return;
@@ -313,6 +348,65 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
           {stockThresholdSaved != null && (
             <span className="text-xs text-stone-400">Actual: {stockThresholdSaved}</span>
           )}
+        </div>
+      </div>
+      </div>
+
+      <div style={{ display: section === "impuestos" ? undefined : "none" }}>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
+        <div>
+          <h2 className="font-bold text-sm text-stone-700 mb-1 flex items-center gap-2">
+            <Receipt size={14} /> Impuestos
+          </h2>
+          <p className="text-xs text-stone-500">
+            Tasas aplicables al cobrar con factura. IGTF solo aplica si el cliente paga en USD (Cash USD, Zelle, tarjeta internacional) y pide factura.
+          </p>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-stone-600 block mb-1">IVA (%)</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={ivaInput}
+              onChange={(e) => setIvaInput(e.target.value)}
+              className="w-24 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+            <span className="text-xs text-stone-400">%</span>
+            <button
+              onClick={() => saveTaxRate("cantina_iva_rate_pct", ivaInput, setIvaSaved)}
+              disabled={savingTax || Number(ivaInput) === ivaSaved}
+              className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark disabled:opacity-40"
+            >
+              {savingTax ? "Guardando..." : "Guardar"}
+            </button>
+            {ivaSaved != null && <span className="text-xs text-stone-400">Actual: {ivaSaved}%</span>}
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-stone-600 block mb-1">IGTF (%)</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={igtfInput}
+              onChange={(e) => setIgtfInput(e.target.value)}
+              className="w-24 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+            <span className="text-xs text-stone-400">%</span>
+            <button
+              onClick={() => saveTaxRate("cantina_igtf_rate_pct", igtfInput, setIgtfSaved)}
+              disabled={savingTax || Number(igtfInput) === igtfSaved}
+              className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark disabled:opacity-40"
+            >
+              {savingTax ? "Guardando..." : "Guardar"}
+            </button>
+            {igtfSaved != null && <span className="text-xs text-stone-400">Actual: {igtfSaved}%</span>}
+          </div>
         </div>
       </div>
       </div>
