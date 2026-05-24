@@ -27,6 +27,11 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
         <h2 className="text-xl font-bold text-stone-800 mb-1">
           {sale.paymentMethod === "credit" ? "Credito registrado!" : "Venta registrada!"}
         </h2>
+        {sale.saleNumber != null && (
+          <p className="text-[11px] uppercase tracking-wider text-stone-500 font-bold mb-1">
+            Venta <span className="font-mono text-brand text-sm">#{sale.saleNumber}</span>
+          </p>
+        )}
         <p className="text-sm text-stone-400 mb-5">
           {sale.paymentMethod === "credit"
             ? `Credito para ${sale.creditClientName}`

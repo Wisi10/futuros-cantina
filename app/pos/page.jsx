@@ -659,6 +659,7 @@ function POSPageInner() {
       setLastSaleRecord(result.sale);
       setLastSaleTime(Date.now());
       setLastSale({
+        saleNumber: result.sale.sale_number,
         items: result.items,
         totalRef,
         totalBs,
@@ -713,6 +714,7 @@ function POSPageInner() {
       setLastSaleRecord(result.sale);
       setLastSaleTime(Date.now());
       setLastSale({
+        saleNumber: result.sale.sale_number,
         items: result.items,
         totalRef,
         totalBs,
