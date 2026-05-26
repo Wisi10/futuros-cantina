@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown, Receipt } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { ProductImage, calculateProfitability } from "@/lib/utils";
+import { ProductImage, calculateProfitability, loadProductCategoryNames, CANTINA_CATEGORIES } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
 import DescuentosCantinaEditor from "./DescuentosCantinaEditor";
 import EmpleadosEditor from "./EmpleadosEditor";
@@ -496,6 +496,25 @@ function EditProductModal({ product, onClose, onSave }) {
   const [costRef, setCostRef] = useState(product.cost_ref?.toString() || "0");
   const [emoji, setEmoji] = useState(product.emoji || "🍽️");
   const [category, setCategory] = useState(product.category || "");
+  // Catálogo de categorías editable (Config > Categorías). Fallback a la
+  // lista hardcoded si falla la carga. Si la categoría actual del producto
+  // no está en el catálogo (data legacy), la inyectamos para que aparezca.
+  const [categories, setCategories] = useState(() => {
+    const base = [...CANTINA_CATEGORIES];
+    if (product.category && !base.includes(product.category)) base.push(product.category);
+    return base;
+  });
+  useEffect(() => {
+    let alive = true;
+    loadProductCategoryNames(supabase).then((cats) => {
+      if (!alive) return;
+      const merged = [...cats];
+      if (product.category && !merged.includes(product.category)) merged.push(product.category);
+      setCategories(merged);
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [alert, setAlert] = useState(product.low_stock_alert?.toString() || "10");
   const [isRedeemable, setIsRedeemable] = useState(!!product.is_redeemable);
   const [redemptionCost, setRedemptionCost] = useState(product.redemption_cost_points?.toString() || "");
@@ -557,8 +576,10 @@ function EditProductModal({ product, onClose, onSave }) {
             </div>
             <div>
               <label className="text-xs font-medium text-stone-500 block mb-1">Categoría</label>
-              <input type="text" value={category} onChange={(e) => setCategory(e.target.value)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
+              <select value={category} onChange={(e) => setCategory(e.target.value)}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white">
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div>
               <label className="text-xs font-medium text-stone-500 block mb-1">Alerta stock</label>
