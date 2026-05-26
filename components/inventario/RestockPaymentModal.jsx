@@ -1,6 +1,6 @@
 "use client";
-import { useState, useMemo } from "react";
-import { X, DollarSign, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { X, DollarSign, Loader2, AlertTriangle, CheckCircle2, TrendingUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 // Modal para registrar pago contra un restock pendiente (lado proveedor).
@@ -45,9 +45,23 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
   const amountBs = usesRate && rateNum > 0 ? amountNum * rateNum : null;
 
   const isFullPayment = amountNum >= outstanding - 0.005;
-  const newStatus = isFullPayment ? "paid" : amountNum > 0 ? "partial" : restock.payment_status;
+  const isOverpay = amountNum > outstanding + 0.005;
+  const overpayDelta = isOverpay ? amountNum - outstanding : 0;
+  const newStatus = isFullPayment || isOverpay ? "paid" : amountNum > 0 ? "partial" : restock.payment_status;
 
-  const canSubmit = amountNum > 0 && amountNum <= outstanding + 0.01 && !saving;
+  // Si proveedor cobró más de lo estimado, el staff confirma si actualizar
+  // los precios de los productos del restock (forward-only). Default ON
+  // cuando hay overpay, OFF cuando es pago normal.
+  const [updatePrices, setUpdatePrices] = useState(false);
+  // Auto-marcar updatePrices cuando aparece overpay (UX hint, el staff puede destildear)
+  // y limpiar cuando se vuelve a pagos normales.
+  useEffect(() => {
+    setUpdatePrices(isOverpay);
+  }, [isOverpay]);
+
+  // Ya no bloqueamos overpay — el escenario real "el proveedor subió el precio"
+  // requiere permitirlo. Solo bloqueamos amounts inválidos.
+  const canSubmit = amountNum > 0 && !saving;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -69,13 +83,48 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
       });
       if (payErr) throw payErr;
 
-      // 2. Update restock
+      // 2. Update restock — incluye total nuevo si hubo overpay (el proveedor cobró más)
       const newPaid = alreadyPaid + amountNum;
+      const newTotal = isOverpay ? newPaid : Number(restock.total_cost_ref || 0);
+      const restockUpdate = {
+        paid_amount_ref: newPaid,
+        payment_status: newStatus,
+      };
+      if (isOverpay) restockUpdate.total_cost_ref = newTotal;
       const { error: upErr } = await supabase
         .from("cantina_restocks")
-        .update({ paid_amount_ref: newPaid, payment_status: newStatus })
+        .update(restockUpdate)
         .eq("id", restock.id);
       if (upErr) throw upErr;
+
+      // 2b. Si overpay + staff marcó "actualizar precios": ajustar cost_ref de los
+      //     productos del restock proporcionalmente (forward-only, ventas pasadas
+      //     mantienen el cost ya grabado). Registramos también una "alerta" como
+      //     stock_movement con type='adjustment' y notes detalladas para audit.
+      if (isOverpay && updatePrices) {
+        const oldTotal = Number(restock.total_cost_ref || 0);
+        const factor = oldTotal > 0 ? newTotal / oldTotal : 1;
+        const restockItems = Array.isArray(restock.items) ? restock.items : [];
+        for (const it of restockItems) {
+          if (!it?.product_id || !it?.cost_per_unit_ref) continue;
+          const oldCostU = Number(it.cost_per_unit_ref);
+          const newCostU = oldCostU * factor;
+          // Update producto cost_ref a el nuevo (MAC simplificado por ahora —
+          // forward-only, no recalcula ventas pasadas).
+          await supabase.from("products").update({ cost_ref: newCostU }).eq("id", it.product_id);
+          // Audit trail: alerta persistente como stock_movement
+          await supabase.from("stock_movements").insert({
+            product_id: it.product_id,
+            product_name: it.name || "(producto)",
+            movement_type: "adjustment",
+            quantity: 0,
+            reference_id: restock.id,
+            cost_ref: newCostU,
+            notes: `⚠️ Precio actualizado por factura final: $${oldCostU.toFixed(4)} → $${newCostU.toFixed(4)} (proveedor ${restock.supplier || "?"})`,
+            created_by: user?.name || "Cantina",
+          });
+        }
+      }
 
       // 3. Crear expense (cash outflow real). Categoría derivada de los items
       //    del restock; misma lógica que RestockForm "ya pagada".
@@ -177,9 +226,26 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
                 Todo
               </button>
             </div>
-            {amountNum > outstanding + 0.01 && (
-              <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                <AlertTriangle size={11} /> El monto excede lo pendiente
+            {isOverpay && (
+              <div className="text-xs text-amber-700 mt-1 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded p-2">
+                <TrendingUp size={13} className="mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-medium">El proveedor cobró ${overpayDelta.toFixed(2)} más de lo estimado.</p>
+                  <label className="flex items-center gap-1.5 mt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={updatePrices}
+                      onChange={(e) => setUpdatePrices(e.target.checked)}
+                      className="w-3.5 h-3.5"
+                    />
+                    <span>Actualizar costo de productos (impacta MAC futuro)</span>
+                  </label>
+                  {updatePrices && (
+                    <p className="text-[10px] text-amber-600 mt-1">
+                      Los costos de venta históricos NO se modifican. Cambio queda en historial.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -256,8 +322,8 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
           {/* Status preview */}
           <div className="text-xs text-stone-500 flex items-center gap-1">
             <CheckCircle2 size={12} />
-            Después de este pago: <strong className={isFullPayment ? "text-green-700" : "text-violet-700"}>
-              {isFullPayment ? "Pagada completa" : "Parcial"}
+            Después de este pago: <strong className={isFullPayment || isOverpay ? "text-green-700" : "text-violet-700"}>
+              {isOverpay ? `Pagada (total ajustado a $${(alreadyPaid + amountNum).toFixed(2)})` : isFullPayment ? "Pagada completa" : "Parcial"}
             </strong>
           </div>
 
