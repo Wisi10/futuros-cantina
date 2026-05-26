@@ -21,6 +21,33 @@ function emptyRow() {
   };
 }
 
+// Mapping de category del producto → category del gasto auto-creado.
+// Si todos los items de un restock son de la misma category, usamos esa.
+// Si son mixtos (o ninguno encaja), default a "Insumos cantina · Otros".
+function deriveExpenseCategory(items, productLookup) {
+  const cats = new Set();
+  for (const it of items) {
+    const p = productLookup(it.product_id);
+    const pc = p?.category;
+    if (!pc) { cats.add("Insumos cantina · Otros"); continue; }
+    if (pc === "Bebida") cats.add("Insumos cantina · Bebida");
+    else if (pc === "Comida") cats.add("Insumos cantina · Comida");
+    else if (pc === "Snacks") cats.add("Insumos cantina · Snacks");
+    else if (pc === "Helados") cats.add("Insumos cantina · Helados");
+    else if (pc === "Insumos") cats.add("Insumos cantina · Empaques");
+    else cats.add("Insumos cantina · Otros");
+  }
+  return cats.size === 1 ? [...cats][0] : "Insumos cantina · Otros";
+}
+
+const PAYMENT_METHODS = [
+  { id: "pago_movil", label: "Pago Móvil" },
+  { id: "zelle", label: "Zelle" },
+  { id: "cash_usd", label: "Cash USD" },
+  { id: "cash_bs", label: "Cash Bs" },
+  { id: "transferencia", label: "Transferencia" },
+];
+
 export default function RestockForm({ products, user, onRestocked }) {
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [rows, setRows] = useState([emptyRow()]);
@@ -29,6 +56,7 @@ export default function RestockForm({ products, user, onRestocked }) {
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("pago_movil");
   const [saving, setSaving] = useState(false);
 
   // Filtrar productos con receta — esos se manejan vía ingredientes en materia prima.
@@ -162,12 +190,45 @@ export default function RestockForm({ products, user, onRestocked }) {
         if (stockErr) throw stockErr;
       }
 
+      // 3. Auto-crear gasto vinculado al restock (BUG audit: link inventario ↔ gasto).
+      //    Si falla, alertamos pero NO rollback del restock (el stock subió OK).
+      let expenseOk = true;
+      let expenseErrMsg = null;
+      try {
+        const expenseCategory = deriveExpenseCategory(items, productById);
+        const expenseName = supplier.trim()
+          ? `Compra ${supplier.trim()}`
+          : `Restock ${items.length} producto${items.length !== 1 ? "s" : ""}`;
+        const { error: expErr } = await supabase.from("expenses").insert({
+          id: "exp_" + Math.random().toString(36).slice(2, 12),
+          expense_type: "variable",
+          category: expenseCategory,
+          name: expenseName,
+          amount_usd: totalCostRef,
+          payment_method: paymentMethod,
+          provider: supplier.trim() || null,
+          expense_date: date,
+          created_by: user?.name || "Cantina",
+          notes: `Auto-creado desde restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
+        });
+        if (expErr) { expenseOk = false; expenseErrMsg = expErr.message; }
+      } catch (linkErr) {
+        expenseOk = false;
+        expenseErrMsg = linkErr.message;
+      }
+      if (!expenseOk) console.error("[RESTOCK→GASTO]", expenseErrMsg);
+
       // Reset form
       setRows([emptyRow()]);
       setSupplier("");
       setNewSupplierMode(false);
       setNotes("");
-      alert("Entrada registrada correctamente");
+      setPaymentMethod("pago_movil");
+      if (expenseOk) {
+        alert("Entrada registrada ✅ Inventario + gasto creados.");
+      } else {
+        alert(`Inventario actualizado ✅, pero el gasto NO se creó. Ingrésalo manual desde Gastos.\n\nError: ${expenseErrMsg}`);
+      }
       onRestocked();
     } catch (err) {
       alert("Error: " + err.message);
@@ -318,8 +379,8 @@ export default function RestockForm({ products, user, onRestocked }) {
         </div>
       </div>
 
-      {/* Proveedor, Fecha y Notas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Proveedor, Fecha, Método pago y Notas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Proveedor</label>
           {newSupplierMode || supplierOptions.length === 0 ? (
@@ -364,6 +425,17 @@ export default function RestockForm({ products, user, onRestocked }) {
             onChange={(e) => setDate(e.target.value)}
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
+        </div>
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <label className="text-xs font-medium text-stone-500 block mb-1">Método de pago</label>
+          <select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+          >
+            {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+          <p className="text-[10px] text-stone-400 mt-1">Se registra también como gasto.</p>
         </div>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Notas (opcional)</label>
