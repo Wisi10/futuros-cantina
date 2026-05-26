@@ -1,17 +1,23 @@
 "use client";
 import { useState, useEffect } from "react";
-import { X, Loader2, Plus } from "lucide-react";
+import { X, Loader2, Plus, Wheat } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { generateId, toTitleCase, CANTINA_CATEGORIES, loadProductCategoryNames } from "@/lib/utils";
 
 const UNIT_LABELS = ["", "u", "kg", "g", "l", "ml", "caja", "paq", "u/caja"];
 
-export default function CreateProductModal({ user, onClose, onCreated }) {
+// scope: "vendible" (default) crea producto cantina con price_ref obligatorio.
+// scope: "materia" crea materia prima (is_cantina=false, category='Materia Prima',
+// sin price_ref, unit_size+unit_label obligatorios para que las recetas puedan
+// convertir unidades correctamente).
+export default function CreateProductModal({ user, onClose, onCreated, scope = "vendible" }) {
+  const isMateria = scope === "materia";
   const [name, setName] = useState("");
   const [categories, setCategories] = useState(CANTINA_CATEGORIES);
-  const [category, setCategory] = useState("Bebida");
+  const [category, setCategory] = useState(isMateria ? "Materia Prima" : "Bebida");
 
   useEffect(() => {
+    if (isMateria) return; // MP no usa el catálogo editable; siempre va a 'Materia Prima'
     let alive = true;
     loadProductCategoryNames(supabase).then((cats) => {
       if (!alive) return;
@@ -30,7 +36,12 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const canSubmit = name.trim() && Number(priceRef) > 0 && !saving;
+  // Vendible: nombre + precio. MP: nombre + unit_size + unit_label (sin precio).
+  const sizeNumPreview = parseFloat(unitSize);
+  const hasValidUnit = Number.isFinite(sizeNumPreview) && sizeNumPreview > 0 && unitLabel.trim();
+  const canSubmit = name.trim()
+    && (isMateria ? hasValidUnit : Number(priceRef) > 0)
+    && !saving;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -62,11 +73,11 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
       const { error: insertError } = await supabase.from("products").insert({
         id: newId,
         name: finalName,
-        category: category || "Otro",
-        price_ref: Number(priceRef),
+        category: isMateria ? "Materia Prima" : (category || "Otro"),
+        price_ref: isMateria ? 0 : Number(priceRef),
         cost_ref: Number(costRef) || 0,
         emoji: emoji.trim() || null,
-        is_cantina: true,
+        is_cantina: !isMateria,
         active: true,
         sort_order: nextOrder,
         stock_quantity: 0,
@@ -86,9 +97,16 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">
-            <Plus size={18} /> Crear producto
-          </h2>
+          <div>
+            <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">
+              {isMateria ? <><Wheat size={18} /> Crear materia prima</> : <><Plus size={18} /> Crear producto</>}
+            </h2>
+            {isMateria && (
+              <p className="text-[11px] text-stone-500 mt-0.5">
+                Ingrediente para recetas. No se vende directo en POS.
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg" disabled={saving}>
             <X size={18} className="text-stone-400" />
           </button>
@@ -115,54 +133,70 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
             )}
           </div>
 
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-              Categoría
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none bg-white"
-            >
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
+          {!isMateria && (
             <div>
               <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-                Precio venta $
+                Categoría
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={priceRef}
-                onChange={(e) => setPriceRef(e.target.value)}
-                placeholder="0.00"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
-              />
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none bg-white"
+              >
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
+          )}
+
+          {!isMateria ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+                  Precio venta $
+                </label>
+                <input
+                  type="number" step="0.01" min="0.01"
+                  value={priceRef}
+                  onChange={(e) => setPriceRef(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+                  Costo $ (opcional)
+                </label>
+                <input
+                  type="number" step="0.01" min="0"
+                  value={costRef}
+                  onChange={(e) => setCostRef(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+            </div>
+          ) : (
             <div>
               <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-                Costo $ (opcional)
+                Costo $ por unidad (opcional)
               </label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="number" step="0.0001" min="0"
                 value={costRef}
                 onChange={(e) => setCostRef(e.target.value)}
                 placeholder="0.00"
                 className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
               />
+              <p className="text-[10px] text-stone-400 mt-1">
+                Si dejas vacío, el costo se calcula automático al registrar entrada de inventario.
+              </p>
             </div>
-          </div>
+          )}
 
-          {/* Tamaño físico opcional — ej. 1 kg, 500 g, 12 u/caja */}
+          {/* Tamaño físico — obligatorio para MP (necesario para conversión de unidades en recetas) */}
           <div>
             <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-              Tamaño por unidad (opcional)
+              Tamaño por unidad {isMateria ? <span className="text-red-500">*</span> : "(opcional)"}
             </label>
             <div className="flex gap-2">
               <input
@@ -188,7 +222,9 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
               </datalist>
             </div>
             <p className="text-[10px] text-stone-400 mt-1">
-              Ej. 1 kg, 500 g, 12 u/caja. Si no aplica, dejar vacío.
+              {isMateria
+                ? "Ej. paquete de 1 kg, botella de 500 ml, caja de 12 u. Necesario para que las recetas conviertan correctamente."
+                : "Ej. 1 kg, 500 g, 12 u/caja. Si no aplica, dejar vacío."}
             </p>
           </div>
 
@@ -227,7 +263,7 @@ export default function CreateProductModal({ user, onClose, onCreated }) {
               disabled={!canSubmit}
               className="flex-1 py-3 rounded-xl bg-brand text-white font-bold text-sm hover:bg-brand-dark disabled:opacity-30 transition-colors flex items-center justify-center gap-2"
             >
-              {saving ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : "Crear producto"}
+              {saving ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : (isMateria ? "Crear materia prima" : "Crear producto")}
             </button>
           </div>
         </div>

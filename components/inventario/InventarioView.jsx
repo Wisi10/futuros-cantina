@@ -717,10 +717,11 @@ export default function InventarioView({ user, rate }) {
         />
       )}
 
-      {/* Create product modal */}
+      {/* Create product modal — scope cambia el modal según subtab activo */}
       {createModalOpen && (
         <CreateProductModal
           user={user}
+          scope={scope === "materia" ? "materia" : "vendible"}
           onClose={() => setCreateModalOpen(false)}
           onCreated={async () => { await loadProducts(); }}
         />
