@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { X, Plus, Trash2, Search, Loader2 } from "lucide-react";
+import { X, Plus, Trash2, Search, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { convertUnit, unitsCompatible } from "@/lib/unitConversion";
 
 const UNITS = ["unidad", "g", "kg", "ml", "l", "cucharada", "rebanada", "rodaja", "pizca"];
 
@@ -29,7 +30,7 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
         .eq("product_id", product.id),
       supabase
         .from("products")
-        .select("id, name, cost_ref, stock_quantity, is_cantina, has_recipe, active, category")
+        .select("id, name, cost_ref, stock_quantity, unit_label, unit_size, is_cantina, has_recipe, active, category")
         .eq("is_cantina", false)
         .eq("category", "Materia Prima")
         .eq("active", true)
@@ -43,6 +44,7 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
       ingredient_id: r.ingredient_id,
       ingredient_name: rawMap[r.ingredient_id]?.name || "(eliminado)",
       ingredient_cost: Number(rawMap[r.ingredient_id]?.cost_ref || 0),
+      ingredient_unit_label: rawMap[r.ingredient_id]?.unit_label || null,
       quantity: Number(r.quantity || 0),
       unit: r.unit || "unidad",
       notes: r.notes || "",
@@ -63,6 +65,8 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
   }, [rawMaterials, pickerSearch, ingredients]);
 
   const addIngredient = (rawProduct) => {
+    // Default la unidad de la receta a la unit_label del MP — así la conversión
+    // es trivial (1:1) hasta que el staff la cambie explícitamente.
     setIngredients((prev) => [
       ...prev,
       {
@@ -70,8 +74,9 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
         ingredient_id: rawProduct.id,
         ingredient_name: rawProduct.name,
         ingredient_cost: Number(rawProduct.cost_ref || 0),
+        ingredient_unit_label: rawProduct.unit_label || null,
         quantity: 1,
-        unit: "unidad",
+        unit: rawProduct.unit_label || "unidad",
         notes: "",
       },
     ]);
@@ -90,15 +95,26 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
   async function handleSave() {
     if (saving) return;
     setError("");
+
+    // Validar conversión de unidades antes de pegar a DB.
+    // Si MP tiene unit_label y receta usa otra incompatible → bloquear.
+    const valid = ingredients.filter((i) => i.ingredient_id && Number(i.quantity) > 0);
+    for (const i of valid) {
+      if (i.ingredient_unit_label) {
+        const conv = convertUnit(Number(i.quantity), i.unit, i.ingredient_unit_label);
+        if (!conv.ok) {
+          setError(`${i.ingredient_name}: ${conv.reason}. Cambia la unidad de la receta o actualiza el unit_label de la materia prima.`);
+          return;
+        }
+      }
+    }
     setSaving(true);
-    const payload = ingredients
-      .filter((i) => i.ingredient_id && Number(i.quantity) > 0)
-      .map((i) => ({
-        ingredient_id: i.ingredient_id,
-        quantity: Number(i.quantity),
-        unit: i.unit || "unidad",
-        notes: i.notes || null,
-      }));
+    const payload = valid.map((i) => ({
+      ingredient_id: i.ingredient_id,
+      quantity: Number(i.quantity),
+      unit: i.unit || "unidad",
+      notes: i.notes || null,
+    }));
     const overrideNum = costOverride.trim() === "" ? null : Number(costOverride);
     if (overrideNum != null && (!Number.isFinite(overrideNum) || overrideNum < 0)) {
       setError("Override de costo invalido");
@@ -179,39 +195,55 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {ingredients.map((i) => (
-                            <tr key={i.key} className="border-t border-stone-100">
-                              <td className="px-3 py-2 text-stone-700">{i.ingredient_name}</td>
-                              <td className="px-3 py-2 text-right">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={i.quantity}
-                                  onChange={(e) => updateRow(i.key, { quantity: e.target.value })}
-                                  disabled={!isAdmin}
-                                  className="w-14 border border-stone-200 rounded px-1.5 py-1 text-right text-xs focus:outline-none focus:border-brand"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <select
-                                  value={i.unit}
-                                  onChange={(e) => updateRow(i.key, { unit: e.target.value })}
-                                  disabled={!isAdmin}
-                                  className="w-full border border-stone-200 rounded px-1.5 py-1 text-xs bg-white"
-                                >
-                                  {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                                </select>
-                              </td>
-                              {isAdmin && (
-                                <td className="px-2 py-2 text-right">
-                                  <button onClick={() => removeRow(i.key)} className="text-stone-400 hover:text-red-500 p-1">
-                                    <Trash2 size={12} />
-                                  </button>
+                          {ingredients.map((i) => {
+                            const mpUnit = i.ingredient_unit_label;
+                            const incompatible = mpUnit && !unitsCompatible(i.unit, mpUnit);
+                            return (
+                              <tr key={i.key} className={`border-t border-stone-100 ${incompatible ? "bg-red-50" : ""}`}>
+                                <td className="px-3 py-2 text-stone-700">
+                                  <div>{i.ingredient_name}</div>
+                                  {mpUnit ? (
+                                    <div className="text-[10px] text-stone-400">MP en {mpUnit}</div>
+                                  ) : (
+                                    <div className="text-[10px] text-amber-600 flex items-center gap-1">
+                                      <AlertTriangle size={9} /> Sin unit_label
+                                    </div>
+                                  )}
                                 </td>
-                              )}
-                            </tr>
-                          ))}
+                                <td className="px-3 py-2 text-right">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={i.quantity}
+                                    onChange={(e) => updateRow(i.key, { quantity: e.target.value })}
+                                    disabled={!isAdmin}
+                                    className="w-14 border border-stone-200 rounded px-1.5 py-1 text-right text-xs focus:outline-none focus:border-brand"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={i.unit}
+                                    onChange={(e) => updateRow(i.key, { unit: e.target.value })}
+                                    disabled={!isAdmin}
+                                    className={`w-full border rounded px-1.5 py-1 text-xs bg-white ${incompatible ? "border-red-300" : "border-stone-200"}`}
+                                  >
+                                    {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                                  </select>
+                                  {incompatible && (
+                                    <p className="text-[9px] text-red-600 mt-0.5">No convierte a {mpUnit}</p>
+                                  )}
+                                </td>
+                                {isAdmin && (
+                                  <td className="px-2 py-2 text-right">
+                                    <button onClick={() => removeRow(i.key)} className="text-stone-400 hover:text-red-500 p-1">
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     )}
@@ -251,9 +283,12 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                                 <button
                                   key={p.id}
                                   onClick={() => addIngredient(p)}
-                                  className="w-full text-left px-2 py-1.5 hover:bg-white rounded text-sm text-stone-700"
+                                  className="w-full text-left px-2 py-1.5 hover:bg-white rounded text-sm text-stone-700 flex items-center justify-between"
                                 >
-                                  {p.name}
+                                  <span>{p.name}</span>
+                                  <span className="text-[10px] text-stone-400">
+                                    {p.unit_label ? `en ${p.unit_label}` : "sin unidad"}
+                                  </span>
                                 </button>
                               ))
                             )}

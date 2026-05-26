@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, CreditCard, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { calcBs, ProductImage } from "@/lib/utils";
+import { convertUnit } from "@/lib/unitConversion";
 import SideNav from "@/components/nav/SideNav";
 import RateChip from "@/components/shared/RateChip";
 import ClientProfileModal from "@/components/clientes/ClientProfileModal";
@@ -402,7 +403,7 @@ function POSPageInner() {
       if (ingredientIds.length > 0) {
         const { data: ingRows } = await supabase
           .from("products")
-          .select("id, name, stock_quantity, cost_ref")
+          .select("id, name, stock_quantity, cost_ref, unit_label, unit_size")
           .in("id", ingredientIds);
         (ingRows || []).forEach((p) => { ingredientStockById[p.id] = p; });
       }
@@ -419,10 +420,18 @@ function POSPageInner() {
         for (const ing of recipe) {
           const stock = ingredientStockById[ing.ingredient_id];
           if (!stock) continue;
-          const needed = Number(ing.quantity) * item.qty;
+          // Conversión: receta en ing.unit → unidad del stock (stock.unit_label).
+          // Si MP no tiene unit_label, fallback a same-unit (sin conversión).
+          const conv = convertUnit(Number(ing.quantity) * item.qty, ing.unit, stock.unit_label);
+          if (!conv.ok) {
+            alert(`Receta de ${item.product.name} inválida — ingrediente ${stock.name}: ${conv.reason}. Arregla la receta o el unit_label de la materia prima desde Inventario.`);
+            return null;
+          }
+          const needed = conv.value;
           if (Number(stock.stock_quantity || 0) < needed) {
+            const unitLabel = stock.unit_label || "";
             const ok = window.confirm(
-              `Falta materia prima para ${item.product.name}: ${stock.name} (necesita ${needed}, hay ${stock.stock_quantity}). Stock quedara negativo. Continuar?`
+              `Falta materia prima para ${item.product.name}: ${stock.name} (necesita ${needed.toFixed(3)} ${unitLabel}, hay ${stock.stock_quantity} ${unitLabel}). Stock quedará negativo. Continuar?`
             );
             if (!ok) return null;
           }
@@ -473,7 +482,9 @@ function POSPageInner() {
         const recipe = recipesByProduct[item.product.id] || [];
         for (const ing of recipe) {
           const ingrInfo = ingredientStockById[ing.ingredient_id];
-          const needed = Number(ing.quantity) * item.qty;
+          // Re-aplicamos conversión (ya validada en el chequeo previo, aquí no debe fallar).
+          const conv = convertUnit(Number(ing.quantity) * item.qty, ing.unit, ingrInfo?.unit_label);
+          const needed = conv.ok ? conv.value : Number(ing.quantity) * item.qty;
           movements.push({
             product_id: ing.ingredient_id,
             product_name: ingrInfo?.name || "(ingrediente)",
@@ -481,7 +492,7 @@ function POSPageInner() {
             quantity: -needed,
             reference_id: sale.id,
             cost_ref: parseFloat(ingrInfo?.cost_ref || 0),
-            notes: `Consumo receta · ${item.product.name}`,
+            notes: `Consumo receta · ${item.product.name} · ${ing.quantity} ${ing.unit || ""} → ${needed.toFixed(3)} ${ingrInfo?.unit_label || ""}`.trim(),
             created_by: user?.name || "Cantina",
           });
           ingredientUpdates.push({ id: ing.ingredient_id, decrement: needed });
