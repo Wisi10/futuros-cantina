@@ -57,6 +57,15 @@ export default function RestockForm({ products, user, onRestocked }) {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("pago_movil");
+  // Si la entrada YA fue pagada en el momento (mi fix anterior) o queda en
+  // cuentas por pagar para liquidar después. Default 'paid' por compatibilidad
+  // con el flujo previo, pero el toggle UI hace que el staff lo elija conscientemente.
+  const [paymentStatus, setPaymentStatus] = useState("paid"); // 'paid' | 'pending'
+  const [dueDate, setDueDate] = useState(() => {
+    // Default 30 días desde hoy
+    const d = new Date(); d.setDate(d.getDate() + 30);
+    return d.toISOString().split("T")[0];
+  });
   const [saving, setSaving] = useState(false);
 
   // Filtrar productos con receta — esos se manejan vía ingredientes en materia prima.
@@ -125,6 +134,10 @@ export default function RestockForm({ products, user, onRestocked }) {
 
   const handleSubmit = async () => {
     if (validRows.length === 0) return;
+    if (!supplier.trim()) {
+      alert("Debes elegir o crear un proveedor antes de registrar la entrada.");
+      return;
+    }
     setSaving(true);
 
     try {
@@ -140,16 +153,20 @@ export default function RestockForm({ products, user, onRestocked }) {
         };
       });
 
-      // 1. Insert cantina_restocks
+      // 1. Insert cantina_restocks con estado de pago
+      const isPaidNow = paymentStatus === "paid";
       const { data: restock, error: restockErr } = await supabase
         .from("cantina_restocks")
         .insert({
           restock_date: date,
           items,
           total_cost_ref: totalCostRef,
-          supplier: supplier.trim() || null,
+          supplier: supplier.trim(),
           notes: notes || null,
           created_by: user?.name || "Cantina",
+          payment_status: isPaidNow ? "paid" : "pending",
+          paid_amount_ref: isPaidNow ? totalCostRef : 0,
+          due_date: isPaidNow ? null : dueDate,
         })
         .select()
         .single();
@@ -190,33 +207,33 @@ export default function RestockForm({ products, user, onRestocked }) {
         if (stockErr) throw stockErr;
       }
 
-      // 3. Auto-crear gasto vinculado al restock (BUG audit: link inventario ↔ gasto).
-      //    Si falla, alertamos pero NO rollback del restock (el stock subió OK).
+      // 3. Si la entrada se marca como YA PAGADA → crear expense automático.
+      //    Si queda "por pagar" → no crea gasto todavía; aparecerá en Por Pagar
+      //    y el expense se crea cuando se registre el pago.
       let expenseOk = true;
       let expenseErrMsg = null;
-      try {
-        const expenseCategory = deriveExpenseCategory(items, productById);
-        const expenseName = supplier.trim()
-          ? `Compra ${supplier.trim()}`
-          : `Restock ${items.length} producto${items.length !== 1 ? "s" : ""}`;
-        const { error: expErr } = await supabase.from("expenses").insert({
-          id: "exp_" + Math.random().toString(36).slice(2, 12),
-          expense_type: "variable",
-          category: expenseCategory,
-          name: expenseName,
-          amount_usd: totalCostRef,
-          payment_method: paymentMethod,
-          provider: supplier.trim() || null,
-          expense_date: date,
-          created_by: user?.name || "Cantina",
-          notes: `Auto-creado desde restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
-        });
-        if (expErr) { expenseOk = false; expenseErrMsg = expErr.message; }
-      } catch (linkErr) {
-        expenseOk = false;
-        expenseErrMsg = linkErr.message;
+      if (isPaidNow) {
+        try {
+          const expenseCategory = deriveExpenseCategory(items, productById);
+          const { error: expErr } = await supabase.from("expenses").insert({
+            id: "exp_" + Math.random().toString(36).slice(2, 12),
+            expense_type: "variable",
+            category: expenseCategory,
+            name: `Compra ${supplier.trim()}`,
+            amount_usd: totalCostRef,
+            payment_method: paymentMethod,
+            provider: supplier.trim(),
+            expense_date: date,
+            created_by: user?.name || "Cantina",
+            notes: `Auto-creado desde restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
+          });
+          if (expErr) { expenseOk = false; expenseErrMsg = expErr.message; }
+        } catch (linkErr) {
+          expenseOk = false;
+          expenseErrMsg = linkErr.message;
+        }
+        if (!expenseOk) console.error("[RESTOCK→GASTO]", expenseErrMsg);
       }
-      if (!expenseOk) console.error("[RESTOCK→GASTO]", expenseErrMsg);
 
       // Reset form
       setRows([emptyRow()]);
@@ -224,10 +241,15 @@ export default function RestockForm({ products, user, onRestocked }) {
       setNewSupplierMode(false);
       setNotes("");
       setPaymentMethod("pago_movil");
-      if (expenseOk) {
-        alert("Entrada registrada ✅ Inventario + gasto creados.");
+      setPaymentStatus("paid");
+      if (isPaidNow) {
+        if (expenseOk) {
+          alert("Entrada registrada ✅ Inventario + gasto creados.");
+        } else {
+          alert(`Inventario actualizado ✅, pero el gasto NO se creó. Ingrésalo manual desde Gastos.\n\nError: ${expenseErrMsg}`);
+        }
       } else {
-        alert(`Inventario actualizado ✅, pero el gasto NO se creó. Ingrésalo manual desde Gastos.\n\nError: ${expenseErrMsg}`);
+        alert("Entrada registrada ✅ Stock actualizado. La factura quedó en 'Por Pagar' (vence " + dueDate + "). Cuando la pagues, se registra el gasto automático.");
       }
       onRestocked();
     } catch (err) {
@@ -427,15 +449,52 @@ export default function RestockForm({ products, user, onRestocked }) {
           />
         </div>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <label className="text-xs font-medium text-stone-500 block mb-1">Método de pago</label>
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
-          >
-            {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
-          <p className="text-[10px] text-stone-400 mt-1">Se registra también como gasto.</p>
+          <label className="text-xs font-medium text-stone-500 block mb-1">¿Estado del pago?</label>
+          <div className="flex gap-1.5 mb-2">
+            <button
+              type="button"
+              onClick={() => setPaymentStatus("paid")}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                paymentStatus === "paid"
+                  ? "bg-brand text-white"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              }`}
+            >
+              Ya pagada
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentStatus("pending")}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                paymentStatus === "pending"
+                  ? "bg-amber-500 text-white"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              }`}
+            >
+              Por pagar
+            </button>
+          </div>
+          {paymentStatus === "paid" ? (
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+            >
+              {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          ) : (
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+          )}
+          <p className="text-[10px] text-stone-400 mt-1">
+            {paymentStatus === "paid"
+              ? "Se registra como gasto inmediato."
+              : "Vence en esta fecha. Queda en 'Por Pagar' hasta liquidar."}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Notas (opcional)</label>

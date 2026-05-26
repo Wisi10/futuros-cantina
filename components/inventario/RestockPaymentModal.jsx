@@ -77,6 +77,45 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
         .eq("id", restock.id);
       if (upErr) throw upErr;
 
+      // 3. Crear expense (cash outflow real). Categoría derivada de los items
+      //    del restock; misma lógica que RestockForm "ya pagada".
+      try {
+        const restockItems = Array.isArray(restock.items) ? restock.items : [];
+        // Derivar category: si todos los items son del mismo product.category
+        // usamos esa, si no "Insumos cantina · Otros". Para no traer products
+        // de DB acá, usamos la category del primer item si está cacheada en
+        // items[].category, o un default.
+        const categories = new Set();
+        restockItems.forEach((it) => {
+          const pc = it?.category || it?.product_category;
+          if (pc === "Bebida") categories.add("Insumos cantina · Bebida");
+          else if (pc === "Comida") categories.add("Insumos cantina · Comida");
+          else if (pc === "Snacks") categories.add("Insumos cantina · Snacks");
+          else if (pc === "Helados") categories.add("Insumos cantina · Helados");
+          else if (pc === "Insumos") categories.add("Insumos cantina · Empaques");
+          else categories.add("Insumos cantina · Otros");
+        });
+        const expenseCategory = categories.size === 1 ? [...categories][0] : "Insumos cantina · Otros";
+        const { error: expErr } = await supabase.from("expenses").insert({
+          id: "exp_" + Math.random().toString(36).slice(2, 12),
+          expense_type: "variable",
+          category: expenseCategory,
+          name: `Pago factura ${restock.supplier || "proveedor"}${isFullPayment ? "" : " (parcial)"}`,
+          amount_usd: amountNum,
+          amount_bs: amountBs,
+          exchange_rate: usesRate && rateNum > 0 ? rateNum : null,
+          payment_method: method,
+          reference: reference.trim() || null,
+          provider: restock.supplier || null,
+          expense_date: paidAt,
+          created_by: user?.name || "Cantina",
+          notes: `Pago contra restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
+        });
+        if (expErr) console.error("[INVOICE_PAYMENT→GASTO]", expErr);
+      } catch (linkErr) {
+        console.error("[INVOICE_PAYMENT→GASTO]", linkErr);
+      }
+
       if (onPaid) onPaid();
     } catch (e) {
       setError("Error: " + e.message);
