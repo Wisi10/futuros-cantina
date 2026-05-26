@@ -1,8 +1,87 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Sparkles } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Trash2, Loader2, Sparkles, Search, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import InvoiceUploadModal from "./InvoiceUploadModal";
+
+// Combobox con búsqueda para elegir un producto entre N (>100). Reemplaza
+// el <select> nativo (scroll inviable con 153 productos). Filtra por nombre
+// case/accent-insensitive. Click fuera cierra.
+function ProductPicker({ products, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const selected = products.find((p) => p.id === value);
+  const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const qNorm = norm(q.trim());
+  const filtered = qNorm
+    ? products.filter((p) => norm(p.name).includes(qNorm)).slice(0, 30)
+    : products.slice(0, 30);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setQ(""); }}
+        className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-left bg-white hover:border-brand transition-colors flex items-center justify-between gap-2"
+      >
+        <span className={selected ? "text-stone-800 truncate" : "text-stone-400"}>
+          {selected ? `${selected.emoji || "🍽️"} ${selected.name}` : "Seleccionar..."}
+        </span>
+        <Search size={12} className="text-stone-400 shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-72 overflow-hidden flex flex-col">
+          <div className="p-1.5 border-b border-stone-100 relative">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              autoFocus
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar producto..."
+              className="w-full border border-stone-200 rounded pl-6 pr-7 py-1 text-xs focus:outline-none focus:border-brand"
+            />
+            {q && (
+              <button onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-stone-400 text-center py-3">Sin resultados</p>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => { onChange(p.id); setOpen(false); setQ(""); }}
+                  className={`w-full text-left px-2 py-1.5 hover:bg-stone-50 text-xs flex items-center justify-between gap-2 ${
+                    p.id === value ? "bg-brand/5 text-brand font-medium" : "text-stone-700"
+                  }`}
+                >
+                  <span className="truncate">
+                    {p.emoji || "🍽️"} {p.name}
+                  </span>
+                  <span className="text-[10px] text-stone-400 shrink-0">stk {Number(p.stock_quantity || 0)}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Reglas:
 // - Productos con receta (has_recipe=true) NO se stockean directo: se controlan
@@ -299,18 +378,11 @@ export default function RestockForm({ products, user, onRestocked }) {
                 return (
                   <tr key={i} className="border-t border-stone-100 align-top">
                     <td className="px-3 py-2">
-                      <select
+                      <ProductPicker
+                        products={selectableProducts}
                         value={row.productId}
-                        onChange={(e) => updateRow(i, "productId", e.target.value)}
-                        className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:border-brand focus:outline-none"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {selectableProducts.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.emoji || "🍽️"} {p.name} (stock: {Number(p.stock_quantity || 0)})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(id) => updateRow(i, "productId", id)}
+                      />
                       {/* Inline set de tamaño si el producto no lo tiene */}
                       {product && !productHasUnit && (
                         <div className="mt-1.5 flex items-center gap-1 text-[10px] text-stone-500">
