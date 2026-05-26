@@ -449,12 +449,44 @@ function POSPageInner() {
       }
     }
 
+    // cost_ref por-unidad. Para productos con receta, SUMAMOS ingredientes
+    // (convertidos a la unidad del MP) × cost_ref del MP. Si el producto tiene
+    // recipe_cost_override seteado, ese gana. Sin receta → cost_ref del producto.
+    const computeUnitCost = (item) => {
+      if (!item.product.has_recipe) {
+        return parseFloat(item.product.cost_ref || 0);
+      }
+      const override = item.product.recipe_cost_override;
+      if (override != null && override !== "" && Number.isFinite(Number(override))) {
+        return Number(override);
+      }
+      const recipe = recipesByProduct[item.product.id] || [];
+      if (recipe.length === 0) return parseFloat(item.product.cost_ref || 0);
+      // Si algún MP no tiene unit_label, el cost_ref del MP puede no estar en
+      // unidad atómica (legacy data). Computar daría garbage; mejor caer al
+      // cost_ref del producto (que normalmente fue seteado a mano).
+      const hasLegacyMp = recipe.some((ing) => {
+        const mp = ingredientStockById[ing.ingredient_id];
+        return mp && !mp.unit_label;
+      });
+      if (hasLegacyMp) return parseFloat(item.product.cost_ref || 0);
+      let total = 0;
+      for (const ing of recipe) {
+        const mp = ingredientStockById[ing.ingredient_id];
+        if (!mp) continue;
+        const conv = convertUnit(Number(ing.quantity), ing.unit, mp.unit_label);
+        const qtyInMpUnit = conv.ok ? conv.value : Number(ing.quantity);
+        total += qtyInMpUnit * Number(mp.cost_ref || 0);
+      }
+      return Math.round(total * 10000) / 10000; // 4 decimales para precisión
+    };
+
     const items = cart.map((item) => ({
       product_id: item.product.id,
       name: item.product.name,
       qty: item.qty,
       price_ref: parseFloat(item.product.price_ref),
-      cost_ref: parseFloat(item.product.cost_ref || 0),
+      cost_ref: computeUnitCost(item),
     }));
 
     const { data: sale, error: saleError } = await supabase
