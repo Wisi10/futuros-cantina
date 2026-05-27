@@ -28,6 +28,8 @@ export default function PorPagarView({ user, rate }) {
   const [loading, setLoading] = useState(true);
   const [expandedSuppliers, setExpandedSuppliers] = useState(new Set());
   const [payingRestock, setPayingRestock] = useState(null);
+  const [payingRestocks, setPayingRestocks] = useState(null); // array para pago combinado
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [historyOpen, setHistoryOpen] = useState(null); // restock_id
 
   const load = useCallback(async () => {
@@ -178,11 +180,41 @@ export default function PorPagarView({ user, rate }) {
                       restock={r}
                       payments={payments[r.id] || []}
                       usdRate={usdRate}
+                      selected={selectedIds.has(r.id)}
+                      onToggleSelect={() => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+                          return next;
+                        });
+                      }}
                       onPay={() => setPayingRestock(r)}
                       onToggleHistory={() => setHistoryOpen(historyOpen === r.id ? null : r.id)}
                       historyOpen={historyOpen === r.id}
                     />
                   ))}
+                  {/* Botón pago combinado cuando hay ≥2 seleccionadas de este proveedor */}
+                  {(() => {
+                    const selected = g.items.filter((r) => selectedIds.has(r.id));
+                    if (selected.length < 2) return null;
+                    const sumOutstanding = selected.reduce(
+                      (s, r) => s + Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0)), 0
+                    );
+                    return (
+                      <div className="px-4 py-3 bg-brand/5 border-t border-brand/20 flex items-center justify-between">
+                        <div className="text-xs text-brand">
+                          <span className="font-bold">{selected.length} facturas seleccionadas</span>
+                          <span className="ml-2 text-stone-600">· Total a pagar: <strong>${sumOutstanding.toFixed(2)}</strong></span>
+                        </div>
+                        <button
+                          onClick={() => setPayingRestocks(selected)}
+                          className="px-3 py-1.5 bg-brand text-white hover:bg-brand-dark rounded-lg text-xs font-bold flex items-center gap-1.5"
+                        >
+                          <DollarSign size={12} /> Pagar las {selected.length} juntas
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -190,7 +222,7 @@ export default function PorPagarView({ user, rate }) {
         })}
       </div>
 
-      {/* Modal de pago (Paso 11) */}
+      {/* Modal de pago single */}
       {payingRestock && (
         <RestockPaymentModal
           restock={payingRestock}
@@ -204,11 +236,26 @@ export default function PorPagarView({ user, rate }) {
           }}
         />
       )}
+
+      {/* Modal de pago multi-factura (mismo proveedor) */}
+      {payingRestocks && payingRestocks.length > 0 && (
+        <RestockPaymentModal
+          restocks={payingRestocks}
+          rate={rate}
+          user={user}
+          onClose={() => setPayingRestocks(null)}
+          onPaid={() => {
+            setPayingRestocks(null);
+            setSelectedIds(new Set());
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function RestockRow({ restock, payments, usdRate, onPay, onToggleHistory, historyOpen }) {
+function RestockRow({ restock, payments, usdRate, selected, onToggleSelect, onPay, onToggleHistory, historyOpen }) {
   const r = restock;
   const owed = Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0);
   const overdueDays = r.due_date ? -daysUntil(r.due_date) : null; // si dueDate pasada, positivo
@@ -216,8 +263,18 @@ function RestockRow({ restock, payments, usdRate, onPay, onToggleHistory, histor
   const isPartial = r.payment_status === "partial";
 
   return (
-    <div className={`border-b border-stone-100 last:border-b-0 ${isOverdue ? "bg-red-50/40" : ""}`}>
+    <div className={`border-b border-stone-100 last:border-b-0 ${isOverdue ? "bg-red-50/40" : ""} ${selected ? "bg-brand/5" : ""}`}>
       <div className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={onToggleSelect}
+            onClick={(e) => e.stopPropagation()}
+            className="w-4 h-4 cursor-pointer shrink-0"
+            title="Seleccionar para pagar con otras facturas del mismo proveedor"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-stone-500">{r.restock_date}</span>

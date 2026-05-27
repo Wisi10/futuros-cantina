@@ -20,9 +20,19 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function RestockPaymentModal({ restock, payments = [], rate, user, onClose, onPaid }) {
-  const total = Number(restock.total_cost_ref || 0);
-  const alreadyPaid = Number(restock.paid_amount_ref || 0);
+// Soporta single-factura (restock prop) o multi-factura (restocks prop array).
+// En multi-factura: agrega outstandings de todas las facturas del MISMO proveedor.
+// Al pagar, distribuye proporcionalmente entre las facturas para cubrir exact
+// outstanding de cada una (versión simple — no permite parcial en multi).
+export default function RestockPaymentModal({ restock, restocks, payments = [], rate, user, onClose, onPaid }) {
+  const restockArr = restocks && restocks.length > 0 ? restocks : (restock ? [restock] : []);
+  const isMulti = restockArr.length > 1;
+  // Por consistencia con código previo, mantengo `restock` apuntando al primero.
+  // En multi-factura usamos los agregados.
+  const firstRestock = restockArr[0] || {};
+  const supplierName = firstRestock.supplier || "Sin proveedor";
+  const total = restockArr.reduce((s, r) => s + Number(r.total_cost_ref || 0), 0);
+  const alreadyPaid = restockArr.reduce((s, r) => s + Number(r.paid_amount_ref || 0), 0);
   const outstanding = Math.max(0, total - alreadyPaid);
 
   // Tasa default: la del día (de exchange_rates via rate prop). Editable por staff
@@ -45,9 +55,10 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
   const amountBs = usesRate && rateNum > 0 ? amountNum * rateNum : null;
 
   const isFullPayment = amountNum >= outstanding - 0.005;
-  const isOverpay = amountNum > outstanding + 0.005;
+  // Overpay solo disponible en single-factura (en multi, distribución compleja).
+  const isOverpay = !isMulti && amountNum > outstanding + 0.005;
   const overpayDelta = isOverpay ? amountNum - outstanding : 0;
-  const newStatus = isFullPayment || isOverpay ? "paid" : amountNum > 0 ? "partial" : restock.payment_status;
+  const newStatus = isFullPayment || isOverpay ? "paid" : amountNum > 0 ? "partial" : (firstRestock.payment_status || "pending");
 
   // Si proveedor cobró más de lo estimado, el staff confirma si actualizar
   // los precios de los productos del restock (forward-only). Default ON
@@ -63,15 +74,105 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
   // requiere permitirlo. Solo bloqueamos amounts inválidos.
   const canSubmit = amountNum > 0 && !saving;
 
+  // Categorizar gasto a partir de los items de un restock
+  const deriveExpenseCategory = (restockItems) => {
+    const categories = new Set();
+    restockItems.forEach((it) => {
+      const pc = it?.category || it?.product_category;
+      if (pc === "Bebida") categories.add("Insumos cantina · Bebida");
+      else if (pc === "Comida") categories.add("Insumos cantina · Comida");
+      else if (pc === "Snacks") categories.add("Insumos cantina · Snacks");
+      else if (pc === "Helados") categories.add("Insumos cantina · Helados");
+      else if (pc === "Insumos") categories.add("Insumos cantina · Empaques");
+      else categories.add("Insumos cantina · Otros");
+    });
+    return categories.size === 1 ? [...categories][0] : "Insumos cantina · Otros";
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSaving(true);
     setError("");
 
     try {
-      // 1. Insert payment
+      if (isMulti) {
+        // ─── MULTI-FACTURA: distribuir el monto entre las facturas del proveedor
+        // Si amount cubre el total → cada factura se paga completa (paid).
+        // Si amount es parcial → distribuir proporcionalmente al outstanding de cada factura.
+        const totalOutstanding = outstanding;
+        const isFullCombined = amountNum >= totalOutstanding - 0.005;
+        const paymentInserts = [];
+        const restockUpdates = [];
+        for (const r of restockArr) {
+          const rOutstanding = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
+          if (rOutstanding <= 0) continue;
+          // Si pago completo combinado: cada factura recibe su outstanding exacto.
+          // Si parcial: prorrateado.
+          const allocated = isFullCombined
+            ? rOutstanding
+            : Math.round(amountNum * (rOutstanding / totalOutstanding) * 100) / 100;
+          if (allocated <= 0) continue;
+          paymentInserts.push({
+            restock_id: r.id,
+            amount_ref: allocated,
+            amount_bs: usesRate && rateNum > 0 ? allocated * rateNum : null,
+            payment_method: method,
+            reference: reference.trim() || null,
+            exchange_rate_bs: usesRate && rateNum > 0 ? rateNum : null,
+            paid_at: paidAt,
+            notes: notes.trim() ? `${notes.trim()} (pago combinado ${restockArr.length} facturas)` : `Pago combinado ${restockArr.length} facturas del proveedor`,
+            created_by: user?.name || "Cantina",
+          });
+          const newPaidForR = Number(r.paid_amount_ref || 0) + allocated;
+          const total = Number(r.total_cost_ref || 0);
+          const status = newPaidForR >= total - 0.005 ? "paid" : "partial";
+          restockUpdates.push({ id: r.id, paid_amount_ref: newPaidForR, payment_status: status });
+        }
+
+        if (paymentInserts.length === 0) throw new Error("Sin facturas con saldo pendiente");
+
+        const { error: payErr } = await supabase.from("cantina_restock_payments").insert(paymentInserts);
+        if (payErr) throw payErr;
+
+        for (const u of restockUpdates) {
+          const { error: upErr } = await supabase
+            .from("cantina_restocks")
+            .update({ paid_amount_ref: u.paid_amount_ref, payment_status: u.payment_status })
+            .eq("id", u.id);
+          if (upErr) throw upErr;
+        }
+
+        // 1 expense agregando todo el pago
+        const allItems = restockArr.flatMap((r) => Array.isArray(r.items) ? r.items : []);
+        const expenseCategory = deriveExpenseCategory(allItems);
+        try {
+          await supabase.from("expenses").insert({
+            id: "exp_" + Math.random().toString(36).slice(2, 12),
+            expense_type: "variable",
+            category: expenseCategory,
+            name: `Pago combinado ${restockArr.length} facturas · ${supplierName}`,
+            amount_usd: amountNum,
+            amount_bs: amountBs,
+            exchange_rate: usesRate && rateNum > 0 ? rateNum : null,
+            payment_method: method,
+            reference: reference.trim() || null,
+            provider: supplierName,
+            expense_date: paidAt,
+            created_by: user?.name || "Cantina",
+            notes: `Pago a ${restockArr.length} facturas: ${restockArr.map((r) => r.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
+          });
+        } catch (linkErr) {
+          console.error("[MULTI_PAYMENT→GASTO]", linkErr);
+        }
+
+        if (onPaid) onPaid();
+        return;
+      }
+
+      // ─── SINGLE-FACTURA: flujo previo intacto (incluye overpay + updatePrices)
+      const singleRestock = firstRestock;
       const { error: payErr } = await supabase.from("cantina_restock_payments").insert({
-        restock_id: restock.id,
+        restock_id: singleRestock.id,
         amount_ref: amountNum,
         amount_bs: amountBs,
         payment_method: method,
@@ -83,82 +184,55 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
       });
       if (payErr) throw payErr;
 
-      // 2. Update restock — incluye total nuevo si hubo overpay (el proveedor cobró más)
       const newPaid = alreadyPaid + amountNum;
-      const newTotal = isOverpay ? newPaid : Number(restock.total_cost_ref || 0);
-      const restockUpdate = {
-        paid_amount_ref: newPaid,
-        payment_status: newStatus,
-      };
+      const newTotal = isOverpay ? newPaid : Number(singleRestock.total_cost_ref || 0);
+      const restockUpdate = { paid_amount_ref: newPaid, payment_status: newStatus };
       if (isOverpay) restockUpdate.total_cost_ref = newTotal;
       const { error: upErr } = await supabase
         .from("cantina_restocks")
         .update(restockUpdate)
-        .eq("id", restock.id);
+        .eq("id", singleRestock.id);
       if (upErr) throw upErr;
 
-      // 2b. Si overpay + staff marcó "actualizar precios": ajustar cost_ref de los
-      //     productos del restock proporcionalmente (forward-only, ventas pasadas
-      //     mantienen el cost ya grabado). Registramos también una "alerta" como
-      //     stock_movement con type='adjustment' y notes detalladas para audit.
       if (isOverpay && updatePrices) {
-        const oldTotal = Number(restock.total_cost_ref || 0);
+        const oldTotal = Number(singleRestock.total_cost_ref || 0);
         const factor = oldTotal > 0 ? newTotal / oldTotal : 1;
-        const restockItems = Array.isArray(restock.items) ? restock.items : [];
+        const restockItems = Array.isArray(singleRestock.items) ? singleRestock.items : [];
         for (const it of restockItems) {
           if (!it?.product_id || !it?.cost_per_unit_ref) continue;
           const oldCostU = Number(it.cost_per_unit_ref);
           const newCostU = oldCostU * factor;
-          // Update producto cost_ref a el nuevo (MAC simplificado por ahora —
-          // forward-only, no recalcula ventas pasadas).
           await supabase.from("products").update({ cost_ref: newCostU }).eq("id", it.product_id);
-          // Audit trail: alerta persistente como stock_movement
           await supabase.from("stock_movements").insert({
             product_id: it.product_id,
             product_name: it.name || "(producto)",
             movement_type: "adjustment",
             quantity: 0,
-            reference_id: restock.id,
+            reference_id: singleRestock.id,
             cost_ref: newCostU,
-            notes: `⚠️ Precio actualizado por factura final: $${oldCostU.toFixed(4)} → $${newCostU.toFixed(4)} (proveedor ${restock.supplier || "?"})`,
+            notes: `⚠️ Precio actualizado por factura final: $${oldCostU.toFixed(4)} → $${newCostU.toFixed(4)} (proveedor ${singleRestock.supplier || "?"})`,
             created_by: user?.name || "Cantina",
           });
         }
       }
 
-      // 3. Crear expense (cash outflow real). Categoría derivada de los items
-      //    del restock; misma lógica que RestockForm "ya pagada".
       try {
-        const restockItems = Array.isArray(restock.items) ? restock.items : [];
-        // Derivar category: si todos los items son del mismo product.category
-        // usamos esa, si no "Insumos cantina · Otros". Para no traer products
-        // de DB acá, usamos la category del primer item si está cacheada en
-        // items[].category, o un default.
-        const categories = new Set();
-        restockItems.forEach((it) => {
-          const pc = it?.category || it?.product_category;
-          if (pc === "Bebida") categories.add("Insumos cantina · Bebida");
-          else if (pc === "Comida") categories.add("Insumos cantina · Comida");
-          else if (pc === "Snacks") categories.add("Insumos cantina · Snacks");
-          else if (pc === "Helados") categories.add("Insumos cantina · Helados");
-          else if (pc === "Insumos") categories.add("Insumos cantina · Empaques");
-          else categories.add("Insumos cantina · Otros");
-        });
-        const expenseCategory = categories.size === 1 ? [...categories][0] : "Insumos cantina · Otros";
+        const restockItems = Array.isArray(singleRestock.items) ? singleRestock.items : [];
+        const expenseCategory = deriveExpenseCategory(restockItems);
         const { error: expErr } = await supabase.from("expenses").insert({
           id: "exp_" + Math.random().toString(36).slice(2, 12),
           expense_type: "variable",
           category: expenseCategory,
-          name: `Pago factura ${restock.supplier || "proveedor"}${isFullPayment ? "" : " (parcial)"}`,
+          name: `Pago factura ${singleRestock.supplier || "proveedor"}${isFullPayment ? "" : " (parcial)"}`,
           amount_usd: amountNum,
           amount_bs: amountBs,
           exchange_rate: usesRate && rateNum > 0 ? rateNum : null,
           payment_method: method,
           reference: reference.trim() || null,
-          provider: restock.supplier || null,
+          provider: singleRestock.supplier || null,
           expense_date: paidAt,
           created_by: user?.name || "Cantina",
-          notes: `Pago contra restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
+          notes: `Pago contra restock ${singleRestock.id}${notes ? ` · ${notes}` : ""}`,
         });
         if (expErr) console.error("[INVOICE_PAYMENT→GASTO]", expErr);
       } catch (linkErr) {
@@ -188,9 +262,25 @@ export default function RestockPaymentModal({ restock, payments = [], rate, user
         <div className="px-5 py-4 space-y-4">
           {/* Restock summary */}
           <div className="bg-stone-50 rounded-xl p-3">
-            <div className="text-xs text-stone-500 uppercase tracking-wider font-medium">Factura</div>
-            <div className="font-bold text-stone-800 mt-0.5">{restock.supplier || "Sin proveedor"}</div>
-            <div className="text-xs text-stone-500 mt-0.5">{restock.notes || ""}</div>
+            <div className="text-xs text-stone-500 uppercase tracking-wider font-medium">
+              {isMulti ? `${restockArr.length} facturas` : "Factura"}
+            </div>
+            <div className="font-bold text-stone-800 mt-0.5">{supplierName}</div>
+            {isMulti ? (
+              <div className="mt-2 space-y-0.5 max-h-32 overflow-y-auto text-[11px]">
+                {restockArr.map((r) => {
+                  const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
+                  return (
+                    <div key={r.id} className="flex justify-between text-stone-600">
+                      <span>{r.restock_date} {r.notes ? `· ${r.notes}` : ""}</span>
+                      <span className="font-medium">${out.toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              firstRestock.notes && <div className="text-xs text-stone-500 mt-0.5">{firstRestock.notes}</div>
+            )}
             <div className="grid grid-cols-3 gap-2 mt-3 text-sm">
               <div>
                 <div className="text-[11px] text-stone-500">Total</div>

@@ -314,6 +314,10 @@ export default function RestockForm({ products, user, onRestocked }) {
         if (!expenseOk) console.error("[RESTOCK→GASTO]", expenseErrMsg);
       }
 
+      // Agregar supplier al dropdown si era nuevo (evita tener que refrescar la página)
+      if (supplier.trim() && !supplierOptions.includes(supplier.trim())) {
+        setSupplierOptions((prev) => [...prev, supplier.trim()].sort());
+      }
       // Reset form
       setRows([emptyRow()]);
       setSupplier("");
