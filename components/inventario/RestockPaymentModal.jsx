@@ -68,12 +68,16 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
   const rateNum = parseFloat(exchangeRate) || 0;
   const amountBs = usesRate && rateNum > 0 ? amountNum * rateNum : null;
 
-  // Validación per-row en multi: ningún amount puede exceder su outstanding.
-  const multiInvalidRow = isMulti && restockArr.some((r) => {
-    const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
-    const paid = parseFloat(perInvoiceAmounts[r.id]) || 0;
-    return paid < 0 || paid > out + 0.005;
-  });
+  // En multi se permite overpay por row (proveedor pudo subir precio post-entrega).
+  // Solo bloqueamos negativos. Cada row marca su propio overpay para UI.
+  const multiOverpayRows = isMulti
+    ? restockArr.filter((r) => {
+        const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
+        const paid = parseFloat(perInvoiceAmounts[r.id]) || 0;
+        return paid > out + 0.005;
+      })
+    : [];
+  const multiInvalidRow = isMulti && restockArr.some((r) => (parseFloat(perInvoiceAmounts[r.id]) || 0) < 0);
 
   const isFullPayment = amountNum >= outstanding - 0.005;
   // Overpay solo disponible en single-factura (en multi, distribución compleja).
@@ -85,11 +89,11 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
   // los precios de los productos del restock (forward-only). Default ON
   // cuando hay overpay, OFF cuando es pago normal.
   const [updatePrices, setUpdatePrices] = useState(false);
-  // Auto-marcar updatePrices cuando aparece overpay (UX hint, el staff puede destildear)
-  // y limpiar cuando se vuelve a pagos normales.
+  // Auto-marcar updatePrices cuando aparece overpay (single o multi). UX hint;
+  // el staff puede destildear si fue un typo.
   useEffect(() => {
-    setUpdatePrices(isOverpay);
-  }, [isOverpay]);
+    setUpdatePrices(isOverpay || multiOverpayRows.length > 0);
+  }, [isOverpay, multiOverpayRows.length]);
 
   // Ya no bloqueamos overpay en single (escenario "proveedor subió el precio").
   // En multi sí bloqueamos si algún row excede su outstanding.
@@ -117,13 +121,22 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
 
     try {
       if (isMulti) {
-        // ─── MULTI-FACTURA: cada factura tiene su amount editable (default outstanding).
-        // El staff puede ajustar/cero por row. Validación bloquea overpay individual.
+        // ─── MULTI-FACTURA: cada factura tiene su amount editable. Permite overpay
+        // por row (proveedor pudo subir precio). Si updatePrices=ON, para cada row
+        // con overpay se ajusta total_cost_ref y se actualizan los precios de los
+        // productos de esa factura + audit stock_movement.
         const paymentInserts = [];
         const restockUpdates = [];
+        const priceAdjustments = []; // { restock, newTotal, factor }
         for (const r of restockArr) {
           const allocated = parseFloat(perInvoiceAmounts[r.id]) || 0;
-          if (allocated <= 0) continue; // staff puso 0 → saltar esta factura
+          if (allocated <= 0) continue;
+          const oldPaid = Number(r.paid_amount_ref || 0);
+          const oldTotal = Number(r.total_cost_ref || 0);
+          const outstandingR = Math.max(0, oldTotal - oldPaid);
+          const rowOverpay = allocated > outstandingR + 0.005;
+          const newPaid = oldPaid + allocated;
+          const newTotal = rowOverpay ? newPaid : oldTotal;
           paymentInserts.push({
             restock_id: r.id,
             amount_ref: allocated,
@@ -135,10 +148,17 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
             notes: notes.trim() ? `${notes.trim()} (pago combinado ${restockArr.length} facturas)` : `Pago combinado ${restockArr.length} facturas del proveedor`,
             created_by: user?.name || "Cantina",
           });
-          const newPaidForR = Number(r.paid_amount_ref || 0) + allocated;
-          const total = Number(r.total_cost_ref || 0);
-          const status = newPaidForR >= total - 0.005 ? "paid" : "partial";
-          restockUpdates.push({ id: r.id, paid_amount_ref: newPaidForR, payment_status: status });
+          const status = newPaid >= newTotal - 0.005 ? "paid" : "partial";
+          restockUpdates.push({
+            id: r.id,
+            paid_amount_ref: newPaid,
+            payment_status: status,
+            ...(rowOverpay ? { total_cost_ref: newTotal } : {}),
+          });
+          if (rowOverpay && updatePrices) {
+            const factor = oldTotal > 0 ? newTotal / oldTotal : 1;
+            priceAdjustments.push({ restock: r, newTotal, factor });
+          }
         }
 
         if (paymentInserts.length === 0) throw new Error("Todos los montos están en 0 — nada que pagar");
@@ -147,11 +167,34 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
         if (payErr) throw payErr;
 
         for (const u of restockUpdates) {
+          const upPayload = { paid_amount_ref: u.paid_amount_ref, payment_status: u.payment_status };
+          if (u.total_cost_ref != null) upPayload.total_cost_ref = u.total_cost_ref;
           const { error: upErr } = await supabase
             .from("cantina_restocks")
-            .update({ paid_amount_ref: u.paid_amount_ref, payment_status: u.payment_status })
+            .update(upPayload)
             .eq("id", u.id);
           if (upErr) throw upErr;
+        }
+
+        // Ajustes de precio para rows con overpay (forward-only, audit en stock_movements)
+        for (const adj of priceAdjustments) {
+          const items = Array.isArray(adj.restock.items) ? adj.restock.items : [];
+          for (const it of items) {
+            if (!it?.product_id || !it?.cost_per_unit_ref) continue;
+            const oldCostU = Number(it.cost_per_unit_ref);
+            const newCostU = oldCostU * adj.factor;
+            await supabase.from("products").update({ cost_ref: newCostU }).eq("id", it.product_id);
+            await supabase.from("stock_movements").insert({
+              product_id: it.product_id,
+              product_name: it.name || "(producto)",
+              movement_type: "adjustment",
+              quantity: 0,
+              reference_id: adj.restock.id,
+              cost_ref: newCostU,
+              notes: `⚠️ Precio actualizado por factura final: $${oldCostU.toFixed(4)} → $${newCostU.toFixed(4)} (proveedor ${adj.restock.supplier || "?"}, pago combinado)`,
+              created_by: user?.name || "Cantina",
+            });
+          }
         }
 
         // 1 expense agregando todo el pago
@@ -289,34 +332,60 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
                   const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
                   const currentAmt = parseFloat(perInvoiceAmounts[r.id]) || 0;
                   const overRow = currentAmt > out + 0.005;
+                  const delta = overRow ? currentAmt - out : 0;
                   return (
-                    <div key={r.id} className="flex items-center gap-1.5 text-xs bg-white rounded px-1.5 py-1 border border-stone-100">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-stone-700 truncate">{r.restock_date}</p>
-                        {r.notes && <p className="text-[10px] text-stone-400 truncate">{r.notes}</p>}
+                    <div key={r.id} className={`text-xs rounded px-1.5 py-1 border ${overRow ? "border-amber-300 bg-amber-50" : "border-stone-100 bg-white"}`}>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-stone-700 truncate">{r.restock_date}</p>
+                          {r.notes && <p className="text-[10px] text-stone-400 truncate">{r.notes}</p>}
+                        </div>
+                        <span className="w-16 text-right text-stone-500 text-[11px]">${out.toFixed(2)}</span>
+                        <div className="w-20 flex items-center gap-0.5">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={perInvoiceAmounts[r.id] ?? ""}
+                            onChange={(e) => setPerInvoiceAmounts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            className="w-full border rounded px-1 py-0.5 text-xs text-right focus:outline-none focus:border-brand border-stone-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPerInvoiceAmounts((prev) => ({ ...prev, [r.id]: out.toFixed(2) }))}
+                            className="text-[9px] text-stone-400 hover:text-brand px-0.5"
+                            title="Pagar todo lo pendiente de esta factura"
+                          >max</button>
+                        </div>
                       </div>
-                      <span className="w-16 text-right text-stone-500 text-[11px]">${out.toFixed(2)}</span>
-                      <div className="w-20 flex items-center gap-0.5">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={perInvoiceAmounts[r.id] ?? ""}
-                          onChange={(e) => setPerInvoiceAmounts((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                          className={`w-full border rounded px-1 py-0.5 text-xs text-right focus:outline-none focus:border-brand ${overRow ? "border-red-400 bg-red-50" : "border-stone-300"}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPerInvoiceAmounts((prev) => ({ ...prev, [r.id]: out.toFixed(2) }))}
-                          className="text-[9px] text-stone-400 hover:text-brand px-0.5"
-                          title="Pagar todo lo pendiente de esta factura"
-                        >max</button>
-                      </div>
+                      {overRow && (
+                        <p className="text-[10px] text-amber-700 mt-0.5 flex items-center gap-1">
+                          <TrendingUp size={10} /> Subió ${delta.toFixed(2)} del estimado
+                        </p>
+                      )}
                     </div>
                   );
                 })}
-                {multiInvalidRow && (
-                  <p className="text-[10px] text-red-600 px-1">Algún monto excede lo pendiente de su factura. Ajustá.</p>
+                {multiOverpayRows.length > 0 && (
+                  <div className="mt-1.5 bg-amber-50 border border-amber-200 rounded p-2 text-[11px]">
+                    <p className="text-amber-800 font-medium flex items-center gap-1">
+                      <TrendingUp size={11} /> {multiOverpayRows.length} factura{multiOverpayRows.length !== 1 ? "s" : ""} con precio subido
+                    </p>
+                    <label className="flex items-center gap-1.5 mt-1 cursor-pointer text-amber-700">
+                      <input
+                        type="checkbox"
+                        checked={updatePrices}
+                        onChange={(e) => setUpdatePrices(e.target.checked)}
+                        className="w-3 h-3"
+                      />
+                      <span>Actualizar costo de productos en esas facturas (MAC futuro)</span>
+                    </label>
+                    {updatePrices && (
+                      <p className="text-[10px] text-amber-600 mt-1 ml-4">
+                        Ventas históricas mantienen su costo grabado. Cambio queda en historial.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
