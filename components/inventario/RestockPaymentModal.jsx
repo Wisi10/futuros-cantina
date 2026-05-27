@@ -41,6 +41,16 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
   const todaysRate = rate?.usd || rate?.eur || "";
 
   const [amount, setAmount] = useState(String(outstanding.toFixed(2)));
+  // Multi-factura: amounts editables por factura (key = restock.id).
+  // Default a outstanding de cada una. Staff puede ajustar/cero por row.
+  const [perInvoiceAmounts, setPerInvoiceAmounts] = useState(() => {
+    const m = {};
+    restockArr.forEach((r) => {
+      const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
+      m[r.id] = out.toFixed(2);
+    });
+    return m;
+  });
   const [method, setMethod] = useState("transferencia");
   const [reference, setReference] = useState("");
   const [paidAt, setPaidAt] = useState(todayISO());
@@ -49,10 +59,21 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const amountNum = parseFloat(amount) || 0;
+  // En single usamos `amount`. En multi sumamos perInvoiceAmounts para el total.
+  const multiTotal = isMulti
+    ? Object.values(perInvoiceAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+    : 0;
+  const amountNum = isMulti ? multiTotal : (parseFloat(amount) || 0);
   const usesRate = method === "pago_movil" || method === "cash_bs" || method === "transferencia";
   const rateNum = parseFloat(exchangeRate) || 0;
   const amountBs = usesRate && rateNum > 0 ? amountNum * rateNum : null;
+
+  // Validación per-row en multi: ningún amount puede exceder su outstanding.
+  const multiInvalidRow = isMulti && restockArr.some((r) => {
+    const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
+    const paid = parseFloat(perInvoiceAmounts[r.id]) || 0;
+    return paid < 0 || paid > out + 0.005;
+  });
 
   const isFullPayment = amountNum >= outstanding - 0.005;
   // Overpay solo disponible en single-factura (en multi, distribución compleja).
@@ -70,9 +91,9 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
     setUpdatePrices(isOverpay);
   }, [isOverpay]);
 
-  // Ya no bloqueamos overpay — el escenario real "el proveedor subió el precio"
-  // requiere permitirlo. Solo bloqueamos amounts inválidos.
-  const canSubmit = amountNum > 0 && !saving;
+  // Ya no bloqueamos overpay en single (escenario "proveedor subió el precio").
+  // En multi sí bloqueamos si algún row excede su outstanding.
+  const canSubmit = amountNum > 0 && !saving && !multiInvalidRow;
 
   // Categorizar gasto a partir de los items de un restock
   const deriveExpenseCategory = (restockItems) => {
@@ -96,22 +117,13 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
 
     try {
       if (isMulti) {
-        // ─── MULTI-FACTURA: distribuir el monto entre las facturas del proveedor
-        // Si amount cubre el total → cada factura se paga completa (paid).
-        // Si amount es parcial → distribuir proporcionalmente al outstanding de cada factura.
-        const totalOutstanding = outstanding;
-        const isFullCombined = amountNum >= totalOutstanding - 0.005;
+        // ─── MULTI-FACTURA: cada factura tiene su amount editable (default outstanding).
+        // El staff puede ajustar/cero por row. Validación bloquea overpay individual.
         const paymentInserts = [];
         const restockUpdates = [];
         for (const r of restockArr) {
-          const rOutstanding = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
-          if (rOutstanding <= 0) continue;
-          // Si pago completo combinado: cada factura recibe su outstanding exacto.
-          // Si parcial: prorrateado.
-          const allocated = isFullCombined
-            ? rOutstanding
-            : Math.round(amountNum * (rOutstanding / totalOutstanding) * 100) / 100;
-          if (allocated <= 0) continue;
+          const allocated = parseFloat(perInvoiceAmounts[r.id]) || 0;
+          if (allocated <= 0) continue; // staff puso 0 → saltar esta factura
           paymentInserts.push({
             restock_id: r.id,
             amount_ref: allocated,
@@ -129,7 +141,7 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
           restockUpdates.push({ id: r.id, paid_amount_ref: newPaidForR, payment_status: status });
         }
 
-        if (paymentInserts.length === 0) throw new Error("Sin facturas con saldo pendiente");
+        if (paymentInserts.length === 0) throw new Error("Todos los montos están en 0 — nada que pagar");
 
         const { error: payErr } = await supabase.from("cantina_restock_payments").insert(paymentInserts);
         if (payErr) throw payErr;
@@ -267,16 +279,45 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
             </div>
             <div className="font-bold text-stone-800 mt-0.5">{supplierName}</div>
             {isMulti ? (
-              <div className="mt-2 space-y-0.5 max-h-32 overflow-y-auto text-[11px]">
+              <div className="mt-2 space-y-1 max-h-56 overflow-y-auto">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-400 font-bold px-1">
+                  <span className="flex-1">Factura</span>
+                  <span className="w-16 text-right">Pendiente</span>
+                  <span className="w-20 text-right">Pagar $</span>
+                </div>
                 {restockArr.map((r) => {
                   const out = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
+                  const currentAmt = parseFloat(perInvoiceAmounts[r.id]) || 0;
+                  const overRow = currentAmt > out + 0.005;
                   return (
-                    <div key={r.id} className="flex justify-between text-stone-600">
-                      <span>{r.restock_date} {r.notes ? `· ${r.notes}` : ""}</span>
-                      <span className="font-medium">${out.toFixed(2)}</span>
+                    <div key={r.id} className="flex items-center gap-1.5 text-xs bg-white rounded px-1.5 py-1 border border-stone-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-stone-700 truncate">{r.restock_date}</p>
+                        {r.notes && <p className="text-[10px] text-stone-400 truncate">{r.notes}</p>}
+                      </div>
+                      <span className="w-16 text-right text-stone-500 text-[11px]">${out.toFixed(2)}</span>
+                      <div className="w-20 flex items-center gap-0.5">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={perInvoiceAmounts[r.id] ?? ""}
+                          onChange={(e) => setPerInvoiceAmounts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                          className={`w-full border rounded px-1 py-0.5 text-xs text-right focus:outline-none focus:border-brand ${overRow ? "border-red-400 bg-red-50" : "border-stone-300"}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPerInvoiceAmounts((prev) => ({ ...prev, [r.id]: out.toFixed(2) }))}
+                          className="text-[9px] text-stone-400 hover:text-brand px-0.5"
+                          title="Pagar todo lo pendiente de esta factura"
+                        >max</button>
+                      </div>
                     </div>
                   );
                 })}
+                {multiInvalidRow && (
+                  <p className="text-[10px] text-red-600 px-1">Algún monto excede lo pendiente de su factura. Ajustá.</p>
+                )}
               </div>
             ) : (
               firstRestock.notes && <div className="text-xs text-stone-500 mt-0.5">{firstRestock.notes}</div>
@@ -297,25 +338,34 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
             </div>
           </div>
 
-          {/* Amount */}
+          {/* Amount: en single un input; en multi se muestra el total agregado solamente */}
           <div>
-            <label className="text-xs text-stone-500 mb-1 block">Monto a pagar ($REF)</label>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-              />
-              <button
-                onClick={() => setAmount(String(outstanding.toFixed(2)))}
-                className="px-3 py-2 bg-stone-100 hover:bg-stone-200 rounded-lg text-xs"
-                title="Pagar todo lo pendiente"
-              >
-                Todo
-              </button>
-            </div>
+            {isMulti ? (
+              <div className="bg-stone-50 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-xs text-stone-500">Total a pagar (suma de las {restockArr.length} facturas):</span>
+                <span className="text-base font-bold text-brand">${amountNum.toFixed(2)}</span>
+              </div>
+            ) : (
+              <>
+                <label className="text-xs text-stone-500 mb-1 block">Monto a pagar ($REF)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                  />
+                  <button
+                    onClick={() => setAmount(String(outstanding.toFixed(2)))}
+                    className="px-3 py-2 bg-stone-100 hover:bg-stone-200 rounded-lg text-xs"
+                    title="Pagar todo lo pendiente"
+                  >
+                    Todo
+                  </button>
+                </div>
+              </>
+            )}
             {isOverpay && (
               <div className="text-xs text-amber-700 mt-1 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded p-2">
                 <TrendingUp size={13} className="mt-0.5 shrink-0" />
