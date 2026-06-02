@@ -615,14 +615,17 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                       className="w-full border border-stone-300 rounded-lg px-3 py-2 text-base font-medium focus:border-brand focus:outline-none"
                     />
                   </div>
-                  {m?.needsRef && (
+                  {(m?.needsRef || m?.acceptsRef) && (
                     <div>
-                      <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Referencia</label>
+                      <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+                        Referencia {!m.needsRef && <span className="normal-case tracking-normal text-stone-400">(opcional)</span>}
+                      </label>
                       <input
                         type="text"
+                        maxLength={20}
                         value={pendingRef}
                         onChange={(e) => setPendingRef(e.target.value)}
-                        placeholder={`Ref. ${m.label}`}
+                        placeholder={m.refHint || `Ref. ${m.label}`}
                         className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
                       />
                     </div>
