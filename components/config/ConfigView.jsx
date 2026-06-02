@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown, Receipt } from "lucide-react";
+import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown, Receipt, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability, loadProductCategoryNames, CANTINA_CATEGORIES } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
@@ -22,6 +22,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
   const [products, setProducts] = useState([]);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
+  const [productSearch, setProductSearch] = useState("");
 
   const toggleSort = (key) => {
     if (sortKey === key) {
@@ -49,8 +50,17 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
     );
   };
 
+  const filteredProducts = (() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => {
+      const hay = `${p.name || ""} ${p.category || ""} ${p.emoji || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  })();
+
   const sortedProducts = (() => {
-    if (!sortKey) return products;
+    if (!sortKey) return filteredProducts;
     const dir = sortDir === "asc" ? 1 : -1;
     const cmp = (a, b) => {
       let av, bv;
@@ -73,7 +83,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       if (av > bv) return 1 * dir;
       return 0;
     };
-    return [...products].sort(cmp);
+    return [...filteredProducts].sort(cmp);
   })();
   const [rateHistory, setRateHistory] = useState([]);
   const [eurInput, setEurInput] = useState("");
@@ -414,9 +424,37 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
       <div style={{ display: section === "productos" ? undefined : "none" }}>
       {/* Products Section */}
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-stone-100">
-          <h2 className="font-bold text-sm text-stone-700">Productos</h2>
-          <p className="text-xs text-stone-400">Activa "Cantina" para que aparezcan en el POS</p>
+        <div className="px-4 py-3 border-b border-stone-100 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-bold text-sm text-stone-700">Productos</h2>
+            <p className="text-xs text-stone-400">
+              Activa "Cantina" para que aparezcan en el POS
+              {productSearch.trim() && (
+                <span className="ml-2 text-brand">
+                  · {sortedProducts.length} de {products.length}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="relative w-full max-w-xs shrink-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+            <input
+              type="text"
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              placeholder="Buscar producto, categoría o emoji…"
+              className="w-full border border-stone-300 rounded-lg pl-8 pr-8 py-1.5 text-sm focus:border-brand focus:outline-none"
+            />
+            {productSearch && (
+              <button
+                onClick={() => setProductSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                aria-label="Limpiar búsqueda"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
         {loading ? (
           <p className="p-4 text-sm text-stone-400 animate-pulse">Cargando...</p>
