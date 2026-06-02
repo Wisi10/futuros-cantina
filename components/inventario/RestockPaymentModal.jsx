@@ -7,10 +7,13 @@ import { supabase } from "@/lib/supabase";
 // Mismo pattern canónico que cantina_credits/cantina_credit_payments del
 // lado cliente: deuda en $REF locked + tabla pagos 1:N.
 
+// needsRef: bloquea guardar si vacio. acceptsRef: muestra input opcional.
+// Distinto del PAYMENT_METHODS global (lib/utils.js) porque acá los metodos
+// son lado proveedor (incluye Transferencia, no incluye Tarjeta).
 const PAYMENT_METHODS = [
-  { id: "transferencia", label: "Transferencia" },
-  { id: "pago_movil", label: "Pago Móvil" },
-  { id: "zelle", label: "Zelle" },
+  { id: "transferencia", label: "Transferencia", acceptsRef: true, refHint: "Nº transferencia" },
+  { id: "pago_movil", label: "Pago Móvil", acceptsRef: true, refHint: "Últimos 4 dígitos" },
+  { id: "zelle", label: "Zelle", needsRef: true, acceptsRef: true, refHint: "Email o ref" },
   { id: "cash_usd", label: "Efectivo USD" },
   { id: "cash_bs", label: "Efectivo Bs" },
 ];
@@ -473,16 +476,25 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
                 ))}
               </select>
             </div>
-            <div>
-              <label className="text-xs text-stone-500 mb-1 block">Referencia (opcional)</label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder="Nº ref"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-              />
-            </div>
+            {(() => {
+              const m = PAYMENT_METHODS.find((x) => x.id === method);
+              if (!m?.needsRef && !m?.acceptsRef) return null;
+              return (
+                <div>
+                  <label className="text-xs text-stone-500 mb-1 block">
+                    Referencia {!m.needsRef && <span className="text-stone-400">(opcional)</span>}
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={20}
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    placeholder={m.refHint || "Nº ref"}
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                  />
+                </div>
+              );
+            })()}
             <div>
               <label className="text-xs text-stone-500 mb-1 block">Fecha del pago</label>
               <input

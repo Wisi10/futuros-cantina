@@ -370,14 +370,17 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                 </div>
               </div>
 
-              {selectedPayMethod?.needsRef && (
+              {(selectedPayMethod?.needsRef || selectedPayMethod?.acceptsRef) && (
                 <div>
-                  <label className="text-xs font-medium text-stone-500 block mb-1">Referencia</label>
+                  <label className="text-xs font-medium text-stone-500 block mb-1">
+                    Referencia {!selectedPayMethod.needsRef && <span className="font-normal text-stone-400">(opcional)</span>}
+                  </label>
                   <input
                     type="text"
+                    maxLength={20}
                     value={payRef}
                     onChange={(e) => setPayRef(e.target.value)}
-                    placeholder="Número de referencia"
+                    placeholder={selectedPayMethod.refHint || "Número de referencia"}
                     className="w-full border border-stone-300 rounded-lg px-3 py-3 text-base focus:border-brand focus:outline-none"
                   />
                 </div>

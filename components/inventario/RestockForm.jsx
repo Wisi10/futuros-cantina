@@ -56,7 +56,7 @@ function ProductPicker({ products, value, onChange }) {
               </button>
             )}
           </div>
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 scrollbar-hide">
             {filtered.length === 0 ? (
               <p className="text-xs text-stone-400 text-center py-3">Sin resultados</p>
             ) : (
@@ -120,11 +120,11 @@ function deriveExpenseCategory(items, productLookup) {
 }
 
 const PAYMENT_METHODS = [
-  { id: "pago_movil", label: "Pago Móvil" },
-  { id: "zelle", label: "Zelle" },
+  { id: "pago_movil", label: "Pago Móvil", acceptsRef: true, refHint: "Últimos 4 dígitos" },
+  { id: "zelle", label: "Zelle", needsRef: true, acceptsRef: true, refHint: "Email o ref" },
   { id: "cash_usd", label: "Cash USD" },
   { id: "cash_bs", label: "Cash Bs" },
-  { id: "transferencia", label: "Transferencia" },
+  { id: "transferencia", label: "Transferencia", acceptsRef: true, refHint: "Nº transferencia" },
 ];
 
 export default function RestockForm({ products, user, onRestocked }) {
@@ -136,6 +136,7 @@ export default function RestockForm({ products, user, onRestocked }) {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("pago_movil");
+  const [paymentRef, setPaymentRef] = useState("");
   // Si la entrada YA fue pagada en el momento (mi fix anterior) o queda en
   // cuentas por pagar para liquidar después. Default 'paid' por compatibilidad
   // con el flujo previo, pero el toggle UI hace que el staff lo elija conscientemente.
@@ -301,6 +302,7 @@ export default function RestockForm({ products, user, onRestocked }) {
             name: `Compra ${supplier.trim()}`,
             amount_usd: totalCostRef,
             payment_method: paymentMethod,
+            reference: paymentRef.trim() || null,
             provider: supplier.trim(),
             expense_date: date,
             created_by: user?.name || "Cantina",
@@ -324,6 +326,7 @@ export default function RestockForm({ products, user, onRestocked }) {
       setNewSupplierMode(false);
       setNotes("");
       setPaymentMethod("pago_movil");
+      setPaymentRef("");
       setPaymentStatus("paid");
       if (isPaidNow) {
         if (expenseOk) {
@@ -551,13 +554,29 @@ export default function RestockForm({ products, user, onRestocked }) {
             </button>
           </div>
           {paymentStatus === "paid" ? (
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
-            >
-              {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
+            <>
+              <select
+                value={paymentMethod}
+                onChange={(e) => { setPaymentMethod(e.target.value); setPaymentRef(""); }}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+              >
+                {PAYMENT_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+              {(() => {
+                const m = PAYMENT_METHODS.find((x) => x.id === paymentMethod);
+                if (!m?.needsRef && !m?.acceptsRef) return null;
+                return (
+                  <input
+                    type="text"
+                    maxLength={20}
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    placeholder={m.refHint || "Referencia"}
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none mt-2"
+                  />
+                );
+              })()}
+            </>
           ) : (
             <input
               type="date"
