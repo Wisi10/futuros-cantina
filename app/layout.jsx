@@ -5,8 +5,8 @@ export const metadata = {
   description: 'POS Cantina - Futuros Sports Complex',
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
+    icon: '/favicon.ico?v=2',
+    apple: '/apple-touch-icon.png?v=2',
   },
   appleWebApp: {
     capable: true,
@@ -27,8 +27,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" href="/favicon.ico?v=2" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
       </head>
       <body className="bg-brand-cream-light min-h-screen">
         {children}
