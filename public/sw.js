@@ -1,6 +1,6 @@
 // Versionado: bumpear el numero cada deploy para invalidar cache viejo.
 // Si te olvidas, los staff veran la version vieja hasta limpiar cache manual.
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `futuros-cantina-${CACHE_VERSION}`;
 const SHELL = ['/'];
 
