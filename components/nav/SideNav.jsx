@@ -30,8 +30,9 @@ export default function SideNav({ activeTab, onTabChange, userRole }) {
 
   return (
     <>
-      {/* Desktop: vertical sidebar */}
-      <nav className="hidden md:flex w-16 bg-brand flex-col items-center py-4 gap-1 shrink-0">
+      {/* Desktop/tablet: vertical sidebar. overflow-y-auto por si la viewport
+          es corta y los tabs no caben (iPad landscape 768 alto). */}
+      <nav className="hidden md:flex w-16 bg-brand flex-col items-center py-4 gap-1 shrink-0 overflow-y-auto scrollbar-hide">
         <div className="text-white/80 font-bold text-xs tracking-wider">FS</div>
         <div className={`text-[8px] font-medium tracking-wider uppercase mb-3 ${lvl >= 1 ? "text-gold" : "text-white/40"}`}>
           {userRole === "owner" ? "Owner" : lvl >= 1 ? "Gerente" : "Staff"}
@@ -54,24 +55,27 @@ export default function SideNav({ activeTab, onTabChange, userRole }) {
         })}
       </nav>
 
-      {/* Mobile: bottom navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-brand z-30 flex items-center justify-around px-1 py-1 safe-bottom">
-        {visibleTabs.slice(0, 6).map((tab) => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex-1 flex flex-col items-center justify-center py-2 rounded-lg transition-colors ${
-                active ? "text-white" : "text-white/40"
-              }`}
-            >
-              <Icon size={20} />
-              <span className="text-[8px] font-medium leading-none mt-0.5">{tab.label}</span>
-            </button>
-          );
-        })}
+      {/* Mobile: bottom navigation con scroll horizontal cuando hay muchos tabs.
+          Owner ve 10 tabs, gerente 9 — no caben en barra fija, se desliza. */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-brand z-30 safe-bottom overflow-x-auto scrollbar-hide">
+        <div className="flex items-center px-1 py-1 min-w-max">
+          {visibleTabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg transition-colors min-w-[64px] ${
+                  active ? "text-white bg-white/10" : "text-white/40"
+                }`}
+              >
+                <Icon size={20} />
+                <span className="text-[8px] font-medium leading-none mt-0.5">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
     </>
   );
