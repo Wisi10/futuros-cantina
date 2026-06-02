@@ -963,10 +963,10 @@ function POSPageInner() {
   const isOwner = effRole === "owner";
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-brand-cream-light overflow-hidden">
+    <div className="h-screen flex flex-col lg:flex-row bg-brand-cream-light overflow-hidden">
       <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={effectiveUser.cantinaRole || "staff"} />
 
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 pb-16 md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 pb-16 lg:pb-0">
         {/* Killswitch ventas activado por owner */}
         {killswitchSales.enabled && (
           <div className="bg-red-600 text-white px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium shrink-0">
