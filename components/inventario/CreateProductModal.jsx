@@ -21,7 +21,9 @@ const TYPES = [
   { id: "servicio",          label: "Servicio",         icon: ShoppingBag, desc: "Servicio/alquiler sin stock (Hora Cancha, Mesa)", forSell: false, skipStep2: true },
 ];
 
-const UNIT_LABELS = ["u", "kg", "g", "l", "ml", "caja", "paq"];
+// Orden: unidades contables, peso (g antes que kg porque en cocina es más
+// común), volumen, packs. Si necesitas mg para algo muy chico, se tipea manual.
+const UNIT_LABELS = ["u", "g", "kg", "ml", "l", "caja", "paq"];
 
 const PAYMENT_METHODS = [
   { id: "pago_movil", label: "Pago Móvil", acceptsRef: true, refHint: "Últimos 4 dígitos" },
@@ -198,7 +200,7 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         .eq("active", true)
         .limit(1);
       if (existing && existing.length > 0) {
-        setError(`"${finalName}" ya existe. Cambiá el nombre o cancelá.`);
+        setError(`"${finalName}" ya existe. Cambia el nombre o cancela.`);
         setSaving(false);
         return;
       }
@@ -400,7 +402,7 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                 />
                 {dupWarning && (
                   <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-1.5">
-                    ⚠️ Ya existe <b>{dupWarning.name}</b> ({dupWarning.type}). Si querés agregar inventario al existente, cerrá esto y usá Registrar entrada.
+                    ⚠️ Ya existe <b>{dupWarning.name}</b> ({dupWarning.type}). Si quieres agregar inventario al existente, cierra esto y usa Registrar entrada.
                   </p>
                 )}
               </div>
@@ -465,7 +467,7 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                 <div className="border border-stone-200 rounded-lg p-3 bg-stone-50">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={usesPack} onChange={(e) => setUsesPack(e.target.checked)} />
-                    <span className="text-sm font-medium text-stone-700">Lo comprás en pack / caja / bulto</span>
+                    <span className="text-sm font-medium text-stone-700">Lo compras en pack / caja / bulto</span>
                   </label>
                   {usesPack && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
@@ -513,7 +515,7 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
           {step === 2 && !typeMeta?.skipStep2 && hasRecipe && (
             <>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
-                <p className="font-medium mb-1">📝 Definí la receta de <b>{toTitleCase(name)}</b></p>
+                <p className="font-medium mb-1">📝 Define la receta de <b>{toTitleCase(name)}</b></p>
                 <p className="text-[11px] text-blue-700">Cada ingrediente con su cantidad. El costo total se calcula automático sumando.</p>
               </div>
 
