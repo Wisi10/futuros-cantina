@@ -403,7 +403,7 @@ function POSPageInner() {
       if (ingredientIds.length > 0) {
         const { data: ingRows } = await supabase
           .from("products")
-          .select("id, name, stock_quantity, cost_ref, unit_label, unit_size")
+          .select("id, name, stock_quantity, cost_ref, unit_label, unit_size, weight_per_unit, weight_unit")
           .in("id", ingredientIds);
         (ingRows || []).forEach((p) => { ingredientStockById[p.id] = p; });
       }
@@ -420,14 +420,20 @@ function POSPageInner() {
         for (const ing of recipe) {
           const stock = ingredientStockById[ing.ingredient_id];
           if (!stock) continue;
-          // Conversión: receta en ing.unit → unidad del stock (stock.unit_label).
-          // Si MP no tiene unit_label, fallback a same-unit (sin conversión).
-          const conv = convertUnit(Number(ing.quantity) * item.qty, ing.unit, stock.unit_label);
-          if (!conv.ok) {
-            alert(`Receta de ${item.product.name} inválida — ingrediente ${stock.name}: ${conv.reason}. Arregla la receta o el unit_label de la materia prima desde Inventario.`);
-            return null;
+          // Perfil doble: receta en weight_unit (g/ml) e ingrediente con weight_per_unit.
+          // Conversión por-producto: needed_in_base = qty_receta / weight_per_unit
+          const isDoubleUnit = stock.weight_per_unit && ing.unit === stock.weight_unit;
+          let needed;
+          if (isDoubleUnit) {
+            needed = (Number(ing.quantity) * item.qty) / Number(stock.weight_per_unit);
+          } else {
+            const conv = convertUnit(Number(ing.quantity) * item.qty, ing.unit, stock.unit_label);
+            if (!conv.ok) {
+              alert(`Receta de ${item.product.name} inválida — ingrediente ${stock.name}: ${conv.reason}. Arregla la receta o el unit_label de la materia prima desde Inventario.`);
+              return null;
+            }
+            needed = conv.value;
           }
-          const needed = conv.value;
           if (Number(stock.stock_quantity || 0) < needed) {
             const unitLabel = stock.unit_label || "";
             const ok = window.confirm(
@@ -514,9 +520,15 @@ function POSPageInner() {
         const recipe = recipesByProduct[item.product.id] || [];
         for (const ing of recipe) {
           const ingrInfo = ingredientStockById[ing.ingredient_id];
-          // Re-aplicamos conversión (ya validada en el chequeo previo, aquí no debe fallar).
-          const conv = convertUnit(Number(ing.quantity) * item.qty, ing.unit, ingrInfo?.unit_label);
-          const needed = conv.ok ? conv.value : Number(ing.quantity) * item.qty;
+          // Misma lógica que el chequeo previo — perfil doble usa weight_per_unit.
+          const isDoubleUnit = ingrInfo?.weight_per_unit && ing.unit === ingrInfo?.weight_unit;
+          let needed;
+          if (isDoubleUnit) {
+            needed = (Number(ing.quantity) * item.qty) / Number(ingrInfo.weight_per_unit);
+          } else {
+            const conv = convertUnit(Number(ing.quantity) * item.qty, ing.unit, ingrInfo?.unit_label);
+            needed = conv.ok ? conv.value : Number(ing.quantity) * item.qty;
+          }
           movements.push({
             product_id: ing.ingredient_id,
             product_name: ingrInfo?.name || "(ingrediente)",

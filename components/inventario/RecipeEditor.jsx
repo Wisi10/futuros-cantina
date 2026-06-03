@@ -30,9 +30,8 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
         .eq("product_id", product.id),
       supabase
         .from("products")
-        .select("id, name, cost_ref, stock_quantity, unit_label, unit_size, is_cantina, has_recipe, active, category")
-        .eq("is_cantina", false)
-        .eq("category", "Materia Prima")
+        .select("id, name, cost_ref, stock_quantity, unit_label, unit_size, weight_per_unit, weight_unit, has_recipe, active, type")
+        .eq("type", "materia_prima")
         .eq("active", true)
         .order("name"),
     ]);
@@ -45,6 +44,8 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
       ingredient_name: rawMap[r.ingredient_id]?.name || "(eliminado)",
       ingredient_cost: Number(rawMap[r.ingredient_id]?.cost_ref || 0),
       ingredient_unit_label: rawMap[r.ingredient_id]?.unit_label || null,
+      ingredient_weight_per_unit: rawMap[r.ingredient_id]?.weight_per_unit || null,
+      ingredient_weight_unit: rawMap[r.ingredient_id]?.weight_unit || null,
       quantity: Number(r.quantity || 0),
       unit: r.unit || "unidad",
       notes: r.notes || "",
@@ -65,8 +66,6 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
   }, [rawMaterials, pickerSearch, ingredients]);
 
   const addIngredient = (rawProduct) => {
-    // Default la unidad de la receta a la unit_label del MP — así la conversión
-    // es trivial (1:1) hasta que el staff la cambie explícitamente.
     setIngredients((prev) => [
       ...prev,
       {
@@ -75,6 +74,8 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
         ingredient_name: rawProduct.name,
         ingredient_cost: Number(rawProduct.cost_ref || 0),
         ingredient_unit_label: rawProduct.unit_label || null,
+        ingredient_weight_per_unit: rawProduct.weight_per_unit || null,
+        ingredient_weight_unit: rawProduct.weight_unit || null,
         quantity: 1,
         unit: rawProduct.unit_label || "unidad",
         notes: "",
@@ -97,10 +98,13 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
     setError("");
 
     // Validar conversión de unidades antes de pegar a DB.
-    // Si MP tiene unit_label y receta usa otra incompatible → bloquear.
+    // EXCEPTO si ingrediente tiene perfil doble (weight_per_unit) y la unidad
+    // elegida es la weight_unit del ingrediente — esa conversión es por-producto
+    // y la maneja el descuento de stock, no convertUnit.
     const valid = ingredients.filter((i) => i.ingredient_id && Number(i.quantity) > 0);
     for (const i of valid) {
-      if (i.ingredient_unit_label) {
+      const isDoubleUnit = i.ingredient_weight_per_unit && i.unit === i.ingredient_weight_unit;
+      if (i.ingredient_unit_label && !isDoubleUnit) {
         const conv = convertUnit(Number(i.quantity), i.unit, i.ingredient_unit_label);
         if (!conv.ok) {
           setError(`${i.ingredient_name}: ${conv.reason}. Cambia la unidad de la receta o actualiza el unit_label de la materia prima.`);
@@ -197,13 +201,25 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                         <tbody>
                           {ingredients.map((i) => {
                             const mpUnit = i.ingredient_unit_label;
-                            const incompatible = mpUnit && !unitsCompatible(i.unit, mpUnit);
+                            const isDoubleUnit = i.ingredient_weight_per_unit && i.unit === i.ingredient_weight_unit;
+                            // Perfil doble: la conversión u→g/ml es por-producto (weight_per_unit),
+                            // no por convertUnit. Marca como compatible.
+                            const incompatible = mpUnit && !isDoubleUnit && !unitsCompatible(i.unit, mpUnit);
+                            // Opciones del dropdown: si perfil doble, agregar weight_unit
+                            const unitOpts = i.ingredient_weight_per_unit && i.ingredient_weight_unit
+                              ? [...UNITS, i.ingredient_weight_unit].filter((u, idx, arr) => arr.indexOf(u) === idx)
+                              : UNITS;
                             return (
                               <tr key={i.key} className={`border-t border-stone-100 ${incompatible ? "bg-red-50" : ""}`}>
                                 <td className="px-3 py-2 text-stone-700">
                                   <div>{i.ingredient_name}</div>
                                   {mpUnit ? (
-                                    <div className="text-[10px] text-stone-400">MP en {mpUnit}</div>
+                                    <div className="text-[10px] text-stone-400">
+                                      MP en {mpUnit}
+                                      {i.ingredient_weight_per_unit && i.ingredient_weight_unit && (
+                                        <span> · 1 = {i.ingredient_weight_per_unit} {i.ingredient_weight_unit}</span>
+                                      )}
+                                    </div>
                                   ) : (
                                     <div className="text-[10px] text-amber-600 flex items-center gap-1">
                                       <AlertTriangle size={9} /> Sin unit_label
@@ -228,10 +244,15 @@ export default function RecipeEditor({ product, user, onClose, onSaved }) {
                                     disabled={!isAdmin}
                                     className={`w-full border rounded px-1.5 py-1 text-xs bg-white ${incompatible ? "border-red-300" : "border-stone-200"}`}
                                   >
-                                    {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                                    {unitOpts.map((u) => <option key={u} value={u}>{u}</option>)}
                                   </select>
                                   {incompatible && (
                                     <p className="text-[9px] text-red-600 mt-0.5">No convierte a {mpUnit}</p>
+                                  )}
+                                  {isDoubleUnit && Number(i.quantity) > 0 && (
+                                    <p className="text-[9px] text-stone-400 mt-0.5">
+                                      ≈ {(Number(i.quantity) / Number(i.ingredient_weight_per_unit)).toFixed(3)} {mpUnit}
+                                    </p>
                                   )}
                                 </td>
                                 {isAdmin && (

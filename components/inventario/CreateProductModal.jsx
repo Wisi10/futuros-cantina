@@ -53,6 +53,12 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
   const [unitSize, setUnitSize] = useState("1");
   const [unitLabel, setUnitLabel] = useState("u");
   const [emoji, setEmoji] = useState("");
+  // Perfil doble (solo MP base=u): pesa también X g por unidad.
+  // Ej. Tomate base=u + weight_per_unit=150 → 1 tomate ≈ 150 g.
+  // Permite que la receta pida 30 g de tomate y el sistema convierta.
+  const [hasWeight, setHasWeight] = useState(false);
+  const [weightPerUnit, setWeightPerUnit] = useState("");
+  const [weightUnit, setWeightUnit] = useState("g");
 
   // Step 2 state — entrada (producto/MP) — el "pack" es del LOTE, no del producto.
   // packKind define cómo viene esta vez:
@@ -104,6 +110,14 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
     }
   }, [isMP, unitLabel]);
 
+  // weight_per_unit solo aplica a MP base=u. Si cambia algo, resetear.
+  useEffect(() => {
+    if (!isMP || unitLabel !== "u") {
+      setHasWeight(false);
+      setWeightPerUnit("");
+    }
+  }, [isMP, unitLabel]);
+
   // Load categories y suppliers + materia prima (para recetas)
   useEffect(() => {
     let alive = true;
@@ -120,7 +134,7 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
       .then(({ data }) => { if (alive && data) setSuppliers(data); });
     supabase
       .from("products")
-      .select("id, name, emoji, cost_ref, unit_label, unit_size")
+      .select("id, name, emoji, cost_ref, unit_label, unit_size, weight_per_unit, weight_unit")
       .eq("active", true)
       .eq("type", "materia_prima")
       .order("name")
@@ -170,13 +184,20 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
     return total / entryUnits;
   }, [entryTotalCost, entryUnits]);
 
-  // Auto-calc costo receta = SUM(ingrediente.cost_ref * qty)
+  // Auto-calc costo receta = SUM(ingrediente.cost_ref * qty_en_base)
+  // Si la receta usa weight_unit (g/ml) y el ingrediente tiene weight_per_unit,
+  // convertir a la unidad base del ingrediente antes de multiplicar por cost_ref.
+  // Ej: receta dice 30 g de Tomate. Tomate base=u, weight_per_unit=150 g.
+  //     qty_en_base = 30/150 = 0.2 u. cost = 0.2 × cost_ref(per u).
   const recipeCost = useMemo(() => {
     return recipe.reduce((s, r) => {
       const ing = ingredients.find((i) => i.id === r.ingredientId);
       const q = Number(r.quantity);
       if (!ing || !Number.isFinite(q) || q <= 0) return s;
-      return s + (Number(ing.cost_ref) || 0) * q;
+      let qtyInBase = q;
+      const usingWeight = r.unit && r.unit === ing.weight_unit && ing.weight_per_unit;
+      if (usingWeight) qtyInBase = q / Number(ing.weight_per_unit);
+      return s + (Number(ing.cost_ref) || 0) * qtyInBase;
     }, 0);
   }, [recipe, ingredients]);
 
@@ -185,8 +206,9 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
     if (!name.trim()) return false;
     if (hasPrice && (!Number(priceRef) || Number(priceRef) <= 0)) return false;
     if (!unitSize || Number(unitSize) <= 0 || !unitLabel.trim()) return false;
+    if (hasWeight && (!Number(weightPerUnit) || Number(weightPerUnit) <= 0)) return false;
     return true;
-  }, [name, hasPrice, priceRef, unitSize, unitLabel]);
+  }, [name, hasPrice, priceRef, unitSize, unitLabel, hasWeight, weightPerUnit]);
 
   // Validación step 2 — solo cuando NO se saltea
   const canSubmitStep2 = useMemo(() => {
@@ -269,6 +291,9 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         // pack_size/pack_label son del LOTE, no permanentes del producto. NULL aquí.
         pack_size: null,
         pack_label: null,
+        // Perfil doble (solo aplica a MP base=u con peso/vol también)
+        weight_per_unit: hasWeight ? Number(weightPerUnit) : null,
+        weight_unit: hasWeight ? weightUnit : null,
         has_recipe: hasRecipe,
       };
       const { error: insertErr } = await supabase.from("products").insert(productRow);
@@ -281,13 +306,18 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         // Plato / bebida_preparada → guardar receta
         const recipeRows = recipe
           .filter((r) => r.ingredientId && Number(r.quantity) > 0)
-          .map((r) => ({
-            id: "rec_" + generateId(),
-            product_id: newId,
-            ingredient_id: r.ingredientId,
-            quantity: Number(r.quantity),
-            unit: ingredients.find((i) => i.id === r.ingredientId)?.unit_label || "u",
-          }));
+          .map((r) => {
+            const ing = ingredients.find((i) => i.id === r.ingredientId);
+            // Si el usuario eligió unidad (perfil doble), usa esa. Sino, la base del ingrediente.
+            const unit = r.unit || ing?.unit_label || "u";
+            return {
+              id: "rec_" + generateId(),
+              product_id: newId,
+              ingredient_id: r.ingredientId,
+              quantity: Number(r.quantity),
+              unit,
+            };
+          });
         if (recipeRows.length > 0) {
           const { error: recipeErr } = await supabase.from("product_recipes").insert(recipeRows);
           if (recipeErr) throw recipeErr;
@@ -513,10 +543,49 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                 <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-[11px] text-amber-900 leading-snug">
                   <p className="font-medium mb-1">💡 ¿Tomate, cebolla u otro ingrediente ambiguo?</p>
                   <p>
-                    • Si lo usas mayormente <b>picado por peso</b> en recetas → elige <b>g</b><br />
-                    • Si lo usas mayormente <b>entero</b> (rodajas, ensaladas) → elige <b>u</b><br />
-                    Cómo viene en la compra (caja, bolsa, kg) lo defines al ingresar el lote, no acá.
+                    • Si lo cuentas por unidad (10 tomates) → elige <b>u</b> y activa "También se mide por peso" abajo<br />
+                    • Si lo compras y usas siempre por peso (carne picada) → elige <b>g</b><br />
+                    Cómo viene en la compra (caja, bolsa, kg) lo defines al ingresar el lote.
                   </p>
+                </div>
+              )}
+
+              {/* Toggle perfil doble: solo MP base=u */}
+              {isMP && unitLabel === "u" && (
+                <div className="border border-stone-200 rounded-lg p-3 bg-stone-50">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={hasWeight} onChange={(e) => setHasWeight(e.target.checked)} />
+                    <span className="text-sm font-medium text-stone-700">¿También se mide por peso o volumen en recetas?</span>
+                  </label>
+                  <p className="text-[10px] text-stone-500 mt-1 leading-snug">
+                    Sí para Tomate, Cebolla, Pimentón, Lechuga (se cuentan al comprar, pero se pesan al cocinar).
+                    No para Pan, Salchicha (siempre por unidad).
+                  </p>
+                  {hasWeight && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">¿Cuánto pesa 1 unidad?</label>
+                        <input
+                          type="number" step="1" min="1"
+                          value={weightPerUnit}
+                          onChange={(e) => setWeightPerUnit(e.target.value)}
+                          placeholder="150"
+                          className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Unidad</label>
+                        <select
+                          value={weightUnit}
+                          onChange={(e) => setWeightUnit(e.target.value)}
+                          className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+                        >
+                          <option value="g">g (gramos)</option>
+                          <option value="ml">ml (mililitros)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -551,47 +620,85 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                 <>
                   {recipe.map((r, idx) => {
                     const ing = ingredients.find((i) => i.id === r.ingredientId);
+                    // Perfil doble: ingrediente con weight_per_unit ofrece 2 opciones de unidad
+                    const unitOptions = ing
+                      ? (ing.weight_per_unit && ing.weight_unit
+                          ? [ing.unit_label, ing.weight_unit]
+                          : [ing.unit_label])
+                      : [];
+                    const currentUnit = r.unit || ing?.unit_label || "";
+                    // Si la unidad elegida no coincide con la base, mostrar conversión auto
+                    const showConv = ing?.weight_per_unit && currentUnit === ing.weight_unit && Number(r.quantity) > 0;
+                    const qtyInBase = showConv ? Number(r.quantity) / Number(ing.weight_per_unit) : null;
                     return (
-                      <div key={idx} className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Ingrediente</label>
-                          <select
-                            value={r.ingredientId}
-                            onChange={(e) => {
-                              const next = [...recipe];
-                              next[idx].ingredientId = e.target.value;
-                              setRecipe(next);
-                            }}
-                            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+                      <div key={idx} className="space-y-1">
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Ingrediente</label>
+                            <select
+                              value={r.ingredientId}
+                              onChange={(e) => {
+                                const next = [...recipe];
+                                next[idx].ingredientId = e.target.value;
+                                next[idx].unit = ""; // reset al cambiar ingrediente
+                                setRecipe(next);
+                              }}
+                              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+                            >
+                              <option value="">Elegir...</option>
+                              {ingredients.map((i) => (
+                                <option key={i.id} value={i.id}>{i.emoji ? `${i.emoji} ` : ""}{i.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="w-24">
+                            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Cantidad</label>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={r.quantity}
+                              onChange={(e) => {
+                                const next = [...recipe];
+                                next[idx].quantity = e.target.value;
+                                setRecipe(next);
+                              }}
+                              placeholder="1"
+                              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                            />
+                          </div>
+                          <div className="w-20">
+                            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Unidad</label>
+                            {unitOptions.length > 1 ? (
+                              <select
+                                value={currentUnit}
+                                onChange={(e) => {
+                                  const next = [...recipe];
+                                  next[idx].unit = e.target.value;
+                                  setRecipe(next);
+                                }}
+                                className="w-full border border-stone-300 rounded-lg px-2 py-2 text-sm focus:border-brand focus:outline-none bg-white"
+                              >
+                                {unitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
+                              </select>
+                            ) : (
+                              <div className="w-full border border-stone-200 bg-stone-50 rounded-lg px-2 py-2 text-sm text-stone-500 text-center">
+                                {ing?.unit_label || "—"}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setRecipe(recipe.filter((_, i) => i !== idx))}
+                            disabled={recipe.length === 1}
+                            className="p-2 text-stone-400 hover:text-red-500 disabled:opacity-30"
                           >
-                            <option value="">Elegir...</option>
-                            {ingredients.map((i) => (
-                              <option key={i.id} value={i.id}>{i.emoji ? `${i.emoji} ` : ""}{i.name}</option>
-                            ))}
-                          </select>
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-                        <div className="w-32">
-                          <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Cantidad {ing?.unit_label ? `(${ing.unit_label})` : ""}</label>
-                          <input
-                            type="number" step="0.01" min="0"
-                            value={r.quantity}
-                            onChange={(e) => {
-                              const next = [...recipe];
-                              next[idx].quantity = e.target.value;
-                              setRecipe(next);
-                            }}
-                            placeholder="1"
-                            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setRecipe(recipe.filter((_, i) => i !== idx))}
-                          disabled={recipe.length === 1}
-                          className="p-2 text-stone-400 hover:text-red-500 disabled:opacity-30"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {showConv && (
+                          <p className="text-[10px] text-stone-400 pl-1">
+                            ≈ {qtyInBase.toFixed(3)} {ing.unit_label} (convertido para descontar stock)
+                          </p>
+                        )}
                       </div>
                     );
                   })}
