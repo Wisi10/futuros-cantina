@@ -145,8 +145,10 @@ export default function InventarioView({ user, rate }) {
   const categories = ["todos", ...new Set(products.map((p) => p.category || "Otro"))];
 
   // KPIs
-  const sinStockCount = products.filter((p) => Number(p.stock_quantity || 0) <= 0).length;
+  // Excluir has_recipe del conteo — disponibilidad sale de ingredientes
+  const sinStockCount = products.filter((p) => !p.has_recipe && Number(p.stock_quantity || 0) <= 0).length;
   const stockBajoCount = products.filter((p) => {
+    if (p.has_recipe) return false;
     const stock = Number(p.stock_quantity || 0);
     return stock > 0 && stock <= (p.low_stock_alert || 10);
   }).length;
@@ -160,8 +162,14 @@ export default function InventarioView({ user, rate }) {
   // Filtering
   const filtered = (() => {
     const list = products.filter((p) => {
-      if (kpiFilter === "sin_stock" && Number(p.stock_quantity || 0) > 0) return false;
+      // Platos / bebidas preparadas (has_recipe) no se contabilizan por stock_quantity
+      // propio — la disponibilidad sale de los ingredientes.
+      if (kpiFilter === "sin_stock") {
+        if (p.has_recipe) return false;
+        if (Number(p.stock_quantity || 0) > 0) return false;
+      }
       if (kpiFilter === "stock_bajo") {
+        if (p.has_recipe) return false;
         const stock = Number(p.stock_quantity || 0);
         if (!(stock > 0 && stock <= (p.low_stock_alert || 10))) return false;
       }
@@ -206,6 +214,9 @@ export default function InventarioView({ user, rate }) {
   );
 
   const rowBg = (p) => {
+    // Platos / bebidas preparadas no tienen stock propio — su disponibilidad
+    // depende de los ingredientes. No marcar la fila de rojo/amarillo.
+    if (p.has_recipe) return "";
     const stock = Number(p.stock_quantity || 0);
     if (stock <= 0) return "bg-red-50";
     if (stock <= (p.low_stock_alert || 10)) return "bg-yellow-50";
@@ -213,6 +224,9 @@ export default function InventarioView({ user, rate }) {
   };
 
   const stockBadge = (p) => {
+    if (p.has_recipe) {
+      return <span className="text-[10px] font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">Por receta</span>;
+    }
     const stock = Number(p.stock_quantity || 0);
     if (stock <= 0) return <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Sin stock</span>;
     if (stock <= (p.low_stock_alert || 10)) return <span className="text-[10px] font-medium text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded-full">Bajo</span>;
@@ -485,8 +499,8 @@ export default function InventarioView({ user, rate }) {
                           )}
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
-                        <td className="px-3 py-2 text-right font-bold">{formatStockDisplay(p.stock_quantity, p.unit_label)}</td>
-                        <td className="px-3 py-2 text-right text-stone-400 text-xs">{formatStockDisplay(p.low_stock_alert || 10, p.unit_label)}</td>
+                        <td className="px-3 py-2 text-right font-bold">{p.has_recipe ? <span className="text-stone-400 font-normal">—</span> : formatStockDisplay(p.stock_quantity, p.unit_label)}</td>
+                        <td className="px-3 py-2 text-right text-stone-400 text-xs">{p.has_recipe ? "—" : formatStockDisplay(p.low_stock_alert || 10, p.unit_label)}</td>
                         <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                         <td className="px-3 py-2 text-center">{stockBadge(p)}</td>

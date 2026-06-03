@@ -1,8 +1,83 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
-import { X, Loader2, ChevronRight, ChevronLeft, Plus, Trash2, Package, Coffee, Wheat, ShoppingBag, Pizza } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { X, Loader2, ChevronRight, ChevronLeft, Plus, Trash2, Package, Coffee, Wheat, ShoppingBag, Pizza, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { generateId, toTitleCase, CANTINA_CATEGORIES, loadProductCategoryNames } from "@/lib/utils";
+
+// Picker buscable inline para ingredientes (reemplaza el select nativo).
+// Filtro accent-insensitive por nombre.
+function IngredientPicker({ ingredients, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+  const selected = ingredients.find((i) => i.id === value);
+  const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const qNorm = norm(q.trim());
+  const filtered = qNorm
+    ? ingredients.filter((i) => norm(i.name).includes(qNorm)).slice(0, 50)
+    : ingredients.slice(0, 50);
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setQ(""); }}
+        className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-left bg-white hover:border-brand transition-colors flex items-center justify-between gap-2"
+      >
+        <span className={selected ? "text-stone-800 truncate" : "text-stone-400"}>
+          {selected ? `${selected.emoji ? selected.emoji + " " : ""}${selected.name}` : "Elegir ingrediente..."}
+        </span>
+        <Search size={12} className="text-stone-400 shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-xl max-h-72 overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-stone-100 relative">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              autoFocus
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar ingrediente..."
+              className="w-full border border-stone-200 rounded pl-8 pr-7 py-1.5 text-sm focus:outline-none focus:border-brand"
+            />
+            {q && (
+              <button onClick={() => setQ("")} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <div className="overflow-y-auto flex-1 scrollbar-hide">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-stone-400 text-center py-4">Sin resultados</p>
+            ) : (
+              filtered.map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  onClick={() => { onChange(i.id); setOpen(false); setQ(""); }}
+                  className={`w-full text-left px-3 py-2 hover:bg-stone-50 text-sm flex items-center justify-between gap-2 ${
+                    i.id === value ? "bg-brand/5 text-brand font-medium" : "text-stone-700"
+                  }`}
+                >
+                  <span className="truncate">
+                    {i.emoji ? `${i.emoji} ` : ""}{i.name}
+                  </span>
+                  <span className="text-[10px] text-stone-400 shrink-0">{i.unit_label}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ============================================================================
 // Wizard de creación de producto unificado (Fase 3).
@@ -635,21 +710,16 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                         <div className="flex gap-2 items-end">
                           <div className="flex-1">
                             <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Ingrediente</label>
-                            <select
+                            <IngredientPicker
+                              ingredients={ingredients}
                               value={r.ingredientId}
-                              onChange={(e) => {
+                              onChange={(id) => {
                                 const next = [...recipe];
-                                next[idx].ingredientId = e.target.value;
+                                next[idx].ingredientId = id;
                                 next[idx].unit = ""; // reset al cambiar ingrediente
                                 setRecipe(next);
                               }}
-                              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
-                            >
-                              <option value="">Elegir...</option>
-                              {ingredients.map((i) => (
-                                <option key={i.id} value={i.id}>{i.emoji ? `${i.emoji} ` : ""}{i.name}</option>
-                              ))}
-                            </select>
+                            />
                           </div>
                           <div className="w-24">
                             <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Cantidad</label>
