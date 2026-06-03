@@ -6,6 +6,7 @@ import { uploadProductPhoto, ProductImage, calculateProfitability } from "@/lib/
 import StockAdjustModal from "./StockAdjustModal";
 import RestockForm from "./RestockForm";
 import CreateProductModal from "./CreateProductModal";
+import ProductDetailModal from "./ProductDetailModal";
 import RecipeEditor from "./RecipeEditor";
 import DeleteProductModal from "./DeleteProductModal";
 import PorPagarView from "./PorPagarView";
@@ -35,6 +36,7 @@ export default function InventarioView({ user, rate }) {
   const [search, setSearch] = useState("");
   const [adjusting, setAdjusting] = useState(null);
   const [recipeEditing, setRecipeEditing] = useState(null);
+  const [detailProduct, setDetailProduct] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState("todos");
   const [kpiFilter, setKpiFilter] = useState(null); // "sin_stock" | "stock_bajo" | null
   const [restocks, setRestocks] = useState([]);
@@ -488,10 +490,14 @@ export default function InventarioView({ user, rate }) {
                       return (
                       <tr key={p.id} className={`border-t border-stone-100 ${rowBg(p)}`}>
                         <td className="px-3 py-2 font-medium text-stone-800">
-                          <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setDetailProduct(p)}
+                            className="flex items-center gap-1.5 text-left hover:text-brand transition-colors"
+                          >
                             <ProductImage product={p} size={20} />
-                            <span>{p.name}</span>
-                          </div>
+                            <span className="hover:underline">{p.name}</span>
+                          </button>
                           {scope === "productos" && p.has_recipe && recipesByProduct[p.id]?.length > 0 && (
                             <p className="text-[10px] text-stone-400 mt-0.5 line-clamp-1 max-w-[300px]" title={recipesByProduct[p.id].map(i => `${i.qty}${i.unit ? i.unit : ""} ${i.name}`).join(", ")}>
                               {recipesByProduct[p.id].map(i => `${i.qty}${i.unit ? i.unit : ""} ${i.name}`).join(", ")}
@@ -759,6 +765,18 @@ export default function InventarioView({ user, rate }) {
           user={user}
           onClose={() => setDeleting(null)}
           onDeleted={() => { setDeleting(null); loadProducts(); }}
+        />
+      )}
+
+      {/* Product detail modal */}
+      {detailProduct && (
+        <ProductDetailModal
+          product={detailProduct}
+          rate={rate}
+          onClose={() => setDetailProduct(null)}
+          onEdit={(p) => { setDetailProduct(null); setAdjusting(p); }}
+          onAdjust={(p) => { setDetailProduct(null); setAdjusting(p); }}
+          onRestock={(p) => { setDetailProduct(null); setSubTab("entrada"); }}
         />
       )}
     </div>
