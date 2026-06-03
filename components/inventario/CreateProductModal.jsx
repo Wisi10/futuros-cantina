@@ -21,9 +21,13 @@ const TYPES = [
   { id: "servicio",          label: "Servicio",         icon: ShoppingBag, desc: "Servicio/alquiler sin stock (Hora Cancha, Mesa)", forSell: false, skipStep2: true },
 ];
 
-// Orden: unidades contables, peso (g antes que kg porque en cocina es más
-// común), volumen, packs. Si necesitas mg para algo muy chico, se tipea manual.
-const UNIT_LABELS = ["u", "g", "kg", "ml", "l", "caja", "paq"];
+// Para MATERIA PRIMA la unidad base SIEMPRE es la métrica menor (g, ml, u)
+// porque las recetas usan cantidades pequeñas. Al ingresar stock, el staff
+// puede comprar en kg/L y el sistema convierte (kg → ×1000 g, L → ×1000 ml).
+const UNIT_LABELS_MP = ["u", "g", "ml"];
+// Para productos sellables (producto/plato/bebida_preparada) la unidad típica
+// es 1 u (1 botella/lata/plato). kg/g/ml/l disponibles si es algo a granel.
+const UNIT_LABELS_SELL = ["u", "g", "kg", "ml", "l", "caja", "paq"];
 
 const PAYMENT_METHODS = [
   { id: "pago_movil", label: "Pago Móvil", acceptsRef: true, refHint: "Últimos 4 dígitos" },
@@ -435,9 +439,11 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                 </div>
               )}
 
-              {/* Unidad */}
+              {/* Unidad base — MP solo permite métrica menor (g/ml/u) */}
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">¿Qué representa 1 unidad?</label>
+                <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+                  {isMP ? "Unidad base para recetas" : "¿Qué representa 1 unidad?"}
+                </label>
                 <div className="flex gap-2">
                   <input
                     type="number" step="0.01" min="0.01"
@@ -446,20 +452,36 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                     placeholder="1"
                     className="flex-1 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
                   />
-                  <input
-                    list="unit-labels-wiz"
-                    type="text"
-                    value={unitLabel}
-                    onChange={(e) => setUnitLabel(e.target.value)}
-                    placeholder="u / kg / ml"
-                    maxLength={12}
-                    className="w-32 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
-                  />
-                  <datalist id="unit-labels-wiz">
-                    {UNIT_LABELS.map((l) => <option key={l} value={l} />)}
-                  </datalist>
+                  {isMP ? (
+                    <select
+                      value={unitLabel}
+                      onChange={(e) => setUnitLabel(e.target.value)}
+                      className="w-32 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none bg-white"
+                    >
+                      {UNIT_LABELS_MP.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  ) : (
+                    <>
+                      <input
+                        list="unit-labels-wiz"
+                        type="text"
+                        value={unitLabel}
+                        onChange={(e) => setUnitLabel(e.target.value)}
+                        placeholder="u / kg / ml"
+                        maxLength={12}
+                        className="w-32 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+                      />
+                      <datalist id="unit-labels-wiz">
+                        {UNIT_LABELS_SELL.map((l) => <option key={l} value={l} />)}
+                      </datalist>
+                    </>
+                  )}
                 </div>
-                <p className="text-[10px] text-stone-400 mt-1">Ej. 1 u (1 botella), 500 ml (botella aceite), 1 kg (carne).</p>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  {isMP
+                    ? "Solo g, ml o u (la métrica menor). Al ingresar, podrás comprar en kg/L/caja y el sistema convierte automático."
+                    : "Ej. 1 u (1 botella), 500 ml (botella aceite), 1 kg (carne)."}
+                </p>
               </div>
 
               {/* Pack toggle (solo para producto/MP) */}
