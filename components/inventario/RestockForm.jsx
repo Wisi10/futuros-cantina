@@ -1,34 +1,123 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Trash2, Loader2, Sparkles, Search, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import InvoiceUploadModal from "./InvoiceUploadModal";
 
-// Combobox con búsqueda para elegir un producto entre N (>100). Reemplaza
-// el <select> nativo (scroll inviable con 153 productos). Filtra por nombre
-// case/accent-insensitive. Click fuera cierra.
+// Combobox con búsqueda. Renderiza el dropdown via Portal a document.body
+// para escapar overflow:hidden/auto de padres (form card, inventario wrapper).
+// Posicion fixed calculada con getBoundingClientRect del trigger.
 function ProductPicker({ products, value, onChange }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [coords, setCoords] = useState({ left: 0, top: 0, width: 0, openUp: false });
   const ref = useRef(null);
+  const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const onClick = (e) => {
+      if (ref.current?.contains(e.target)) return;
+      if (dropdownRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  // Posicionar el dropdown cuando se abre; auto open-up si no cabe abajo
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const reposition = () => {
+      const r = triggerRef.current.getBoundingClientRect();
+      const dropdownH = 420; // estimado max-h ~28rem
+      const spaceBelow = window.innerHeight - r.bottom;
+      const openUp = spaceBelow < dropdownH && r.top > dropdownH;
+      setCoords({
+        left: r.left,
+        top: openUp ? r.top - 4 : r.bottom + 4,
+        width: r.width,
+        openUp,
+      });
+    };
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
   }, [open]);
 
   const selected = products.find((p) => p.id === value);
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const qNorm = norm(q.trim());
   const filtered = qNorm
-    ? products.filter((p) => norm(p.name).includes(qNorm)).slice(0, 30)
-    : products.slice(0, 30);
+    ? products.filter((p) => norm(p.name).includes(qNorm)).slice(0, 50)
+    : products.slice(0, 50);
+
+  const dropdown = open && typeof document !== "undefined" ? createPortal(
+    <div
+      ref={dropdownRef}
+      className="bg-white border border-stone-200 rounded-lg shadow-2xl flex flex-col"
+      style={{
+        position: "fixed",
+        left: coords.left,
+        top: coords.openUp ? "auto" : coords.top,
+        bottom: coords.openUp ? window.innerHeight - coords.top : "auto",
+        width: coords.width,
+        maxHeight: "min(28rem, 70vh)",
+        zIndex: 100,
+      }}
+    >
+      <div className="p-2 border-b border-stone-100 relative">
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+        <input
+          autoFocus
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar producto..."
+          className="w-full border border-stone-200 rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:border-brand"
+        />
+        {q && (
+          <button onClick={() => setQ("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      <div className="overflow-y-auto flex-1 scrollbar-hide">
+        {filtered.length === 0 ? (
+          <p className="text-sm text-stone-400 text-center py-6">Sin resultados</p>
+        ) : (
+          filtered.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => { onChange(p.id); setOpen(false); setQ(""); }}
+              className={`w-full text-left px-3 py-2.5 hover:bg-stone-50 text-sm flex items-center justify-between gap-2 min-h-[44px] ${
+                p.id === value ? "bg-brand/5 text-brand font-medium" : "text-stone-700"
+              }`}
+            >
+              <span className="truncate flex items-center gap-2">
+                <span className="text-base">{p.emoji || "🍽️"}</span>
+                <span className="truncate">{p.name}</span>
+              </span>
+              <span className="text-xs text-stone-400 shrink-0">stk {Number(p.stock_quantity || 0)}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>,
+    document.body
+  ) : null;
 
   return (
     <div ref={ref} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => { setOpen(!open); setQ(""); }}
         className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-left bg-white hover:border-brand transition-colors flex items-center justify-between gap-2"
@@ -38,48 +127,7 @@ function ProductPicker({ products, value, onChange }) {
         </span>
         <Search size={12} className="text-stone-400 shrink-0" />
       </button>
-      {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-xl max-h-[28rem] overflow-hidden flex flex-col">
-          <div className="p-2 border-b border-stone-100 relative">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
-              autoFocus
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar producto..."
-              className="w-full border border-stone-200 rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:border-brand"
-            />
-            {q && (
-              <button onClick={() => setQ("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-          <div className="overflow-y-auto flex-1 scrollbar-hide">
-            {filtered.length === 0 ? (
-              <p className="text-sm text-stone-400 text-center py-6">Sin resultados</p>
-            ) : (
-              filtered.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => { onChange(p.id); setOpen(false); setQ(""); }}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-stone-50 text-sm flex items-center justify-between gap-2 min-h-[44px] ${
-                    p.id === value ? "bg-brand/5 text-brand font-medium" : "text-stone-700"
-                  }`}
-                >
-                  <span className="truncate flex items-center gap-2">
-                    <span className="text-base">{p.emoji || "🍽️"}</span>
-                    <span className="truncate">{p.name}</span>
-                  </span>
-                  <span className="text-xs text-stone-400 shrink-0">stk {Number(p.stock_quantity || 0)}</span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
