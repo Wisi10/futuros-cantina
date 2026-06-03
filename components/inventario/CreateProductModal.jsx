@@ -52,16 +52,20 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
   const [priceRef, setPriceRef] = useState("");
   const [unitSize, setUnitSize] = useState("1");
   const [unitLabel, setUnitLabel] = useState("u");
-  const [usesPack, setUsesPack] = useState(false);
-  const [packSize, setPackSize] = useState("");
-  const [packLabel, setPackLabel] = useState("caja");
   const [emoji, setEmoji] = useState("");
 
-  // Step 2 state — entrada (producto/MP)
+  // Step 2 state — entrada (producto/MP) — el "pack" es del LOTE, no del producto.
+  // packKind define cómo viene esta vez:
+  //   'sueltos'  → input directo en la unidad base (g/ml/u)
+  //   'mayor'    → input en kg/L, multiplica × 1000 (solo si base = g o ml)
+  //   'pack'     → packSize unidades por pack × cantidad de packs
   const [suppliers, setSuppliers] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
-  const [entryQty, setEntryQty] = useState(""); // packs si usesPack, sino unidades
+  const [packKind, setPackKind] = useState("sueltos");
+  const [packSizeLote, setPackSizeLote] = useState(""); // unidades por pack en este lote
+  const [packLabelLote, setPackLabelLote] = useState("bolsa");
+  const [entryQty, setEntryQty] = useState(""); // cantidad en la unidad del packKind
   const [entryTotalCost, setEntryTotalCost] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("paid");
   const [paymentMethod, setPaymentMethod] = useState("pago_movil");
@@ -82,8 +86,23 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
 
   const typeMeta = useMemo(() => TYPES.find((t) => t.id === type), [type]);
   const isMP = type === "materia_prima";
-  const isSellable = typeMeta?.forSell;
+  const isSellable = typeMeta?.forSell; // is_cantina=true en DB (aparece en POS)
+  const hasPrice = type !== "materia_prima"; // todos salvo MP llevan precio venta
   const hasRecipe = typeMeta?.hasRecipe;
+
+  // Reset packKind si la unidad base cambia y "mayor" ya no aplica
+  useEffect(() => {
+    if (packKind === "mayor" && unitLabel !== "g" && unitLabel !== "ml") {
+      setPackKind("sueltos");
+    }
+  }, [unitLabel, packKind]);
+
+  // Reset unitLabel a opción válida cuando cambia type (MP solo permite g/ml/u)
+  useEffect(() => {
+    if (isMP && !["g", "ml", "u"].includes(unitLabel)) {
+      setUnitLabel("u");
+    }
+  }, [isMP, unitLabel]);
 
   // Load categories y suppliers + materia prima (para recetas)
   useEffect(() => {
@@ -133,16 +152,18 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
   }, [name]);
 
   // Auto-calc para step 2 entrada
+  // Stock final en unidad base = entryQty × multiplicador según packKind
   const entryUnits = useMemo(() => {
     const q = Number(entryQty);
     if (!Number.isFinite(q) || q <= 0) return 0;
-    if (usesPack) {
-      const ps = Number(packSize);
+    if (packKind === "mayor") return q * 1000; // kg→g o L→ml
+    if (packKind === "pack") {
+      const ps = Number(packSizeLote);
       if (!Number.isFinite(ps) || ps <= 0) return 0;
       return q * ps;
     }
-    return q;
-  }, [entryQty, usesPack, packSize]);
+    return q; // sueltos
+  }, [entryQty, packKind, packSizeLote]);
   const entryCostPerUnit = useMemo(() => {
     const total = Number(entryTotalCost);
     if (!Number.isFinite(total) || total <= 0 || entryUnits <= 0) return 0;
@@ -159,14 +180,13 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
     }, 0);
   }, [recipe, ingredients]);
 
-  // Validación step 1
+  // Validación step 1 — solo definición permanente
   const canNextStep1 = useMemo(() => {
     if (!name.trim()) return false;
-    if (isSellable && (!Number(priceRef) || Number(priceRef) <= 0)) return false;
+    if (hasPrice && (!Number(priceRef) || Number(priceRef) <= 0)) return false;
     if (!unitSize || Number(unitSize) <= 0 || !unitLabel.trim()) return false;
-    if (usesPack && (!Number(packSize) || Number(packSize) <= 0)) return false;
     return true;
-  }, [name, isSellable, priceRef, unitSize, unitLabel, usesPack, packSize]);
+  }, [name, hasPrice, priceRef, unitSize, unitLabel]);
 
   // Validación step 2 — solo cuando NO se saltea
   const canSubmitStep2 = useMemo(() => {
@@ -180,13 +200,14 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
     if (skipInitialStock) return true;
     if (!supplierId && !newSupplierName.trim()) return false;
     if (!Number(entryQty) || Number(entryQty) <= 0) return false;
+    if (packKind === "pack" && (!Number(packSizeLote) || Number(packSizeLote) <= 0 || !packLabelLote.trim())) return false;
     if (!Number(entryTotalCost) || Number(entryTotalCost) <= 0) return false;
     if (paymentStatus === "paid") {
       const m = PAYMENT_METHODS.find((p) => p.id === paymentMethod);
       if (m?.needsRef && !paymentRef.trim()) return false;
     }
     return true;
-  }, [typeMeta, hasRecipe, skipInitialRecipe, recipe, skipInitialStock, supplierId, newSupplierName, entryQty, entryTotalCost, paymentStatus, paymentMethod, paymentRef]);
+  }, [typeMeta, hasRecipe, skipInitialRecipe, recipe, skipInitialStock, supplierId, newSupplierName, entryQty, entryTotalCost, packKind, packSizeLote, packLabelLote, paymentStatus, paymentMethod, paymentRef]);
 
   // ---- Submit ----
   const handleSubmit = async () => {
@@ -235,8 +256,8 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         id: newId,
         name: finalName,
         type,
-        category: isMP ? "Materia Prima" : (category || "Otro"),
-        price_ref: isSellable ? Number(priceRef) : 0,
+        category: isMP ? "Materia Prima" : (type === "servicio" ? "Servicio" : (category || "Otro")),
+        price_ref: hasPrice ? Number(priceRef) : 0,
         cost_ref: hasRecipe ? recipeCost : entryCostPerUnit || 0,
         emoji: emoji.trim() || null,
         is_cantina: isSellable,
@@ -245,8 +266,9 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         stock_quantity: 0,
         unit_size: Number(unitSize),
         unit_label: unitLabel.trim(),
-        pack_size: usesPack ? Number(packSize) : null,
-        pack_label: usesPack ? packLabel.trim() : null,
+        // pack_size/pack_label son del LOTE, no permanentes del producto. NULL aquí.
+        pack_size: null,
+        pack_label: null,
         has_recipe: hasRecipe,
       };
       const { error: insertErr } = await supabase.from("products").insert(productRow);
@@ -428,7 +450,7 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
               )}
 
               {/* Precio (solo si se vende) */}
-              {isSellable && (
+              {hasPrice && (
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Precio venta $</label>
                   <input
@@ -486,38 +508,15 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                 </p>
               </div>
 
-              {/* Pack toggle (solo para producto/MP) */}
-              {!hasRecipe && type !== "servicio" && (
-                <div className="border border-stone-200 rounded-lg p-3 bg-stone-50">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={usesPack} onChange={(e) => setUsesPack(e.target.checked)} />
-                    <span className="text-sm font-medium text-stone-700">Lo compras en pack / caja / bulto</span>
-                  </label>
-                  {usesPack && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">¿Cuántas {unitLabel || "u"} trae 1?</label>
-                        <input
-                          type="number" step="1" min="1"
-                          value={packSize}
-                          onChange={(e) => setPackSize(e.target.value)}
-                          placeholder="12"
-                          className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Nombre del pack</label>
-                        <input
-                          type="text"
-                          value={packLabel}
-                          onChange={(e) => setPackLabel(e.target.value)}
-                          placeholder="caja / bulto"
-                          maxLength={12}
-                          className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
+              {/* Hint para MP ambigua tipo Tomate */}
+              {isMP && (
+                <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-[11px] text-amber-900 leading-snug">
+                  <p className="font-medium mb-1">💡 ¿Tomate, cebolla u otro ingrediente ambiguo?</p>
+                  <p>
+                    • Si lo usas mayormente <b>picado por peso</b> en recetas → elige <b>g</b><br />
+                    • Si lo usas mayormente <b>entero</b> (rodajas, ensaladas) → elige <b>u</b><br />
+                    Cómo viene en la compra (caja, bolsa, kg) lo defines al ingresar el lote, no acá.
+                  </p>
                 </div>
               )}
 
@@ -658,20 +657,73 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
                     )}
                   </div>
 
-                  {/* Qty + total cost */}
+                  {/* "¿En qué viene?" selector — el pack es del LOTE */}
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">¿En qué viene este lote?</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPackKind("sueltos")}
+                        className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${packKind === "sueltos" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+                      >Sueltos<br/><span className="text-[10px] font-normal">({unitLabel})</span></button>
+                      <button
+                        type="button"
+                        disabled={unitLabel !== "g" && unitLabel !== "ml"}
+                        onClick={() => setPackKind("mayor")}
+                        className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${packKind === "mayor" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"} disabled:opacity-30 disabled:cursor-not-allowed`}
+                        title={unitLabel === "g" ? "kg" : unitLabel === "ml" ? "L" : "Solo aplica si la base es g o ml"}
+                      >Mayor<br/><span className="text-[10px] font-normal">({unitLabel === "g" ? "kg" : unitLabel === "ml" ? "L" : "—"})</span></button>
+                      <button
+                        type="button"
+                        onClick={() => setPackKind("pack")}
+                        className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${packKind === "pack" ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+                      >Pack<br/><span className="text-[10px] font-normal">(caja/bolsa)</span></button>
+                    </div>
+                  </div>
+
+                  {/* Pack: sub-inputs */}
+                  {packKind === "pack" && (
+                    <div className="grid grid-cols-2 gap-2 border border-stone-200 rounded-lg p-3 bg-stone-50">
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">¿Cuántas {unitLabel} por pack?</label>
+                        <input
+                          type="number" step="1" min="1"
+                          value={packSizeLote}
+                          onChange={(e) => setPackSizeLote(e.target.value)}
+                          placeholder="12"
+                          className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Nombre del pack</label>
+                        <input
+                          type="text"
+                          value={packLabelLote}
+                          onChange={(e) => setPackLabelLote(e.target.value)}
+                          placeholder="caja / bolsa / paq"
+                          maxLength={12}
+                          className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cantidad + costo total */}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
-                        {usesPack ? `¿Cuántos ${packLabel || "packs"}?` : `¿Cuántas ${unitLabel}?`}
+                        {packKind === "sueltos" && `¿Cuántas ${unitLabel}?`}
+                        {packKind === "mayor" && `¿Cuántas ${unitLabel === "g" ? "kg" : "L"}?`}
+                        {packKind === "pack" && `¿Cuántas ${packLabelLote || "packs"}?`}
                       </label>
                       <input
                         type="number" step="0.01" min="0.01"
                         value={entryQty}
                         onChange={(e) => setEntryQty(e.target.value)}
-                        placeholder={usesPack ? "1" : "10"}
+                        placeholder={packKind === "pack" ? "1" : "10"}
                         className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
                       />
-                      {usesPack && entryUnits > 0 && (
+                      {packKind !== "sueltos" && entryUnits > 0 && (
                         <p className="text-[10px] text-stone-400 mt-1">= {entryUnits} {unitLabel}</p>
                       )}
                     </div>
