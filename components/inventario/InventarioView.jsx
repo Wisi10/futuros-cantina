@@ -486,7 +486,7 @@ export default function InventarioView({ user, rate }) {
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
                         <td className="px-3 py-2 text-right font-bold">{formatStockDisplay(p.stock_quantity, p.unit_label)}</td>
-                        <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 10}</td>
+                        <td className="px-3 py-2 text-right text-stone-400 text-xs">{formatStockDisplay(p.low_stock_alert || 10, p.unit_label)}</td>
                         <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                         <td className="px-3 py-2 text-center">{stockBadge(p)}</td>
