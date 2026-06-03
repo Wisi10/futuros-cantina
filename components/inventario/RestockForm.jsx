@@ -179,19 +179,23 @@ const PAYMENT_METHODS = [
 export default function RestockForm({ products, user, onRestocked }) {
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [rows, setRows] = useState([emptyRow()]);
-  const [supplier, setSupplier] = useState("");
+  // Suppliers vienen de la tabla normalizada `suppliers` (Fase 1 migration 035).
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierId, setSupplierId] = useState("");
   const [newSupplierMode, setNewSupplierMode] = useState(false);
-  const [supplierOptions, setSupplierOptions] = useState([]);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  // Map<supplier_id, Set<product_id>> — qué productos se le compraron alguna vez
+  // a cada proveedor. Permite filtrar el picker por proveedor seleccionado.
+  const [supplierProductMap, setSupplierProductMap] = useState({});
+  // Por fila: toggle "Mostrar todos los productos" (para añadir uno nuevo que
+  // el proveedor empieza a vender ahora).
+  const [rowShowAll, setRowShowAll] = useState({});
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("pago_movil");
   const [paymentRef, setPaymentRef] = useState("");
-  // Si la entrada YA fue pagada en el momento (mi fix anterior) o queda en
-  // cuentas por pagar para liquidar después. Default 'paid' por compatibilidad
-  // con el flujo previo, pero el toggle UI hace que el staff lo elija conscientemente.
   const [paymentStatus, setPaymentStatus] = useState("paid"); // 'paid' | 'pending'
   const [dueDate, setDueDate] = useState(() => {
-    // Default 30 días desde hoy
     const d = new Date(); d.setDate(d.getDate() + 30);
     return d.toISOString().split("T")[0];
   });
@@ -201,20 +205,43 @@ export default function RestockForm({ products, user, onRestocked }) {
   const selectableProducts = products.filter((p) => !p.has_recipe);
 
   const productById = (id) => products.find((p) => p.id === id);
+  const supplierById = (id) => suppliers.find((s) => s.id === id);
 
-  // Cargar proveedores históricos
+  // Cargar suppliers + map de productos históricos por proveedor
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("cantina_restocks")
-        .select("supplier")
-        .not("supplier", "is", null)
-        .order("restock_date", { ascending: false })
-        .limit(500);
-      const distinct = Array.from(new Set((data || []).map(r => (r.supplier || "").trim()).filter(Boolean)));
-      setSupplierOptions(distinct.sort());
+      const [supRes, restockRes] = await Promise.all([
+        supabase.from("suppliers").select("id, name").eq("active", true).order("name"),
+        supabase
+          .from("cantina_restocks")
+          .select("supplier_id, items")
+          .not("supplier_id", "is", null)
+          .order("restock_date", { ascending: false })
+          .limit(1000),
+      ]);
+      if (supRes.data) setSuppliers(supRes.data);
+      // Construir map<supplier_id, Set<product_id>>
+      const map = {};
+      (restockRes.data || []).forEach((r) => {
+        if (!r.supplier_id) return;
+        if (!map[r.supplier_id]) map[r.supplier_id] = new Set();
+        const items = Array.isArray(r.items) ? r.items : [];
+        items.forEach((it) => {
+          if (it?.product_id) map[r.supplier_id].add(it.product_id);
+        });
+      });
+      setSupplierProductMap(map);
     })();
   }, []);
+
+  // Productos visibles en el picker según fila + filtro de proveedor
+  const productsForRow = (rowIdx) => {
+    if (!supplierId) return selectableProducts; // sin proveedor → todos
+    if (rowShowAll[rowIdx]) return selectableProducts;
+    const historic = supplierProductMap[supplierId];
+    if (!historic || historic.size === 0) return selectableProducts;
+    return selectableProducts.filter((p) => historic.has(p.id));
+  };
 
   // unit_size efectivo: del producto, o el inline si el producto no tiene.
   function effectiveUnitSize(row) {
@@ -263,13 +290,39 @@ export default function RestockForm({ products, user, onRestocked }) {
 
   const handleSubmit = async () => {
     if (validRows.length === 0) return;
-    if (!supplier.trim()) {
-      alert("Debes elegir o crear un proveedor antes de registrar la entrada.");
+
+    // Resolver supplier_id: existente o crear nuevo
+    let resolvedSupplierId = supplierId;
+    let resolvedSupplierName = supplierById(supplierId)?.name || "";
+    if (newSupplierMode) {
+      const trimmed = newSupplierName.trim();
+      if (!trimmed) {
+        alert("Escribe el nombre del proveedor nuevo o elige uno existente.");
+        return;
+      }
+      resolvedSupplierName = trimmed;
+    }
+    if (!resolvedSupplierId && !newSupplierMode) {
+      alert("Elige un proveedor antes de registrar la entrada.");
       return;
     }
+
     setSaving(true);
 
     try {
+      // Crear supplier si es nuevo
+      if (newSupplierMode && !resolvedSupplierId) {
+        const { data: sup, error: supErr } = await supabase
+          .from("suppliers")
+          .insert({ name: resolvedSupplierName })
+          .select("id")
+          .single();
+        if (supErr) throw supErr;
+        resolvedSupplierId = sup.id;
+        // Actualizar lista local
+        setSuppliers((prev) => [...prev, { id: resolvedSupplierId, name: resolvedSupplierName }].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+
       const items = validRows.map((r) => {
         const product = productById(r.productId);
         const qty = effectiveQty(r);
@@ -282,7 +335,6 @@ export default function RestockForm({ products, user, onRestocked }) {
         };
       });
 
-      // 1. Insert cantina_restocks con estado de pago
       const isPaidNow = paymentStatus === "paid";
       const { data: restock, error: restockErr } = await supabase
         .from("cantina_restocks")
@@ -290,7 +342,8 @@ export default function RestockForm({ products, user, onRestocked }) {
           restock_date: date,
           items,
           total_cost_ref: totalCostRef,
-          supplier: supplier.trim(),
+          supplier: resolvedSupplierName, // legacy text field (compat)
+          supplier_id: resolvedSupplierId, // FK normalizado
           notes: notes || null,
           created_by: user?.name || "Cantina",
           payment_status: isPaidNow ? "paid" : "pending",
@@ -348,11 +401,11 @@ export default function RestockForm({ products, user, onRestocked }) {
             id: "exp_" + Math.random().toString(36).slice(2, 12),
             expense_type: "variable",
             category: expenseCategory,
-            name: `Compra ${supplier.trim()}`,
+            name: `Compra ${resolvedSupplierName}`,
             amount_usd: totalCostRef,
             payment_method: paymentMethod,
             reference: paymentRef.trim() || null,
-            provider: supplier.trim(),
+            provider: resolvedSupplierName,
             expense_date: date,
             created_by: user?.name || "Cantina",
             notes: `Auto-creado desde restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
@@ -365,14 +418,21 @@ export default function RestockForm({ products, user, onRestocked }) {
         if (!expenseOk) console.error("[RESTOCK→GASTO]", expenseErrMsg);
       }
 
-      // Agregar supplier al dropdown si era nuevo (evita tener que refrescar la página)
-      if (supplier.trim() && !supplierOptions.includes(supplier.trim())) {
-        setSupplierOptions((prev) => [...prev, supplier.trim()].sort());
-      }
+      // Actualizar el mapa de productos por proveedor con los items que acaban de entrar
+      setSupplierProductMap((prev) => {
+        const next = { ...prev };
+        if (!next[resolvedSupplierId]) next[resolvedSupplierId] = new Set();
+        else next[resolvedSupplierId] = new Set(next[resolvedSupplierId]);
+        items.forEach((it) => { if (it.product_id) next[resolvedSupplierId].add(it.product_id); });
+        return next;
+      });
+
       // Reset form
       setRows([emptyRow()]);
-      setSupplier("");
+      setSupplierId("");
       setNewSupplierMode(false);
+      setNewSupplierName("");
+      setRowShowAll({});
       setNotes("");
       setPaymentMethod("pago_movil");
       setPaymentRef("");
@@ -395,10 +455,60 @@ export default function RestockForm({ products, user, onRestocked }) {
 
   return (
     <div className="space-y-4">
+      {/* Paso 1 · Proveedor — encabeza el flow inverso */}
+      <div className="bg-white rounded-xl border border-stone-200 p-4">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <label className="text-xs font-bold text-brand uppercase tracking-wider block">Paso 1 · Proveedor</label>
+            <p className="text-[11px] text-stone-500 mt-0.5">Empieza eligiendo a quién le compras. El picker te muestra solo lo que históricamente le has comprado.</p>
+          </div>
+        </div>
+        {!newSupplierMode ? (
+          <select
+            value={supplierId}
+            onChange={(e) => {
+              if (e.target.value === "__new__") { setNewSupplierMode(true); setSupplierId(""); return; }
+              setSupplierId(e.target.value);
+              setRowShowAll({});
+            }}
+            className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none bg-white"
+          >
+            <option value="">Seleccionar proveedor...</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="__new__">+ Nuevo proveedor...</option>
+          </select>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newSupplierName}
+              onChange={(e) => setNewSupplierName(e.target.value)}
+              placeholder="Nombre del proveedor nuevo"
+              className="flex-1 border border-stone-300 rounded-lg px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+              autoFocus
+            />
+            <button onClick={() => { setNewSupplierMode(false); setNewSupplierName(""); }}
+              className="text-xs text-stone-500 hover:text-stone-700 px-2">
+              Cancelar
+            </button>
+          </div>
+        )}
+        {supplierId && supplierProductMap[supplierId] && supplierProductMap[supplierId].size > 0 && (
+          <p className="text-[11px] text-stone-500 mt-2">
+            ✓ Mostrando <b>{supplierProductMap[supplierId].size}</b> productos que históricamente le compras a <b>{supplierById(supplierId)?.name}</b>. Si te trae uno nuevo, usa "+ Otro producto" en la fila.
+          </p>
+        )}
+        {newSupplierMode && (
+          <p className="text-[11px] text-stone-500 mt-2">
+            ⓘ Proveedor nuevo — el picker te muestra todos los productos hasta que registres compras y aprenda el catálogo.
+          </p>
+        )}
+      </div>
+
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-stone-100 flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-bold text-sm text-stone-700">Formulario de entrada</h3>
+            <h3 className="font-bold text-sm text-stone-700">Paso 2 · Productos</h3>
             <p className="text-[11px] text-stone-400 mt-0.5">
               Productos con receta no se ingresan acá — solo sus ingredientes (Materia Prima). Costo total del lote; el sistema divide.
             </p>
@@ -435,10 +545,19 @@ export default function RestockForm({ products, user, onRestocked }) {
                   <tr key={i} className="border-t border-stone-100 align-top">
                     <td className="px-3 py-2">
                       <ProductPicker
-                        products={selectableProducts}
+                        products={productsForRow(i)}
                         value={row.productId}
                         onChange={(id) => updateRow(i, "productId", id)}
                       />
+                      {supplierId && !rowShowAll[i] && supplierProductMap[supplierId] && supplierProductMap[supplierId].size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setRowShowAll({ ...rowShowAll, [i]: true })}
+                          className="mt-1 text-[10px] text-brand hover:underline"
+                        >
+                          + Otro producto (mostrar todos)
+                        </button>
+                      )}
                       {/* Inline set de tamaño si el producto no lo tiene */}
                       {product && !productHasUnit && (
                         <div className="mt-1.5 flex items-center gap-1 text-[10px] text-stone-500">
@@ -529,44 +648,8 @@ export default function RestockForm({ products, user, onRestocked }) {
         </div>
       </div>
 
-      {/* Proveedor, Fecha, Método pago y Notas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <label className="text-xs font-medium text-stone-500 block mb-1">Proveedor</label>
-          {newSupplierMode || supplierOptions.length === 0 ? (
-            <div className="space-y-1.5">
-              <input
-                type="text"
-                value={supplier}
-                onChange={(e) => setSupplier(e.target.value)}
-                placeholder="Nombre del proveedor"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
-                autoFocus={newSupplierMode}
-              />
-              {supplierOptions.length > 0 && (
-                <button onClick={() => { setNewSupplierMode(false); setSupplier(""); }}
-                  className="text-[11px] text-brand hover:underline">
-                  ← Elegir existente
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <select
-                value={supplier}
-                onChange={(e) => {
-                  if (e.target.value === "__new__") { setNewSupplierMode(true); setSupplier(""); return; }
-                  setSupplier(e.target.value);
-                }}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none bg-white"
-              >
-                <option value="">Seleccionar proveedor...</option>
-                {supplierOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                <option value="__new__">+ Nuevo proveedor...</option>
-              </select>
-            </div>
-          )}
-        </div>
+      {/* Paso 3 · Fecha, Pago y Notas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <label className="text-xs font-medium text-stone-500 block mb-1">Fecha de entrada</label>
           <input
