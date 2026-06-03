@@ -260,7 +260,7 @@ export default function CostosView({ user }) {
 
   // Materia prima
   const materiaPrima = useMemo(() => {
-    return products.filter((p) => ingredientIds.has(p.id) || (!p.is_cantina && p.category === "Materia Prima"));
+    return products.filter((p) => ingredientIds.has(p.id) || p.type === "materia_prima");
   }, [products, ingredientIds]);
 
   // Revenue 90d por producto (de cantina_sales.items jsonb)

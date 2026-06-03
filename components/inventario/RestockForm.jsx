@@ -39,40 +39,41 @@ function ProductPicker({ products, value, onChange }) {
         <Search size={12} className="text-stone-400 shrink-0" />
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-72 overflow-hidden flex flex-col">
-          <div className="p-1.5 border-b border-stone-100 relative">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+        <div className="absolute z-20 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-xl max-h-[28rem] overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-stone-100 relative">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               autoFocus
               type="text"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar producto..."
-              className="w-full border border-stone-200 rounded pl-6 pr-7 py-1 text-xs focus:outline-none focus:border-brand"
+              className="w-full border border-stone-200 rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:border-brand"
             />
             {q && (
-              <button onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
-                <X size={11} />
+              <button onClick={() => setQ("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                <X size={14} />
               </button>
             )}
           </div>
           <div className="overflow-y-auto flex-1 scrollbar-hide">
             {filtered.length === 0 ? (
-              <p className="text-xs text-stone-400 text-center py-3">Sin resultados</p>
+              <p className="text-sm text-stone-400 text-center py-6">Sin resultados</p>
             ) : (
               filtered.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => { onChange(p.id); setOpen(false); setQ(""); }}
-                  className={`w-full text-left px-2 py-1.5 hover:bg-stone-50 text-xs flex items-center justify-between gap-2 ${
+                  className={`w-full text-left px-3 py-2.5 hover:bg-stone-50 text-sm flex items-center justify-between gap-2 min-h-[44px] ${
                     p.id === value ? "bg-brand/5 text-brand font-medium" : "text-stone-700"
                   }`}
                 >
-                  <span className="truncate">
-                    {p.emoji || "🍽️"} {p.name}
+                  <span className="truncate flex items-center gap-2">
+                    <span className="text-base">{p.emoji || "🍽️"}</span>
+                    <span className="truncate">{p.name}</span>
                   </span>
-                  <span className="text-[10px] text-stone-400 shrink-0">stk {Number(p.stock_quantity || 0)}</span>
+                  <span className="text-xs text-stone-400 shrink-0">stk {Number(p.stock_quantity || 0)}</span>
                 </button>
               ))
             )}

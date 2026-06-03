@@ -62,11 +62,12 @@ export default function InventarioView({ user, rate }) {
     if (!supabase) return;
     let q = supabase.from("products").select("*").eq("active", true).order("stock_quantity", { ascending: true });
     if (scope === "productos") {
-      q = q.eq("is_cantina", true);
+      // POS-sellable: producto + plato + bebida_preparada (todo lo que aparece en Vender)
+      q = q.in("type", ["producto", "plato", "bebida_preparada"]);
     } else if (scope === "materia") {
-      q = q.eq("is_cantina", false).eq("category", "Materia Prima");
+      q = q.eq("type", "materia_prima");
     } else if (scope === "eventos") {
-      q = q.eq("is_cantina", false).neq("category", "Materia Prima");
+      q = q.eq("type", "servicio");
     }
     const { data } = await q;
     if (data) setProducts(data);
@@ -77,7 +78,7 @@ export default function InventarioView({ user, rate }) {
       if (recipeProductIds.length > 0) {
         const [recipesRes, rawRes] = await Promise.all([
           supabase.from("product_recipes").select("product_id, ingredient_id, quantity, unit").in("product_id", recipeProductIds),
-          supabase.from("products").select("id, name").eq("is_cantina", false).eq("category", "Materia Prima"),
+          supabase.from("products").select("id, name").eq("type", "materia_prima"),
         ]);
         const rawMap = {};
         (rawRes.data || []).forEach(r => { rawMap[r.id] = r.name; });
