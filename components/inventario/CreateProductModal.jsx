@@ -275,11 +275,21 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         const totalCost = Number(entryTotalCost);
         const restockId = "rs_" + generateId();
         const isPaid = paymentStatus === "paid";
+        const supplierName = suppliers.find((s) => s.id === resolvedSupplierId)?.name || newSupplierName.trim();
+        // items jsonb es NOT NULL en cantina_restocks. Mismo shape que usa RestockForm.
+        const itemsJson = [{
+          product_id: newId,
+          name: finalName,
+          qty: entryUnits,
+          cost_per_unit_ref: entryCostPerUnit,
+          total_cost_ref: totalCost,
+        }];
         const { error: restockErr } = await supabase.from("cantina_restocks").insert({
           id: restockId,
-          supplier: suppliers.find((s) => s.id === resolvedSupplierId)?.name || newSupplierName.trim(),
+          supplier: supplierName,
           supplier_id: resolvedSupplierId,
           restock_date: entryDate,
+          items: itemsJson,
           total_cost_ref: totalCost,
           paid_amount_ref: isPaid ? totalCost : 0,
           payment_status: isPaid ? "paid" : "pending",
@@ -288,16 +298,6 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
           created_by: user?.name || "Cantina",
         });
         if (restockErr) throw restockErr;
-
-        // Items del restock (1 row para este producto)
-        await supabase.from("cantina_restock_items").insert({
-          id: "ri_" + generateId(),
-          restock_id: restockId,
-          product_id: newId,
-          quantity: entryUnits,
-          unit_cost_ref: entryCostPerUnit,
-          subtotal_ref: totalCost,
-        });
 
         // Actualizar stock + MAC del producto (el trigger lo hace, pero confirmo)
         await supabase
@@ -324,11 +324,11 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
             id: "exp_" + generateId(),
             expense_type: "variable",
             category: isMP ? "Materia Prima" : "Cantina",
-            name: `Compra ${suppliers.find((s) => s.id === resolvedSupplierId)?.name || newSupplierName.trim()}`,
+            name: `Compra ${supplierName}`,
             amount_usd: totalCost,
             payment_method: paymentMethod,
             reference: paymentRef.trim() || null,
-            provider: suppliers.find((s) => s.id === resolvedSupplierId)?.name || newSupplierName.trim(),
+            provider: supplierName,
             expense_date: entryDate,
             created_by: user?.name || "Cantina",
             notes: `Auto-creado al crear producto ${finalName}${entryNotes ? ` · ${entryNotes}` : ""}`,
@@ -353,7 +353,9 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100">
           <div>
-            <h2 className="text-base font-bold text-stone-800">+ Crear producto</h2>
+            <h2 className="text-base font-bold text-stone-800">
+              + Crear {(typeMeta?.label || "Producto").toLowerCase()}
+            </h2>
             <p className="text-[11px] text-stone-500 mt-0.5">{stepLabel}</p>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg" disabled={saving}>

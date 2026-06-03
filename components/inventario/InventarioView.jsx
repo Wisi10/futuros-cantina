@@ -10,6 +10,23 @@ import RecipeEditor from "./RecipeEditor";
 import DeleteProductModal from "./DeleteProductModal";
 import PorPagarView from "./PorPagarView";
 
+// Stock en formato humano: 3000 g → "3 kg", 250 ml → "250 ml", 1500 ml → "1.5 L".
+// Auto-promueve a métrica mayor cuando >= 1000.
+function formatStockDisplay(stock, unitLabel) {
+  const n = Number(stock || 0);
+  const label = (unitLabel || "").toLowerCase();
+  if (!label) return n.toLocaleString();
+  if (label === "g" && n >= 1000) {
+    const kg = n / 1000;
+    return `${kg.toLocaleString("es-VE", { maximumFractionDigits: 2 })} kg`;
+  }
+  if (label === "ml" && n >= 1000) {
+    const l = n / 1000;
+    return `${l.toLocaleString("es-VE", { maximumFractionDigits: 2 })} L`;
+  }
+  return `${n.toLocaleString()} ${unitLabel}`;
+}
+
 export default function InventarioView({ user, rate }) {
   const [scope, setScope] = useState("productos"); // "productos" | "materia" | "eventos"
   const [subTab, setSubTab] = useState("stock");
@@ -444,9 +461,6 @@ export default function InventarioView({ user, rate }) {
                       <th className="text-left px-3 py-2 font-medium"><SortHeader k="name" label="Producto" /></th>
                       <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="stock" label="Stock" align="right" /></th>
-                      {scope === "materia" && (
-                        <th className="text-right px-3 py-2 font-medium">Tamaño</th>
-                      )}
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="alert" label="Alerta" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo $" align="right" /></th>
                       <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
@@ -471,12 +485,7 @@ export default function InventarioView({ user, rate }) {
                           )}
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
-                        <td className="px-3 py-2 text-right font-bold">{Number(p.stock_quantity || 0)}</td>
-                        {scope === "materia" && (
-                          <td className="px-3 py-2 text-right">
-                            <UnitSizeCell product={p} onSaved={loadProducts} />
-                          </td>
-                        )}
+                        <td className="px-3 py-2 text-right font-bold">{formatStockDisplay(p.stock_quantity, p.unit_label)}</td>
                         <td className="px-3 py-2 text-right text-stone-400">{p.low_stock_alert || 10}</td>
                         <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
@@ -514,7 +523,7 @@ export default function InventarioView({ user, rate }) {
                     })}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={scope === "materia" ? 9 : 8} className="px-3 py-8 text-center text-stone-400 text-xs">
+                        <td colSpan={8} className="px-3 py-8 text-center text-stone-400 text-xs">
                           No hay productos con este filtro
                         </td>
                       </tr>
@@ -522,7 +531,7 @@ export default function InventarioView({ user, rate }) {
                   </tbody>
                   <tfoot>
                     {isAdmin && <tr className="border-t-2 border-stone-200 bg-stone-50">
-                      <td colSpan={scope === "materia" ? 5 : 4} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
+                      <td colSpan={4} className="px-3 py-2 text-sm font-bold text-stone-700 text-right">
                         Valor total inventario:
                       </td>
                       <td className="px-3 py-2 text-right text-sm font-bold text-brand" colSpan={1}>
