@@ -20,31 +20,39 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
     let alive = true;
     (async () => {
       setLoading(true);
-      const cutoff30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const [salesRes, restocksRes, movRes, recipeRes] = await Promise.all([
+      const cutoff365 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const isMP = product.type === "materia_prima";
+      const [salesRes, restocksRes, movRes, recipeRes, usedInRes] = await Promise.all([
         supabase
           .from("cantina_sales")
-          .select("id, sale_date, total_ref, items")
-          .gte("sale_date", cutoff30.split("T")[0])
+          .select("id, sale_number, sale_date, client_id, client_name, total_ref, items")
+          .gte("sale_date", cutoff365)
           .order("sale_date", { ascending: false })
-          .limit(500),
+          .limit(1000),
         supabase
           .from("cantina_restocks")
           .select("id, restock_date, total_cost_ref, items, supplier, supplier_id")
-          .gte("restock_date", cutoff30.split("T")[0])
+          .gte("restock_date", cutoff365)
           .order("restock_date", { ascending: false })
-          .limit(200),
+          .limit(500),
         supabase
           .from("stock_movements")
-          .select("created_at, movement_type, quantity, cost_ref")
+          .select("created_at, movement_type, quantity, cost_ref, reference_id")
           .eq("product_id", product.id)
           .order("created_at", { ascending: false })
-          .limit(50),
+          .limit(300),
         product.has_recipe
           ? supabase
               .from("product_recipes")
               .select("ingredient_id, quantity, unit")
               .eq("product_id", product.id)
+          : Promise.resolve({ data: [] }),
+        // Si es MP: qué platos lo usan como ingrediente
+        isMP
+          ? supabase
+              .from("product_recipes")
+              .select("product_id, quantity, unit")
+              .eq("ingredient_id", product.id)
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -60,24 +68,29 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
         .map((r) => ({ ...r, mine: productInItems(r.items, product.id) }))
         .filter((r) => r.mine);
 
-      // Agrupar ventas por día para el chart
-      const dailySales = {};
       const today = new Date();
+      const cutoff30Date = new Date(today);
+      cutoff30Date.setDate(cutoff30Date.getDate() - 30);
+      const mySales30 = mySales.filter((s) => new Date(s.sale_date) >= cutoff30Date);
+      const myRestocks30 = myRestocks.filter((r) => new Date(r.restock_date) >= cutoff30Date);
+
+      // Agrupar ventas por día para el chart (últimos 30d)
+      const dailySales = {};
       for (let i = 29; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
         const key = d.toISOString().split("T")[0];
         dailySales[key] = 0;
       }
-      mySales.forEach((s) => {
+      mySales30.forEach((s) => {
         const day = s.sale_date;
         if (dailySales[day] !== undefined) {
           dailySales[day] += Number(s.mine?.qty || 0);
         }
       });
 
-      const totalSold30 = mySales.reduce((sum, s) => sum + Number(s.mine?.qty || 0), 0);
-      const revenue30 = mySales.reduce((sum, s) => {
+      const totalSold30 = mySales30.reduce((sum, s) => sum + Number(s.mine?.qty || 0), 0);
+      const revenue30 = mySales30.reduce((sum, s) => {
         const item = s.mine;
         return sum + (Number(item?.qty || 0) * Number(item?.unit_price_ref || product.price_ref || 0));
       }, 0);
@@ -87,6 +100,91 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
       const lastRestock = myRestocks[0]?.restock_date || null;
       const daysSinceLastSale = lastSale ? Math.floor((today - new Date(lastSale)) / (1000 * 60 * 60 * 24)) : null;
       const daysSinceLastRestock = lastRestock ? Math.floor((today - new Date(lastRestock)) / (1000 * 60 * 60 * 24)) : null;
+
+      // ---- TAB VENTAS data ----
+      // Top clientes (agrupar por client_id, fallback client_name si no hay id)
+      const clientAgg = {};
+      mySales.forEach((s) => {
+        const key = s.client_id || s.client_name || "Sin cliente";
+        if (!clientAgg[key]) {
+          clientAgg[key] = { client_id: s.client_id, client_name: s.client_name || "Sin cliente", count: 0, qty: 0, revenue: 0 };
+        }
+        clientAgg[key].count += 1;
+        clientAgg[key].qty += Number(s.mine?.qty || 0);
+        clientAgg[key].revenue += Number(s.mine?.qty || 0) * Number(s.mine?.unit_price_ref || product.price_ref || 0);
+      });
+      const topClients = Object.values(clientAgg).sort((a, b) => b.qty - a.qty).slice(0, 10);
+      // Evolución precio venta (último precio usado en cada venta)
+      const priceEvolution = mySales
+        .map((s) => ({ date: s.sale_date, price: Number(s.mine?.unit_price_ref || 0) }))
+        .filter((p) => p.price > 0)
+        .reverse(); // cronológico
+
+      // ---- TAB COMPRAS data ----
+      // Stats por proveedor
+      const supplierAgg = {};
+      myRestocks.forEach((r) => {
+        const key = r.supplier_id || r.supplier || "Sin proveedor";
+        if (!supplierAgg[key]) {
+          supplierAgg[key] = {
+            supplier_id: r.supplier_id,
+            supplier: r.supplier || "Sin proveedor",
+            count: 0,
+            qty: 0,
+            total: 0,
+            last_date: null,
+            last_cost: null,
+          };
+        }
+        const agg = supplierAgg[key];
+        agg.count += 1;
+        agg.qty += Number(r.mine?.qty || 0);
+        agg.total += Number(r.mine?.total_cost_ref || 0);
+        if (!agg.last_date || r.restock_date > agg.last_date) {
+          agg.last_date = r.restock_date;
+          agg.last_cost = Number(r.mine?.cost_per_unit_ref || 0);
+        }
+      });
+      const supplierStats = Object.values(supplierAgg)
+        .map((s) => ({ ...s, avg_cost: s.qty > 0 ? s.total / s.qty : 0 }))
+        .sort((a, b) => b.total - a.total);
+      // MAC histórico (de stock_movements)
+      const macHistory = (movRes.data || [])
+        .filter((m) => Number(m.cost_ref || 0) > 0 && (m.movement_type === "restock" || m.movement_type === "adjustment"))
+        .reverse()
+        .map((m) => ({ date: m.created_at.split("T")[0], cost: Number(m.cost_ref) }));
+
+      // ---- TAB RECETA data — si MP, "en qué platos se usa" ----
+      let usedInProducts = [];
+      if (isMP && usedInRes.data?.length > 0) {
+        const platoIds = usedInRes.data.map((r) => r.product_id);
+        const { data: platosData } = await supabase
+          .from("products")
+          .select("id, name, emoji, price_ref, cost_ref, has_recipe, active")
+          .in("id", platoIds);
+        const platoMap = {};
+        (platosData || []).forEach((p) => { platoMap[p.id] = p; });
+        // Cuántas porciones se vendieron de cada plato últimos 365d
+        const platoSalesCount = {};
+        (salesRes.data || []).forEach((s) => {
+          if (!Array.isArray(s.items)) return;
+          s.items.forEach((it) => {
+            if (platoMap[it.product_id]) {
+              platoSalesCount[it.product_id] = (platoSalesCount[it.product_id] || 0) + Number(it.qty || 0);
+            }
+          });
+        });
+        usedInProducts = usedInRes.data
+          .filter((r) => platoMap[r.product_id])
+          .map((r) => ({
+            ...platoMap[r.product_id],
+            qty_per_serving: r.quantity,
+            unit: r.unit,
+            sold_count: platoSalesCount[r.product_id] || 0,
+            mp_consumed_estimate: (platoSalesCount[r.product_id] || 0) * Number(r.quantity || 0),
+          }))
+          .sort((a, b) => b.sold_count - a.sold_count);
+      }
 
       // Ingredientes con stock actual (si has_recipe)
       let recipeWithStock = [];
@@ -118,19 +216,26 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
         totalSold30,
         revenue30,
         profit30,
-        salesCount30: mySales.length,
-        restocksCount30: myRestocks.length,
+        salesCount30: mySales30.length,
+        restocksCount30: myRestocks30.length,
         lastSale,
         lastRestock,
         daysSinceLastSale,
         daysSinceLastRestock,
         recipeWithStock,
         recentMovements: movRes.data || [],
+        mySales,
+        myRestocks,
+        topClients,
+        priceEvolution,
+        supplierStats,
+        macHistory,
+        usedInProducts,
       });
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [product?.id, product?.has_recipe, product?.price_ref, product?.cost_ref]);
+  }, [product?.id, product?.type, product?.has_recipe, product?.price_ref, product?.cost_ref]);
 
   if (!product) return null;
 
@@ -218,6 +323,7 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
             { id: "ventas", label: "Ventas" },
             { id: "compras", label: "Compras" },
             ...(product.has_recipe ? [{ id: "receta", label: "Receta" }] : []),
+            ...(product.type === "materia_prima" ? [{ id: "usado_en", label: "Usado en" }] : []),
           ].map((t) => (
             <button
               key={t.id}
@@ -341,23 +447,13 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
               )}
             </div>
           ) : tab === "ventas" ? (
-            <div className="py-12 text-center text-stone-400 text-sm">
-              <TrendingUp size={32} className="mx-auto mb-2 opacity-50" />
-              <p>Tab Ventas — próximamente</p>
-              <p className="text-xs mt-1">Historial detallado de ventas, top clientes, evolución de precio venta.</p>
-            </div>
+            <SalesTab stats={stats} product={product} formatStock={formatStock} />
           ) : tab === "compras" ? (
-            <div className="py-12 text-center text-stone-400 text-sm">
-              <DollarSign size={32} className="mx-auto mb-2 opacity-50" />
-              <p>Tab Compras — próximamente</p>
-              <p className="text-xs mt-1">Restocks históricos, proveedores y precio por proveedor, evolución MAC.</p>
-            </div>
+            <ComprasTab stats={stats} product={product} formatStock={formatStock} />
           ) : tab === "receta" ? (
-            <div className="py-12 text-center text-stone-400 text-sm">
-              <Package size={32} className="mx-auto mb-2 opacity-50" />
-              <p>Tab Receta — próximamente</p>
-              <p className="text-xs mt-1">Editor de receta + costo computado + simulador de margen.</p>
-            </div>
+            <RecetaTab stats={stats} product={product} formatStock={formatStock} />
+          ) : tab === "usado_en" ? (
+            <UsadoEnTab stats={stats} product={product} formatStock={formatStock} />
           ) : null}
         </div>
 
@@ -434,6 +530,357 @@ function InfoCard({ icon: Icon, label, value, hint, warning }) {
         {hint && <p className="text-[10px] text-stone-400 mt-0.5">{hint}</p>}
       </div>
       {warning && <AlertCircle size={14} className="text-amber-600 shrink-0" />}
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: VENTAS
+// ============================================================================
+function SalesTab({ stats, product, formatStock }) {
+  if (!stats?.mySales?.length) {
+    return (
+      <div className="py-12 text-center text-stone-400 text-sm">
+        <TrendingUp size={32} className="mx-auto mb-2 opacity-50" />
+        <p>Sin ventas registradas en el último año.</p>
+      </div>
+    );
+  }
+  const totalSold = stats.mySales.reduce((s, x) => s + Number(x.mine?.qty || 0), 0);
+  const totalRevenue = stats.mySales.reduce((s, x) => s + Number(x.mine?.qty || 0) * Number(x.mine?.unit_price_ref || product.price_ref || 0), 0);
+  const priceChartData = stats.priceEvolution?.length > 1 ? {
+    labels: stats.priceEvolution.map((p) => p.date.slice(5)),
+    datasets: [{
+      data: stats.priceEvolution.map((p) => p.price),
+      borderColor: "rgb(120, 30, 50)",
+      backgroundColor: "rgba(120, 30, 50, 0.06)",
+      fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2,
+    }],
+  } : null;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <KpiCard label="Total vendido (365d)" value={`${totalSold} ${product.unit_label || "u"}`} />
+        <KpiCard label="Revenue (365d)" value={`$${totalRevenue.toFixed(2)}`} />
+        <KpiCard label="Tickets" value={stats.mySales.length} />
+      </div>
+
+      {priceChartData && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-2">Evolución de precio de venta</p>
+          <div className="h-32">
+            <Line data={priceChartData} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 8 } },
+                y: { grid: { color: "rgba(0,0,0,0.04)" }, ticks: { font: { size: 9 }, callback: (v) => `$${v}` } },
+              },
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Top clientes */}
+      {stats.topClients?.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+            <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Top clientes (365d)</p>
+          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50 text-stone-500">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                <th className="text-right px-3 py-2 font-medium">Compras</th>
+                <th className="text-right px-3 py-2 font-medium">Qty total</th>
+                <th className="text-right px-3 py-2 font-medium">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.topClients.map((c, i) => (
+                <tr key={i} className="border-t border-stone-100">
+                  <td className="px-3 py-2 text-stone-700">{c.client_name}</td>
+                  <td className="px-3 py-2 text-right">{c.count}</td>
+                  <td className="px-3 py-2 text-right font-medium">{c.qty}</td>
+                  <td className="px-3 py-2 text-right font-bold text-stone-800">${c.revenue.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Historial de ventas */}
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Historial (últimas {Math.min(stats.mySales.length, 50)} ventas)</p>
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50 text-stone-500 sticky top-0">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Fecha</th>
+                <th className="text-left px-3 py-2 font-medium">Ticket</th>
+                <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                <th className="text-right px-3 py-2 font-medium">Qty</th>
+                <th className="text-right px-3 py-2 font-medium">Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.mySales.slice(0, 50).map((s) => (
+                <tr key={s.id} className="border-t border-stone-100">
+                  <td className="px-3 py-2 text-stone-700">{new Date(s.sale_date).toLocaleDateString("es-VE")}</td>
+                  <td className="px-3 py-2 text-stone-500">#{s.sale_number || s.id.slice(-6)}</td>
+                  <td className="px-3 py-2 text-stone-700">{s.client_name || "—"}</td>
+                  <td className="px-3 py-2 text-right font-medium">{s.mine?.qty}</td>
+                  <td className="px-3 py-2 text-right">${Number(s.mine?.unit_price_ref || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: COMPRAS
+// ============================================================================
+function ComprasTab({ stats, product, formatStock }) {
+  if (!stats?.myRestocks?.length) {
+    return (
+      <div className="py-12 text-center text-stone-400 text-sm">
+        <DollarSign size={32} className="mx-auto mb-2 opacity-50" />
+        <p>Sin compras registradas en el último año.</p>
+      </div>
+    );
+  }
+  const totalCompras = stats.myRestocks.reduce((s, r) => s + Number(r.mine?.total_cost_ref || 0), 0);
+  const totalQty = stats.myRestocks.reduce((s, r) => s + Number(r.mine?.qty || 0), 0);
+  const macChartData = stats.macHistory?.length > 1 ? {
+    labels: stats.macHistory.map((m) => m.date.slice(5)),
+    datasets: [{
+      data: stats.macHistory.map((m) => m.cost),
+      borderColor: "rgb(120, 30, 50)",
+      backgroundColor: "rgba(120, 30, 50, 0.06)",
+      fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2,
+    }],
+  } : null;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <KpiCard label="Total comprado (365d)" value={`${totalQty} ${product.unit_label || "u"}`} />
+        <KpiCard label="Gasto total" value={`$${totalCompras.toFixed(2)}`} />
+        <KpiCard label="Entradas" value={stats.myRestocks.length} />
+      </div>
+
+      {macChartData && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-2">Evolución del costo (MAC)</p>
+          <div className="h-32">
+            <Line data={macChartData} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 8 } },
+                y: { grid: { color: "rgba(0,0,0,0.04)" }, ticks: { font: { size: 9 }, callback: (v) => `$${v.toFixed(2)}` } },
+              },
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Stats por proveedor */}
+      {stats.supplierStats?.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+            <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Por proveedor (365d)</p>
+          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50 text-stone-500">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Proveedor</th>
+                <th className="text-right px-3 py-2 font-medium">Entradas</th>
+                <th className="text-right px-3 py-2 font-medium">Qty</th>
+                <th className="text-right px-3 py-2 font-medium">Total $</th>
+                <th className="text-right px-3 py-2 font-medium">Costo prom.</th>
+                <th className="text-right px-3 py-2 font-medium">Última</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.supplierStats.map((s, i) => (
+                <tr key={i} className="border-t border-stone-100">
+                  <td className="px-3 py-2 font-medium text-stone-700">{s.supplier}</td>
+                  <td className="px-3 py-2 text-right">{s.count}</td>
+                  <td className="px-3 py-2 text-right">{s.qty}</td>
+                  <td className="px-3 py-2 text-right font-bold text-stone-800">${s.total.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right">${s.avg_cost.toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right text-stone-500">{s.last_date ? new Date(s.last_date).toLocaleDateString("es-VE") : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Historial restocks */}
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Historial (últimas {Math.min(stats.myRestocks.length, 50)} entradas)</p>
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50 text-stone-500 sticky top-0">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Fecha</th>
+                <th className="text-left px-3 py-2 font-medium">Proveedor</th>
+                <th className="text-right px-3 py-2 font-medium">Qty</th>
+                <th className="text-right px-3 py-2 font-medium">Costo/u</th>
+                <th className="text-right px-3 py-2 font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.myRestocks.slice(0, 50).map((r) => (
+                <tr key={r.id} className="border-t border-stone-100">
+                  <td className="px-3 py-2 text-stone-700">{new Date(r.restock_date).toLocaleDateString("es-VE")}</td>
+                  <td className="px-3 py-2 text-stone-700">{r.supplier || "—"}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.mine?.qty}</td>
+                  <td className="px-3 py-2 text-right">${Number(r.mine?.cost_per_unit_ref || 0).toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right font-bold text-stone-800">${Number(r.mine?.total_cost_ref || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: RECETA (para platos y bebidas preparadas)
+// ============================================================================
+function RecetaTab({ stats, product, formatStock }) {
+  const recipe = stats?.recipeWithStock || [];
+  if (!recipe.length) {
+    return (
+      <div className="py-12 text-center text-stone-400 text-sm">
+        <Package size={32} className="mx-auto mb-2 opacity-50" />
+        <p>Este producto no tiene receta definida aún.</p>
+      </div>
+    );
+  }
+  const costTotal = recipe.reduce((s, r) => s + (Number(r.ingredient?.cost_ref || 0) * Number(r.qty_in_base)), 0);
+  const margin = Number(product.price_ref) > 0 ? ((Number(product.price_ref) - costTotal) / Number(product.price_ref)) * 100 : null;
+  const minServings = recipe.length > 0 ? Math.min(...recipe.map((r) => r.servings_possible)) : 0;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <KpiCard label="Costo receta" value={`$${costTotal.toFixed(2)}`} />
+        <KpiCard label="Precio venta" value={`$${Number(product.price_ref || 0).toFixed(2)}`} />
+        <KpiCard
+          label="Margen"
+          value={margin !== null ? `${margin.toFixed(0)}%` : "—"}
+          color={margin === null ? "stone" : margin >= 50 ? "green" : margin >= 20 ? "amber" : "red"}
+        />
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900">
+        ⓘ Con el stock actual de ingredientes, se pueden preparar <b>{minServings}</b> porciones de {product.name}.
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Ingredientes y aporte al costo</p>
+        </div>
+        <table className="w-full text-xs">
+          <thead className="bg-stone-50 text-stone-500">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium">Ingrediente</th>
+              <th className="text-right px-3 py-2 font-medium">Cant/receta</th>
+              <th className="text-right px-3 py-2 font-medium">Costo/u</th>
+              <th className="text-right px-3 py-2 font-medium">Aporte $</th>
+              <th className="text-right px-3 py-2 font-medium">Stock</th>
+              <th className="text-right px-3 py-2 font-medium">Porciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recipe.map((r, i) => {
+              const aporte = Number(r.ingredient?.cost_ref || 0) * Number(r.qty_in_base);
+              return (
+                <tr key={i} className="border-t border-stone-100">
+                  <td className="px-3 py-2">{r.ingredient?.emoji ? `${r.ingredient.emoji} ` : ""}{r.ingredient?.name || "(eliminado)"}</td>
+                  <td className="px-3 py-2 text-right">{r.quantity} {r.unit}</td>
+                  <td className="px-3 py-2 text-right text-stone-500">${Number(r.ingredient?.cost_ref || 0).toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right font-bold text-stone-800">${aporte.toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right text-stone-500">{r.ingredient ? formatStock(r.ingredient.stock_quantity, r.ingredient.unit_label) : "—"}</td>
+                  <td className={`px-3 py-2 text-right font-bold ${r.servings_possible <= 0 ? "text-red-600" : r.servings_possible <= 5 ? "text-amber-600" : "text-green-700"}`}>
+                    {r.servings_possible}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-stone-200 bg-stone-50">
+              <td colSpan={3} className="px-3 py-2 text-right font-bold text-stone-700">Total costo por porción:</td>
+              <td className="px-3 py-2 text-right font-bold text-brand">${costTotal.toFixed(4)}</td>
+              <td colSpan={2}></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: USADO EN (para materia prima)
+// ============================================================================
+function UsadoEnTab({ stats, product, formatStock }) {
+  const platos = stats?.usedInProducts || [];
+  if (!platos.length) {
+    return (
+      <div className="py-12 text-center text-stone-400 text-sm">
+        <Package size={32} className="mx-auto mb-2 opacity-50" />
+        <p>Esta materia prima no se usa en ningún plato/bebida aún.</p>
+      </div>
+    );
+  }
+  const totalConsumido = platos.reduce((s, p) => s + p.mp_consumed_estimate, 0);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <KpiCard label="En # platos" value={platos.length} />
+        <KpiCard label="Consumido estimado (365d)" value={`${totalConsumido.toFixed(2)} ${product.unit_label || ""}`} hint="qty × ventas por plato" />
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Platos que usan este ingrediente</p>
+        </div>
+        <table className="w-full text-xs">
+          <thead className="bg-stone-50 text-stone-500">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium">Plato</th>
+              <th className="text-right px-3 py-2 font-medium">Cant/porción</th>
+              <th className="text-right px-3 py-2 font-medium">Vendido (365d)</th>
+              <th className="text-right px-3 py-2 font-medium">Total consumido</th>
+            </tr>
+          </thead>
+          <tbody>
+            {platos.map((p) => (
+              <tr key={p.id} className={`border-t border-stone-100 ${!p.active ? "opacity-50" : ""}`}>
+                <td className="px-3 py-2">{p.emoji ? `${p.emoji} ` : ""}{p.name}</td>
+                <td className="px-3 py-2 text-right">{p.qty_per_serving} {p.unit}</td>
+                <td className="px-3 py-2 text-right font-medium">{p.sold_count}</td>
+                <td className="px-3 py-2 text-right font-bold text-stone-800">{p.mp_consumed_estimate.toFixed(2)} {product.unit_label || ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
