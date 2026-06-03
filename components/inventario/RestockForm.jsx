@@ -146,7 +146,24 @@ function emptyRow() {
   return {
     productId: "", qty: "", amount: "", costTotal: "",
     inlineSize: "", inlineLabel: "",
+    // entryUnit: en qué unidad ingresa el staff (g/kg/ml/L/u/pack). Se
+    // multiplica × multiplier para obtener el qty en la unidad base del producto.
+    entryUnit: "",
   };
+}
+
+// Opciones de unidad de ingreso según la unidad base del producto.
+// Permite al staff comprar en kg/L/caja y el sistema convierte a base (g/ml/u).
+function getEntryOptions(product) {
+  if (!product) return [{ label: "u", mult: 1 }];
+  const base = (product.unit_label || "u").toLowerCase();
+  const opts = [{ label: base, mult: 1 }];
+  if (base === "g") opts.push({ label: "kg", mult: 1000 });
+  if (base === "ml") opts.push({ label: "L", mult: 1000 });
+  if (base === "u" && Number(product.pack_size) > 0 && product.pack_label) {
+    opts.push({ label: product.pack_label, mult: Number(product.pack_size) });
+  }
+  return opts;
 }
 
 // Mapping de category del producto → category del gasto auto-creado.
@@ -176,7 +193,8 @@ const PAYMENT_METHODS = [
   { id: "transferencia", label: "Transferencia", acceptsRef: true, refHint: "Nº transferencia" },
 ];
 
-export default function RestockForm({ products, user, onRestocked }) {
+export default function RestockForm({ products, user, scope = "productos", onRestocked }) {
+  const isMP = scope === "materia";
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [rows, setRows] = useState([emptyRow()]);
   // Suppliers vienen de la tabla normalizada `suppliers` (Fase 1 migration 035).
@@ -257,14 +275,15 @@ export default function RestockForm({ products, user, onRestocked }) {
     if (row.inlineLabel?.trim()) return row.inlineLabel.trim();
     return null;
   }
-  // qty efectivo: si hay amount + unit_size efectivo → calcular. Si no, qty directo.
+  // qty efectivo en unidad base = row.qty × multiplier de entryUnit
   function effectiveQty(row) {
-    const amountNum = parseFloat(row.amount);
-    const us = effectiveUnitSize(row);
-    if (Number.isFinite(amountNum) && amountNum > 0 && us) {
-      return amountNum / us;
-    }
-    return parseFloat(row.qty) || 0;
+    const num = parseFloat(row.qty);
+    if (!Number.isFinite(num) || num <= 0) return 0;
+    const product = productById(row.productId);
+    if (!product) return num; // Sin producto aún, asumir base
+    const opts = getEntryOptions(product);
+    const opt = opts.find((o) => o.label === (row.entryUnit || product.unit_label)) || opts[0];
+    return num * opt.mult;
   }
   function costPerUnit(row) {
     const total = parseFloat(row.costTotal) || 0;
@@ -508,9 +527,13 @@ export default function RestockForm({ products, user, onRestocked }) {
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-stone-100 flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-bold text-sm text-stone-700">Paso 2 · Productos</h3>
+            <h3 className="font-bold text-sm text-stone-700">
+              Paso 2 · {isMP ? "Materia prima" : "Productos"}
+            </h3>
             <p className="text-[11px] text-stone-400 mt-0.5">
-              Productos con receta no se ingresan acá — solo sus ingredientes (Materia Prima). Costo total del lote; el sistema divide.
+              {isMP
+                ? "Cantidad y unidad de compra. El sistema convierte a la base (g/ml/u) para que las recetas calculen costos."
+                : "Productos con receta no se ingresan acá — son platos, su costo sale de la receta. Acá solo lo que se compra ya hecho."}
             </p>
           </div>
           <button
@@ -526,28 +549,30 @@ export default function RestockForm({ products, user, onRestocked }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs">
-                <th className="text-left px-3 py-2 font-medium min-w-[200px]">Producto</th>
-                <th className="text-center px-3 py-2 font-medium w-24">Qty</th>
-                <th className="text-center px-3 py-2 font-medium w-32">Peso / Vol total</th>
+                <th className="text-left px-3 py-2 font-medium min-w-[200px]">
+                  {isMP ? "Materia prima" : "Producto"}
+                </th>
+                <th className="text-center px-3 py-2 font-medium w-28">Cantidad</th>
+                <th className="text-center px-3 py-2 font-medium w-24">Unidad</th>
                 <th className="text-center px-3 py-2 font-medium w-28">Costo total $</th>
-                <th className="text-center px-3 py-2 font-medium w-24">Costo/u $</th>
+                {!isMP && <th className="text-center px-3 py-2 font-medium w-24">Costo/u $</th>}
                 <th className="w-10"></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => {
                 const product = productById(row.productId);
-                const productHasUnit = product?.unit_size > 0 && product?.unit_label;
                 const eff = effectiveQty(row);
                 const cpu = costPerUnit(row);
-                const amountFilled = parseFloat(row.amount) > 0 && effectiveUnitSize(row) > 0;
+                const opts = getEntryOptions(product);
+                const currentUnit = row.entryUnit || product?.unit_label || "u";
                 return (
                   <tr key={i} className="border-t border-stone-100 align-top">
                     <td className="px-3 py-2">
                       <ProductPicker
                         products={productsForRow(i)}
                         value={row.productId}
-                        onChange={(id) => updateRow(i, "productId", id)}
+                        onChange={(id) => { updateRow(i, "productId", id); updateRow(i, "entryUnit", ""); }}
                       />
                       {supplierId && !rowShowAll[i] && supplierProductMap[supplierId] && supplierProductMap[supplierId].size > 0 && (
                         <button
@@ -558,58 +583,34 @@ export default function RestockForm({ products, user, onRestocked }) {
                           + Otro producto (mostrar todos)
                         </button>
                       )}
-                      {/* Inline set de tamaño si el producto no lo tiene */}
-                      {product && !productHasUnit && (
-                        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-stone-500">
-                          <span className="shrink-0">Tamaño:</span>
-                          <input
-                            type="number" step="0.01" min="0"
-                            value={row.inlineSize}
-                            onChange={(e) => updateRow(i, "inlineSize", e.target.value)}
-                            placeholder="1"
-                            className="w-14 border border-stone-300 rounded px-1.5 py-1 text-[11px] text-right"
-                          />
-                          <input
-                            type="text"
-                            value={row.inlineLabel}
-                            onChange={(e) => updateRow(i, "inlineLabel", e.target.value)}
-                            placeholder="kg / u"
-                            maxLength={8}
-                            className="w-14 border border-stone-300 rounded px-1.5 py-1 text-[11px]"
-                          />
-                          <span className="text-stone-400">(se guarda en el producto)</span>
-                        </div>
-                      )}
                     </td>
                     <td className="px-3 py-2">
                       <input
                         type="number"
                         min="0"
                         step="0.01"
-                        value={amountFilled ? eff.toFixed(2) : row.qty}
+                        value={row.qty}
                         onChange={(e) => updateRow(i, "qty", e.target.value)}
-                        disabled={amountFilled}
-                        className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-center focus:border-brand focus:outline-none disabled:bg-stone-50 disabled:text-stone-500"
+                        className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-center focus:border-brand focus:outline-none"
                         placeholder="0"
-                        title={amountFilled ? "Calculado del peso/volumen" : ""}
                       />
+                      {currentUnit !== product?.unit_label && eff > 0 && (
+                        <p className="text-[10px] text-stone-400 mt-1 text-center">
+                          = {eff} {product?.unit_label}
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-2">
-                      {effectiveUnitSize(row) ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={row.amount}
-                            onChange={(e) => updateRow(i, "amount", e.target.value)}
-                            className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-center focus:border-brand focus:outline-none"
-                            placeholder="0"
-                          />
-                          <span className="text-[11px] text-stone-500 font-medium">{effectiveUnitLabel(row)}</span>
-                        </div>
+                      {product ? (
+                        <select
+                          value={currentUnit}
+                          onChange={(e) => updateRow(i, "entryUnit", e.target.value)}
+                          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-center focus:border-brand focus:outline-none bg-white"
+                        >
+                          {opts.map((o) => <option key={o.label} value={o.label}>{o.label}</option>)}
+                        </select>
                       ) : (
-                        <span className="text-[10px] text-stone-300 italic">define tamaño</span>
+                        <span className="text-[10px] text-stone-300 italic">elige producto</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -622,9 +623,11 @@ export default function RestockForm({ products, user, onRestocked }) {
                         placeholder="0.00"
                       />
                     </td>
-                    <td className="px-3 py-2 text-center text-stone-500 text-xs">
-                      {eff > 0 && cpu > 0 ? `$${cpu.toFixed(2)}` : "—"}
-                    </td>
+                    {!isMP && (
+                      <td className="px-3 py-2 text-center text-stone-500 text-xs">
+                        {eff > 0 && cpu > 0 ? `$${cpu.toFixed(2)}` : "—"}
+                      </td>
+                    )}
                     <td className="px-3 py-2">
                       <button
                         onClick={() => removeRow(i)}

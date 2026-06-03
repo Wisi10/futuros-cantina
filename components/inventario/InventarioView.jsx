@@ -623,6 +623,7 @@ export default function InventarioView({ user, rate }) {
           <RestockForm
             products={products}
             user={user}
+            scope={scope}
             onRestocked={loadProducts}
           />
         </div>
