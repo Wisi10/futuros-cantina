@@ -1,17 +1,19 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown, Receipt, Search } from "lucide-react";
+import { Settings, Save, RefreshCw, History, X, Package, Tag, Percent, Users, ChevronRight, ShoppingBag, ChevronUp, ChevronDown, ArrowUpDown, Receipt, Search, Truck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ProductImage, calculateProfitability, loadProductCategoryNames, CANTINA_CATEGORIES } from "@/lib/utils";
 import CategoriesEditor from "./CategoriesEditor";
 import DescuentosCantinaEditor from "./DescuentosCantinaEditor";
 import EmpleadosEditor from "./EmpleadosEditor";
+import SuppliersEditor from "./SuppliersEditor";
 
 const SECTIONS = [
   { id: "tasa",        name: "Tasa del día",   icon: RefreshCw },
   { id: "categorias",  name: "Categorías",     icon: Tag },
   { id: "descuentos",  name: "Descuentos",     icon: Percent },
   { id: "empleados",   name: "Empleados",      icon: Users },
+  { id: "proveedores", name: "Proveedores",    icon: Truck },
   { id: "stock",       name: "Umbral stock",   icon: Package },
   { id: "impuestos",   name: "Impuestos",      icon: Receipt },
   { id: "productos",   name: "Productos",      icon: ShoppingBag },
@@ -326,6 +328,10 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
 
       <div style={{ display: section === "empleados" ? undefined : "none" }}>
         <EmpleadosEditor user={user} />
+      </div>
+
+      <div style={{ display: section === "proveedores" ? undefined : "none" }}>
+        <SuppliersEditor />
       </div>
 
       <div style={{ display: section === "stock" ? undefined : "none" }}>
