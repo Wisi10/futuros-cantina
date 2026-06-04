@@ -1133,13 +1133,13 @@ function POSPageInner() {
         )}
 
         {activeTab === "inventario" && (
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <InventarioView user={effectiveUser} rate={rate} />
           </div>
         )}
 
         {activeTab === "caja" && (
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <CajaView user={effectiveUser} rate={rate} />
           </div>
         )}
