@@ -261,6 +261,17 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
     return `${num.toLocaleString()} ${label || ""}`.trim();
   };
 
+  // Costo per-unidad escalado a métrica mayor para reporting (más legible).
+  // $0.0146/g → $14.60/kg. Internamente sigue siendo per-base.
+  // Retorna { display: "$14.60", unit: "kg" }.
+  const formatCostPerUnit = (cost, label) => {
+    const c = Number(cost || 0);
+    const l = (label || "u").toLowerCase();
+    if (l === "g") return { display: `$${(c * 1000).toFixed(2)}`, unit: "kg" };
+    if (l === "ml") return { display: `$${(c * 1000).toFixed(2)}`, unit: "L" };
+    return { display: `$${c.toFixed(c < 0.1 ? 4 : 2)}`, unit: label || "u" };
+  };
+
   const chartData = useMemo(() => {
     if (!stats?.dailySales) return null;
     const labels = Object.keys(stats.dailySales).map((d) => {
@@ -352,11 +363,10 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
                   value={product.has_recipe ? "—" : formatStock(product.stock_quantity, product.unit_label)}
                   hint={product.has_recipe ? "Por receta" : `Alerta: ${formatStock(product.low_stock_alert || 10, product.unit_label)}`}
                 />
-                <KpiCard
-                  label="Costo $"
-                  value={`$${Number(product.cost_ref || 0).toFixed(4).replace(/\.?0+$/, "") || "0"}`}
-                  hint={`por ${product.unit_label || "u"}`}
-                />
+                {(() => {
+                  const c = formatCostPerUnit(product.cost_ref, product.unit_label);
+                  return <KpiCard label="Costo $" value={c.display} hint={`por ${c.unit}`} />;
+                })()}
                 <KpiCard
                   label="Precio venta $"
                   value={`$${Number(product.price_ref || 0).toFixed(2)}`}
@@ -449,9 +459,9 @@ export default function ProductDetailModal({ product, rate, onClose, onEdit, onA
           ) : tab === "ventas" ? (
             <SalesTab stats={stats} product={product} formatStock={formatStock} />
           ) : tab === "compras" ? (
-            <ComprasTab stats={stats} product={product} formatStock={formatStock} />
+            <ComprasTab stats={stats} product={product} formatStock={formatStock} formatCostPerUnit={formatCostPerUnit} />
           ) : tab === "receta" ? (
-            <RecetaTab stats={stats} product={product} formatStock={formatStock} />
+            <RecetaTab stats={stats} product={product} formatStock={formatStock} formatCostPerUnit={formatCostPerUnit} />
           ) : tab === "usado_en" ? (
             <UsadoEnTab stats={stats} product={product} formatStock={formatStock} />
           ) : null}
@@ -647,7 +657,7 @@ function SalesTab({ stats, product, formatStock }) {
 // ============================================================================
 // Tab: COMPRAS
 // ============================================================================
-function ComprasTab({ stats, product, formatStock }) {
+function ComprasTab({ stats, product, formatStock, formatCostPerUnit }) {
   if (!stats?.myRestocks?.length) {
     return (
       <div className="py-12 text-center text-stone-400 text-sm">
@@ -658,10 +668,14 @@ function ComprasTab({ stats, product, formatStock }) {
   }
   const totalCompras = stats.myRestocks.reduce((s, r) => s + Number(r.mine?.total_cost_ref || 0), 0);
   const totalQty = stats.myRestocks.reduce((s, r) => s + Number(r.mine?.qty || 0), 0);
+  // Para el chart de MAC, escalar a métrica mayor si aplica (más legible)
+  const baseLabel = (product.unit_label || "u").toLowerCase();
+  const macScale = (baseLabel === "g" || baseLabel === "ml") ? 1000 : 1;
+  const macUnit = baseLabel === "g" ? "kg" : baseLabel === "ml" ? "L" : (product.unit_label || "u");
   const macChartData = stats.macHistory?.length > 1 ? {
     labels: stats.macHistory.map((m) => m.date.slice(5)),
     datasets: [{
-      data: stats.macHistory.map((m) => m.cost),
+      data: stats.macHistory.map((m) => m.cost * macScale),
       borderColor: "rgb(120, 30, 50)",
       backgroundColor: "rgba(120, 30, 50, 0.06)",
       fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2,
@@ -670,14 +684,14 @@ function ComprasTab({ stats, product, formatStock }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        <KpiCard label="Total comprado (365d)" value={`${totalQty} ${product.unit_label || "u"}`} />
+        <KpiCard label="Total comprado (365d)" value={formatStock(totalQty, product.unit_label)} />
         <KpiCard label="Gasto total" value={`$${totalCompras.toFixed(2)}`} />
         <KpiCard label="Entradas" value={stats.myRestocks.length} />
       </div>
 
       {macChartData && (
         <div className="bg-white border border-stone-200 rounded-xl p-4">
-          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-2">Evolución del costo (MAC)</p>
+          <p className="text-[10px] uppercase tracking-wider text-stone-500 font-bold mb-2">Evolución del costo (MAC) — por {macUnit}</p>
           <div className="h-32">
             <Line data={macChartData} options={{
               responsive: true, maintainAspectRatio: false,
@@ -704,7 +718,7 @@ function ComprasTab({ stats, product, formatStock }) {
                 <th className="text-right px-3 py-2 font-medium">Entradas</th>
                 <th className="text-right px-3 py-2 font-medium">Qty</th>
                 <th className="text-right px-3 py-2 font-medium">Total $</th>
-                <th className="text-right px-3 py-2 font-medium">Costo prom.</th>
+                <th className="text-right px-3 py-2 font-medium">Costo prom./{macUnit}</th>
                 <th className="text-right px-3 py-2 font-medium">Última</th>
               </tr>
             </thead>
@@ -713,9 +727,9 @@ function ComprasTab({ stats, product, formatStock }) {
                 <tr key={i} className="border-t border-stone-100">
                   <td className="px-3 py-2 font-medium text-stone-700">{s.supplier}</td>
                   <td className="px-3 py-2 text-right">{s.count}</td>
-                  <td className="px-3 py-2 text-right">{s.qty}</td>
+                  <td className="px-3 py-2 text-right">{formatStock(s.qty, product.unit_label)}</td>
                   <td className="px-3 py-2 text-right font-bold text-stone-800">${s.total.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">${s.avg_cost.toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right">{formatCostPerUnit(s.avg_cost, product.unit_label).display}</td>
                   <td className="px-3 py-2 text-right text-stone-500">{s.last_date ? new Date(s.last_date).toLocaleDateString("es-VE") : "—"}</td>
                 </tr>
               ))}
@@ -736,7 +750,7 @@ function ComprasTab({ stats, product, formatStock }) {
                 <th className="text-left px-3 py-2 font-medium">Fecha</th>
                 <th className="text-left px-3 py-2 font-medium">Proveedor</th>
                 <th className="text-right px-3 py-2 font-medium">Qty</th>
-                <th className="text-right px-3 py-2 font-medium">Costo/u</th>
+                <th className="text-right px-3 py-2 font-medium">Costo/{macUnit}</th>
                 <th className="text-right px-3 py-2 font-medium">Total</th>
               </tr>
             </thead>
@@ -745,8 +759,8 @@ function ComprasTab({ stats, product, formatStock }) {
                 <tr key={r.id} className="border-t border-stone-100">
                   <td className="px-3 py-2 text-stone-700">{new Date(r.restock_date).toLocaleDateString("es-VE")}</td>
                   <td className="px-3 py-2 text-stone-700">{r.supplier || "—"}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.mine?.qty}</td>
-                  <td className="px-3 py-2 text-right">${Number(r.mine?.cost_per_unit_ref || 0).toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatStock(r.mine?.qty, product.unit_label)}</td>
+                  <td className="px-3 py-2 text-right">{formatCostPerUnit(r.mine?.cost_per_unit_ref, product.unit_label).display}</td>
                   <td className="px-3 py-2 text-right font-bold text-stone-800">${Number(r.mine?.total_cost_ref || 0).toFixed(2)}</td>
                 </tr>
               ))}
@@ -761,7 +775,7 @@ function ComprasTab({ stats, product, formatStock }) {
 // ============================================================================
 // Tab: RECETA (para platos y bebidas preparadas)
 // ============================================================================
-function RecetaTab({ stats, product, formatStock }) {
+function RecetaTab({ stats, product, formatStock, formatCostPerUnit }) {
   const recipe = stats?.recipeWithStock || [];
   if (!recipe.length) {
     return (
@@ -799,7 +813,7 @@ function RecetaTab({ stats, product, formatStock }) {
             <tr>
               <th className="text-left px-3 py-2 font-medium">Ingrediente</th>
               <th className="text-right px-3 py-2 font-medium">Cant/receta</th>
-              <th className="text-right px-3 py-2 font-medium">Costo/u</th>
+              <th className="text-right px-3 py-2 font-medium">Costo unitario</th>
               <th className="text-right px-3 py-2 font-medium">Aporte $</th>
               <th className="text-right px-3 py-2 font-medium">Stock</th>
               <th className="text-right px-3 py-2 font-medium">Porciones</th>
@@ -808,11 +822,12 @@ function RecetaTab({ stats, product, formatStock }) {
           <tbody>
             {recipe.map((r, i) => {
               const aporte = Number(r.ingredient?.cost_ref || 0) * Number(r.qty_in_base);
+              const ingCost = r.ingredient ? formatCostPerUnit(r.ingredient.cost_ref, r.ingredient.unit_label) : null;
               return (
                 <tr key={i} className="border-t border-stone-100">
                   <td className="px-3 py-2">{r.ingredient?.emoji ? `${r.ingredient.emoji} ` : ""}{r.ingredient?.name || "(eliminado)"}</td>
                   <td className="px-3 py-2 text-right">{r.quantity} {r.unit}</td>
-                  <td className="px-3 py-2 text-right text-stone-500">${Number(r.ingredient?.cost_ref || 0).toFixed(4)}</td>
+                  <td className="px-3 py-2 text-right text-stone-500">{ingCost ? `${ingCost.display}/${ingCost.unit}` : "—"}</td>
                   <td className="px-3 py-2 text-right font-bold text-stone-800">${aporte.toFixed(4)}</td>
                   <td className="px-3 py-2 text-right text-stone-500">{r.ingredient ? formatStock(r.ingredient.stock_quantity, r.ingredient.unit_label) : "—"}</td>
                   <td className={`px-3 py-2 text-right font-bold ${r.servings_possible <= 0 ? "text-red-600" : r.servings_possible <= 5 ? "text-amber-600" : "text-green-700"}`}>

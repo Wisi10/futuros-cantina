@@ -28,6 +28,16 @@ function formatStockDisplay(stock, unitLabel) {
   return `${n.toLocaleString()} ${unitLabel}`;
 }
 
+// Costo per-unidad escalado a métrica mayor para reporting.
+// $0.0146/g → "$14.60 /kg". Para u o sin unidad usa el valor crudo.
+function formatCostDisplay(cost, unitLabel) {
+  const c = Number(cost || 0);
+  const l = (unitLabel || "u").toLowerCase();
+  if (l === "g") return `$${(c * 1000).toFixed(2)} /kg`;
+  if (l === "ml") return `$${(c * 1000).toFixed(2)} /L`;
+  return `$${c.toFixed(c < 0.1 ? 4 : 2)}`;
+}
+
 export default function InventarioView({ user, rate }) {
   const [scope, setScope] = useState("productos"); // "productos" | "materia" | "eventos"
   const [subTab, setSubTab] = useState("stock");
@@ -507,7 +517,7 @@ export default function InventarioView({ user, rate }) {
                         <td className="px-3 py-2 text-stone-500 text-xs">{p.category || "—"}</td>
                         <td className="px-3 py-2 text-right font-bold">{p.has_recipe ? <span className="text-stone-400 font-normal">—</span> : formatStockDisplay(p.stock_quantity, p.unit_label)}</td>
                         <td className="px-3 py-2 text-right text-stone-400 text-xs">{p.has_recipe ? "—" : formatStockDisplay(p.low_stock_alert || 10, p.unit_label)}</td>
-                        <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-stone-500">{formatCostDisplay(p.cost_ref, p.unit_label)}</td>
                         <td className={`px-3 py-2 text-right text-xs hidden md:table-cell font-medium ${profit.color}`}>{profit.display}</td>
                         <td className="px-3 py-2 text-center">{stockBadge(p)}</td>
                         <td className="px-3 py-2 text-right">
