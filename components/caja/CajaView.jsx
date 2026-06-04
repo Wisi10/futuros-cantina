@@ -4,6 +4,7 @@ import { DollarSign, Hash, CreditCard, Banknote, ChevronDown, Download, Gift, Tr
 import { supabase } from "@/lib/supabase";
 import { formatBs, formatREFsec, METHOD_LABELS, NON_CASH_METHODS } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
+import SaleDetailModal from "./SaleDetailModal";
 import * as XLSX from "xlsx";
 
 const METHOD_ICONS = {
@@ -20,7 +21,7 @@ export default function CajaView({ user, rate }) {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedSale, setExpandedSale] = useState(null);
+  const [selectedSale, setSelectedSale] = useState(null);
 
   const isToday = selectedDate === new Date().toISOString().split("T")[0];
   const isAdmin = user?.cantinaRole === "admin" || user?.cantinaRole === "owner";
@@ -524,60 +525,41 @@ export default function CajaView({ user, rate }) {
                   const isCredit = sale.payment_status === "credit";
                   const method = isCredit ? "Credito" : (METHOD_LABELS[sale.payment_method] || sale.payment_method || "—");
                   const icon = isCredit ? "📋" : (METHOD_ICONS[sale.payment_method] || "💳");
-                  const expanded = expandedSale === sale.id;
 
                   return (
-                    <div key={sale.id}>
-                      <button
-                        onClick={() => setExpandedSale(expanded ? null : sale.id)}
-                        className="w-full px-4 py-2.5 flex items-center gap-3 text-left hover:bg-stone-50 transition-colors"
-                      >
-                        <span className="text-xs text-stone-400 w-12 shrink-0">{time}</span>
-                        <span className="text-xs text-stone-600 flex-1 truncate">
-                          {items.map((i) => `${i.name} x${i.qty}`).join(", ")}
-                          {sale.client_name && (
-                            <ClientLink clientId={sale.client_id} name={sale.client_name} className="ml-1 !text-stone-500" muted />
-                          )}
-                        </span>
-                        <span className="text-xs font-bold text-brand whitespace-nowrap">
-                          ${parseFloat(sale.total_ref).toFixed(2)}
-                        </span>
-                        <span className="text-xs text-stone-400 w-20 text-right truncate">
-                          {icon} {method}
-                        </span>
-                        <ChevronDown
-                          size={14}
-                          className={`text-stone-300 transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`}
-                        />
-                      </button>
-
-                      {expanded && (
-                        <div className="px-4 pb-3 pt-1 bg-stone-50 text-xs space-y-1">
-                          {items.map((item, i) => (
-                            <div key={i} className="flex justify-between text-stone-500">
-                              <span>{item.name} x{item.qty}</span>
-                              <span>${(item.price_ref * item.qty).toFixed(2)}</span>
-                            </div>
-                          ))}
-                          <div className="flex justify-between pt-1 border-t border-stone-200 font-semibold text-stone-700">
-                            <span>Total</span>
-                            <span>${parseFloat(sale.total_ref).toFixed(2)}</span>
-                          </div>
-                          {sale.client_name && (
-                            <div className="text-stone-400">Cliente: {sale.client_name}</div>
-                          )}
-                          {sale.created_by && (
-                            <div className="text-stone-400">Operador: {sale.created_by}</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={sale.id}
+                      onClick={() => setSelectedSale(sale)}
+                      className="w-full px-4 py-2.5 flex items-center gap-3 text-left hover:bg-stone-50 transition-colors"
+                    >
+                      <span className="text-xs text-stone-400 w-12 shrink-0">{time}</span>
+                      <span className="text-xs text-stone-600 flex-1 truncate">
+                        {items.map((i) => `${i.name} x${i.qty}`).join(", ")}
+                        {sale.client_name && (
+                          <span className="ml-1 text-stone-500">· {sale.client_name}</span>
+                        )}
+                      </span>
+                      <span className="text-xs font-bold text-brand whitespace-nowrap">
+                        ${parseFloat(sale.total_ref).toFixed(2)}
+                      </span>
+                      <span className="text-xs text-stone-400 w-20 text-right truncate">
+                        {icon} {method}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
             )}
           </div>
         </>
+      )}
+
+      {selectedSale && (
+        <SaleDetailModal
+          sale={selectedSale}
+          rate={rate}
+          onClose={() => setSelectedSale(null)}
+        />
       )}
     </div>
   );
