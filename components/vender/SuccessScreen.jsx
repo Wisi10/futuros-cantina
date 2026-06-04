@@ -1,11 +1,83 @@
 "use client";
 import { useState, useEffect } from "react";
-import { CheckCircle, RotateCcw } from "lucide-react";
+import { CheckCircle, RotateCcw, Printer, FileText, Loader2 } from "lucide-react";
 import { formatBs, METHOD_LABELS } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { generateCantinaReceipt, generateCantinaInvoice, ensureInvoiceNumber, loadInvoiceBusinessInfo } from "@/lib/cantinaPrint";
 
 const VOID_WINDOW_MS = 5 * 60 * 1000;
 
-export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale, canVoid, saleTimestamp }) {
+export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNewSale, onVoidSale, canVoid, saleTimestamp }) {
+  const [printing, setPrinting] = useState(null); // 'receipt_bs' | 'receipt_usd' | 'invoice_bs' | 'invoice_usd'
+  const [businessInfo, setBusinessInfo] = useState(null);
+
+  useEffect(() => {
+    loadInvoiceBusinessInfo(supabase).then(setBusinessInfo).catch(() => {});
+  }, []);
+
+  // Construye un sale object normalizado (DB-like) desde el record + summary actual
+  const buildSaleForPrint = () => {
+    if (!saleRecord) {
+      // Fallback: usar el summary del state lastSale
+      return {
+        id: null,
+        sale_number: sale.saleNumber,
+        sale_date: new Date().toISOString().split("T")[0],
+        client_name: sale.creditClientName || null,
+        items: sale.items.map((it) => ({
+          name: it.name,
+          qty: it.qty,
+          price_per_unit: it.price_ref,
+        })),
+        total_ref: sale.subtotalRef ?? sale.totalRef,
+        iva_amount_ref: sale.ivaAmountRef ?? 0,
+        has_factura: !!sale.hasFactura,
+        payment_method: sale.paymentMethod,
+        exchange_rate_bs: rate?.eur || null,
+        created_at: new Date().toISOString(),
+      };
+    }
+    return saleRecord;
+  };
+
+  const handlePrintReceipt = (currency) => {
+    setPrinting(`receipt_${currency}`);
+    try {
+      const s = buildSaleForPrint();
+      generateCantinaReceipt(s, {
+        rates: { eur: rate?.eur, usd: rate?.usd },
+        currency,
+        businessInfo,
+        payments: sale.payments || null,
+      });
+    } finally {
+      setTimeout(() => setPrinting(null), 500);
+    }
+  };
+
+  const handlePrintInvoice = async (currency) => {
+    if (!saleRecord?.id) {
+      alert("No se puede generar factura: venta sin ID en DB.");
+      return;
+    }
+    setPrinting(`invoice_${currency}`);
+    try {
+      const invoiceNumber = await ensureInvoiceNumber(supabase, saleRecord.id);
+      const s = { ...buildSaleForPrint(), invoice_number: invoiceNumber };
+      generateCantinaInvoice(s, {
+        invoiceNumber,
+        rates: { eur: rate?.eur, usd: rate?.usd },
+        currency,
+        businessInfo,
+        payments: sale.payments || null,
+      });
+    } catch (err) {
+      alert("Error generando factura: " + err.message);
+    } finally {
+      setTimeout(() => setPrinting(null), 500);
+    }
+  };
+
   // Countdown del tiempo restante para anular
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -100,6 +172,48 @@ export default function SuccessScreen({ sale, todayStats, onNewSale, onVoidSale,
             </p>
           </div>
         )}
+
+        {/* Botones de impresión: Recibo siempre, Factura solo si hasFactura */}
+        <div className="mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => handlePrintReceipt("bs")}
+              disabled={printing === "receipt_bs"}
+              className="py-2 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 disabled:opacity-50 flex items-center justify-center gap-1"
+            >
+              {printing === "receipt_bs" ? <Loader2 size={12} className="animate-spin" /> : <Printer size={12} />}
+              Recibo Bs
+            </button>
+            <button
+              onClick={() => handlePrintReceipt("usd")}
+              disabled={printing === "receipt_usd"}
+              className="py-2 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 disabled:opacity-50 flex items-center justify-center gap-1"
+            >
+              {printing === "receipt_usd" ? <Loader2 size={12} className="animate-spin" /> : <Printer size={12} />}
+              Recibo $
+            </button>
+          </div>
+          {sale.hasFactura && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handlePrintInvoice("bs")}
+                disabled={printing === "invoice_bs"}
+                className="py-2 rounded-lg border-2 border-brand/30 bg-brand/5 text-brand text-xs font-bold hover:bg-brand/10 disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {printing === "invoice_bs" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                Factura Bs
+              </button>
+              <button
+                onClick={() => handlePrintInvoice("usd")}
+                disabled={printing === "invoice_usd"}
+                className="py-2 rounded-lg border-2 border-brand/30 bg-brand/5 text-brand text-xs font-bold hover:bg-brand/10 disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {printing === "invoice_usd" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                Factura $
+              </button>
+            </div>
+          )}
+        </div>
 
         <button
           onClick={onNewSale}

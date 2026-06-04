@@ -1290,6 +1290,8 @@ function POSPageInner() {
       {screen === "success" && lastSale && (
         <SuccessScreen
           sale={lastSale}
+          saleRecord={lastSaleRecord}
+          rate={rate}
           todayStats={todayStats}
           onNewSale={handleNewSale}
           canVoid={canVoid}
