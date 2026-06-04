@@ -8,12 +8,25 @@ import { generateCantinaReceipt, generateCantinaInvoice, ensureInvoiceNumber, lo
 const VOID_WINDOW_MS = 5 * 60 * 1000;
 
 export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNewSale, onVoidSale, canVoid, saleTimestamp }) {
-  const [printing, setPrinting] = useState(null); // 'receipt_bs' | 'receipt_usd' | 'invoice_bs' | 'invoice_usd'
+  const [printing, setPrinting] = useState(null);
   const [businessInfo, setBusinessInfo] = useState(null);
+  // Datos del cliente fiscal: se autollenan si el saleRecord ya tiene cliente.
+  // Si no, el staff los captura al hacer click en Factura.
+  const [fiscalDataOpen, setFiscalDataOpen] = useState(false);
+  const [fiscalName, setFiscalName] = useState("");
+  const [fiscalCedula, setFiscalCedula] = useState("");
+  const [pendingCurrency, setPendingCurrency] = useState(null);
 
   useEffect(() => {
     loadInvoiceBusinessInfo(supabase).then(setBusinessInfo).catch(() => {});
   }, []);
+
+  // ¿Ya tenemos data fiscal mínima (nombre + cédula)?
+  const hasFiscalData = () => {
+    const name = (saleRecord?.client_name || sale.creditClientName || "").trim();
+    const cedula = (saleRecord?.client_cedula || "").trim();
+    return name.length > 0 && cedula.length > 0;
+  };
 
   // Construye un sale object normalizado (DB-like) desde el record + summary actual
   const buildSaleForPrint = () => {
@@ -60,10 +73,29 @@ export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNe
       alert("No se puede generar factura: venta sin ID en DB.");
       return;
     }
+    // Si falta data fiscal, abrir captura inline (no imprimir aún)
+    if (!hasFiscalData()) {
+      setPendingCurrency(currency);
+      // Pre-llenar con lo que ya hay
+      setFiscalName((saleRecord?.client_name || sale.creditClientName || "").trim());
+      setFiscalCedula((saleRecord?.client_cedula || "").trim());
+      setFiscalDataOpen(true);
+      return;
+    }
+    await doPrintInvoice(currency);
+  };
+
+  const doPrintInvoice = async (currency, overrideName = null, overrideCedula = null) => {
     setPrinting(`invoice_${currency}`);
     try {
       const invoiceNumber = await ensureInvoiceNumber(supabase, saleRecord.id);
-      const s = { ...buildSaleForPrint(), invoice_number: invoiceNumber };
+      const baseSale = buildSaleForPrint();
+      const s = {
+        ...baseSale,
+        invoice_number: invoiceNumber,
+        client_name: overrideName ?? baseSale.client_name,
+        client_cedula: overrideCedula ?? baseSale.client_cedula ?? saleRecord?.client_cedula,
+      };
       generateCantinaInvoice(s, {
         invoiceNumber,
         rates: { eur: rate?.eur, usd: rate?.usd },
@@ -76,6 +108,25 @@ export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNe
     } finally {
       setTimeout(() => setPrinting(null), 500);
     }
+  };
+
+  const confirmFiscalAndPrint = async () => {
+    const name = fiscalName.trim();
+    const cedula = fiscalCedula.trim();
+    if (!name) { alert("Nombre obligatorio para factura."); return; }
+    if (!cedula) { alert("Cédula/RIF obligatorio para factura."); return; }
+    setFiscalDataOpen(false);
+    // Guardar en la venta para futuras impresiones
+    if (saleRecord?.id) {
+      try {
+        await supabase.from("cantina_sales").update({
+          client_name: name,
+          client_cedula: cedula,
+        }).eq("id", saleRecord.id);
+      } catch (_) { /* no fatal */ }
+    }
+    await doPrintInvoice(pendingCurrency, name, cedula);
+    setPendingCurrency(null);
   };
 
   // Countdown del tiempo restante para anular
@@ -235,6 +286,52 @@ export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNe
           </p>
         )}
       </div>
+
+      {/* Modal inline: captura cédula+nombre para factura */}
+      {fiscalDataOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setFiscalDataOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-stone-800 mb-1">Datos para factura</h3>
+            <p className="text-xs text-stone-500 mb-4">
+              Nombre y cédula/RIF son obligatorios para emitir factura formal.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Nombre / Razón social</label>
+                <input
+                  type="text"
+                  value={fiscalName}
+                  onChange={(e) => setFiscalName(e.target.value)}
+                  placeholder="Nombre completo o razón social"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Cédula / RIF</label>
+                <input
+                  type="text"
+                  value={fiscalCedula}
+                  onChange={(e) => setFiscalCedula(e.target.value)}
+                  placeholder="V-12345678 o J-12345678-9"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => { setFiscalDataOpen(false); setPendingCurrency(null); }}
+                className="flex-1 py-2.5 rounded-lg border-2 border-stone-200 text-stone-600 font-medium text-sm hover:bg-stone-50"
+              >Cancelar</button>
+              <button
+                onClick={confirmFiscalAndPrint}
+                disabled={!fiscalName.trim() || !fiscalCedula.trim()}
+                className="flex-1 py-2.5 rounded-lg bg-brand text-white font-bold text-sm hover:bg-brand-dark disabled:opacity-30"
+              >Generar factura</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
