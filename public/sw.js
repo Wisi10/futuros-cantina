@@ -1,6 +1,5 @@
-// Versionado: bumpear el numero cada deploy para invalidar cache viejo.
-// Si te olvidas, los staff veran la version vieja hasta limpiar cache manual.
-const CACHE_VERSION = 'v3';
+// Versionado: bumpear cada deploy para invalidar cache viejo.
+const CACHE_VERSION = 'v4-swr';
 const CACHE_NAME = `futuros-cantina-${CACHE_VERSION}`;
 const SHELL = ['/'];
 
@@ -10,7 +9,6 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Limpiar caches viejos al activar la nueva version del SW
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
@@ -22,12 +20,36 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Estrategia: stale-while-revalidate para assets estáticos (JS, CSS, fuentes,
+// imágenes, manifest, HTML). Para datos dinámicos (Supabase REST, RPC) usamos
+// network-only para no servir stale data crítica como stock o pagos.
 self.addEventListener('fetch', (event) => {
-  // network-first: siempre intenta fresco primero, cache solo si offline
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+  const url = new URL(event.request.url);
+
+  // Solo GETs y mismo origen para SWR — el resto va directo a red.
+  if (event.request.method !== 'GET') return;
+
+  // Supabase / APIs externas → network-only (no queremos stale)
+  if (url.hostname.includes('supabase.') || url.hostname.includes('vercel.app/api')) {
+    return; // dejar pasar al fetch normal del navegador
+  }
+
+  // Assets estáticos: SWR — sirve cache instant + refresca atrás
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(event.request);
+    const networkPromise = fetch(event.request).then((response) => {
+      // Solo cachear respuestas válidas
+      if (response && response.status === 200 && response.type !== 'opaque') {
+        cache.put(event.request, response.clone()).catch(() => {});
+      }
+      return response;
+    }).catch(() => null);
+
+    return cached || (await networkPromise) || new Response('Sin conexión', { status: 503 });
+  })());
 });
 
-// Forzar update cuando la pagina mande mensaje
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });

@@ -147,8 +147,36 @@ function POSPageInner() {
   }, [router]);
 
   // Data loading
+  // Cache local con TTL para no esperar red en cada apertura.
+  // Mostramos cache inmediato (UI rápida) + refresco en background (stale-while-revalidate).
+  const PRODUCTS_CACHE_KEY = "cantina_products_cache_v1";
+  const PRODUCTS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
+
+    // 1. Hidratar UI desde localStorage si hay cache fresco
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(PRODUCTS_CACHE_KEY) : null;
+      if (raw) {
+        const cached = JSON.parse(raw);
+        const age = Date.now() - (cached.timestamp || 0);
+        if (cached.products && age < PRODUCTS_CACHE_TTL_MS) {
+          setProducts(cached.products);
+          if (cached.popularity) setPopularity(cached.popularity);
+          setLoading(false);
+          // Si el cache es muy fresco (<30s), no molestar la red en absoluto
+          if (age < 30 * 1000) return;
+        } else if (cached.products) {
+          // Cache viejo, igual lo mostramos mientras refrescamos
+          setProducts(cached.products);
+          if (cached.popularity) setPopularity(cached.popularity);
+          setLoading(false);
+        }
+      }
+    } catch (_) { /* cache corrupto, ignorar */ }
+
+    // 2. Refrescar de la red (en background si ya hidratamos)
     const [{ data: prods }, { data: popRows }] = await Promise.all([
       supabase
         .from("products")
@@ -159,12 +187,22 @@ function POSPageInner() {
       supabase.rpc("get_product_popularity", { p_days: 30 }),
     ]);
     if (prods) setProducts(prods);
+    let popMap = null;
     if (popRows) {
-      const map = {};
-      popRows.forEach((r) => { map[r.product_id] = Number(r.total_qty) || 0; });
-      setPopularity(map);
+      popMap = {};
+      popRows.forEach((r) => { popMap[r.product_id] = Number(r.total_qty) || 0; });
+      setPopularity(popMap);
     }
     setLoading(false);
+
+    // 3. Persistir para próxima apertura
+    try {
+      localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        products: prods || [],
+        popularity: popMap,
+      }));
+    } catch (_) { /* quota exceeded, ignorar */ }
   }, []);
 
   const loadRate = useCallback(async () => {
@@ -768,8 +806,10 @@ function POSPageInner() {
       });
       setCart([]);
       setScreen("success");
-      await loadProducts();
-      await loadTodayStats();
+      // Fire-and-forget: UI no espera, refresh en background. Crucial para
+      // performance en internet lento de las cajeras.
+      loadProducts().catch(() => {});
+      loadTodayStats().catch(() => {});
     } catch (err) {
       alert("Error registrando venta: " + err.message);
     }
@@ -821,9 +861,10 @@ function POSPageInner() {
       });
       setCart([]);
       setScreen("success");
-      await loadProducts();
-      await loadTodayStats();
-      await loadPendingCreditsCount();
+      // Fire-and-forget — UI no espera red
+      loadProducts().catch(() => {});
+      loadTodayStats().catch(() => {});
+      loadPendingCreditsCount().catch(() => {});
     } catch (err) {
       alert("Error registrando credito: " + err.message);
     }
