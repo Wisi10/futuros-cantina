@@ -180,25 +180,6 @@ function getEntryOptions(product) {
   return opts;
 }
 
-// Mapping de category del producto → category del gasto auto-creado.
-// Si todos los items de un restock son de la misma category, usamos esa.
-// Si son mixtos (o ninguno encaja), default a "Insumos cantina · Otros".
-function deriveExpenseCategory(items, productLookup) {
-  const cats = new Set();
-  for (const it of items) {
-    const p = productLookup(it.product_id);
-    const pc = p?.category;
-    if (!pc) { cats.add("Insumos cantina · Otros"); continue; }
-    if (pc === "Bebida") cats.add("Insumos cantina · Bebida");
-    else if (pc === "Comida") cats.add("Insumos cantina · Comida");
-    else if (pc === "Snacks") cats.add("Insumos cantina · Snacks");
-    else if (pc === "Helados") cats.add("Insumos cantina · Helados");
-    else if (pc === "Insumos") cats.add("Insumos cantina · Empaques");
-    else cats.add("Insumos cantina · Otros");
-  }
-  return cats.size === 1 ? [...cats][0] : "Insumos cantina · Otros";
-}
-
 const PAYMENT_METHODS = [
   { id: "pago_movil", label: "Pago Móvil", acceptsRef: true, refHint: "Últimos 4 dígitos" },
   { id: "zelle", label: "Zelle", needsRef: true, acceptsRef: true, refHint: "Email o ref" },
@@ -455,19 +436,19 @@ export default function RestockForm({ products, user, scope = "productos", onRes
       let expenseErrMsg = null;
       if (isPaidNow) {
         try {
-          const expenseCategory = deriveExpenseCategory(items, productById);
-          const { error: expErr } = await supabase.from("expenses").insert({
-            id: "exp_" + Math.random().toString(36).slice(2, 12),
-            expense_type: "variable",
-            category: expenseCategory,
-            name: `Compra ${resolvedSupplierName}`,
+          const { error: expErr } = await supabase.from("cantina_expenses").insert({
+            id: "cex_rs_" + Math.random().toString(36).slice(2, 12),
+            expense_date: date,
+            category: "Materia Prima / Insumos",
+            description: `Compra ${resolvedSupplierName}`,
+            amount_ref: totalCostRef,
             amount_usd: totalCostRef,
             payment_method: paymentMethod,
             reference: paymentRef.trim() || null,
-            provider: resolvedSupplierName,
-            expense_date: date,
             created_by: user?.name || "Cantina",
-            notes: `Auto-creado desde restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
+            receipt_note: `Auto-creado desde restock ${restock.id}${notes ? ` · ${notes}` : ""}`,
+            source: "auto_restock",
+            source_ref_id: restock.id,
           });
           if (expErr) { expenseOk = false; expenseErrMsg = expErr.message; }
         } catch (linkErr) {

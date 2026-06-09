@@ -102,21 +102,6 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
   // En multi sí bloqueamos si algún row excede su outstanding.
   const canSubmit = amountNum > 0 && !saving && !multiInvalidRow;
 
-  // Categorizar gasto a partir de los items de un restock
-  const deriveExpenseCategory = (restockItems) => {
-    const categories = new Set();
-    restockItems.forEach((it) => {
-      const pc = it?.category || it?.product_category;
-      if (pc === "Bebida") categories.add("Insumos cantina · Bebida");
-      else if (pc === "Comida") categories.add("Insumos cantina · Comida");
-      else if (pc === "Snacks") categories.add("Insumos cantina · Snacks");
-      else if (pc === "Helados") categories.add("Insumos cantina · Helados");
-      else if (pc === "Insumos") categories.add("Insumos cantina · Empaques");
-      else categories.add("Insumos cantina · Otros");
-    });
-    return categories.size === 1 ? [...categories][0] : "Insumos cantina · Otros";
-  };
-
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSaving(true);
@@ -200,24 +185,22 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
           }
         }
 
-        // 1 expense agregando todo el pago
-        const allItems = restockArr.flatMap((r) => Array.isArray(r.items) ? r.items : []);
-        const expenseCategory = deriveExpenseCategory(allItems);
         try {
-          await supabase.from("expenses").insert({
-            id: "exp_" + Math.random().toString(36).slice(2, 12),
-            expense_type: "variable",
-            category: expenseCategory,
-            name: `Pago combinado ${restockArr.length} facturas · ${supplierName}`,
+          await supabase.from("cantina_expenses").insert({
+            id: "cex_rp_" + Math.random().toString(36).slice(2, 12),
+            expense_date: paidAt,
+            category: "Materia Prima / Insumos",
+            description: `Pago combinado ${restockArr.length} facturas · ${supplierName}`,
+            amount_ref: amountNum,
             amount_usd: amountNum,
             amount_bs: amountBs,
-            exchange_rate: usesRate && rateNum > 0 ? rateNum : null,
+            exchange_rate_bs: usesRate && rateNum > 0 ? rateNum : null,
             payment_method: method,
             reference: reference.trim() || null,
-            provider: supplierName,
-            expense_date: paidAt,
             created_by: user?.name || "Cantina",
-            notes: `Pago a ${restockArr.length} facturas: ${restockArr.map((r) => r.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
+            receipt_note: `Pago a ${restockArr.length} facturas: ${restockArr.map((r) => r.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
+            source: "auto_payable",
+            source_ref_id: restockArr[0]?.id || null,
           });
         } catch (linkErr) {
           console.error("[MULTI_PAYMENT→GASTO]", linkErr);
@@ -275,22 +258,21 @@ export default function RestockPaymentModal({ restock, restocks, payments = [], 
       }
 
       try {
-        const restockItems = Array.isArray(singleRestock.items) ? singleRestock.items : [];
-        const expenseCategory = deriveExpenseCategory(restockItems);
-        const { error: expErr } = await supabase.from("expenses").insert({
-          id: "exp_" + Math.random().toString(36).slice(2, 12),
-          expense_type: "variable",
-          category: expenseCategory,
-          name: `Pago factura ${singleRestock.supplier || "proveedor"}${isFullPayment ? "" : " (parcial)"}`,
+        const { error: expErr } = await supabase.from("cantina_expenses").insert({
+          id: "cex_rp_" + Math.random().toString(36).slice(2, 12),
+          expense_date: paidAt,
+          category: "Materia Prima / Insumos",
+          description: `Pago factura ${singleRestock.supplier || "proveedor"}${isFullPayment ? "" : " (parcial)"}`,
+          amount_ref: amountNum,
           amount_usd: amountNum,
           amount_bs: amountBs,
-          exchange_rate: usesRate && rateNum > 0 ? rateNum : null,
+          exchange_rate_bs: usesRate && rateNum > 0 ? rateNum : null,
           payment_method: method,
           reference: reference.trim() || null,
-          provider: singleRestock.supplier || null,
-          expense_date: paidAt,
           created_by: user?.name || "Cantina",
-          notes: `Pago contra restock ${singleRestock.id}${notes ? ` · ${notes}` : ""}`,
+          receipt_note: `Pago contra restock ${singleRestock.id}${notes ? ` · ${notes}` : ""}`,
+          source: "auto_payable",
+          source_ref_id: singleRestock.id,
         });
         if (expErr) console.error("[INVOICE_PAYMENT→GASTO]", expErr);
       } catch (linkErr) {

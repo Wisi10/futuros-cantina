@@ -5,4 +5,3 @@ CREATE POLICY app_settings_write ON app_settings
   FOR ALL TO anon, authenticated
   USING (true) WITH CHECK (true);
 GRANT SELECT, INSERT, UPDATE, DELETE ON app_settings TO anon, authenticated;
-</content>

@@ -445,20 +445,20 @@ export default function CreateProductModal({ user, onClose, onCreated, scope = "
           cost_ref: entryCostPerUnit,
         });
 
-        // Si pagada → expense automático
         if (isPaid) {
-          await supabase.from("expenses").insert({
-            id: "exp_" + generateId(),
-            expense_type: "variable",
-            category: isMP ? "Materia Prima" : "Cantina",
-            name: `Compra ${supplierName}`,
+          await supabase.from("cantina_expenses").insert({
+            id: "cex_cp_" + generateId(),
+            expense_date: entryDate,
+            category: "Materia Prima / Insumos",
+            description: `Compra ${supplierName} · ${finalName}`,
+            amount_ref: totalCost,
             amount_usd: totalCost,
             payment_method: paymentMethod,
             reference: paymentRef.trim() || null,
-            provider: supplierName,
-            expense_date: entryDate,
             created_by: user?.name || "Cantina",
-            notes: `Auto-creado al crear producto ${finalName}${entryNotes ? ` · ${entryNotes}` : ""}`,
+            receipt_note: `Auto-creado al crear producto ${finalName}${entryNotes ? ` · ${entryNotes}` : ""}`,
+            source: "auto_product",
+            source_ref_id: restockId,
           });
         }
       }

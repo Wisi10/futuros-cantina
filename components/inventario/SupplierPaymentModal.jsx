@@ -28,22 +28,6 @@ function daysUntil(dueDate) {
   return Math.round((due - today) / 86400000);
 }
 
-// Categoría del expense derivada de los items (igual lógica que RestockForm).
-function deriveExpenseCategory(items) {
-  if (!items || items.length === 0) return "Insumos cantina · Otros";
-  const cats = new Set();
-  for (const it of items) {
-    const n = (it.name || "").toLowerCase();
-    if (n.match(/coca|pepsi|refresco|jugo|agua|gatorade|cerveza|bebida/)) cats.add("Insumos cantina · Bebida");
-    else if (n.match(/pan|hamburguesa|perro|empanada|pollo|carne|salchicha|tequeño|nugget|papa|comida/)) cats.add("Insumos cantina · Comida");
-    else if (n.match(/snack|chip|flips|pepito|samba|malta|chocolate|cri-cri|donas|galleta|chupeta|caramelo/)) cats.add("Insumos cantina · Snacks");
-    else if (n.match(/vaso|bolsa|servilleta|pitillo|empaque|porta|aluminio|papel/)) cats.add("Insumos cantina · Empaques");
-    else if (n.match(/lavaplato|esponja|jabon|limpieza|cloro|detergente|atomizador/)) cats.add("Insumos cantina · Limpieza");
-  }
-  if (cats.size === 1) return [...cats][0];
-  return "Insumos cantina · Otros";
-}
-
 // Modal de pago simplificado: el usuario ingresa UN monto total + método y el sistema
 // distribuye automáticamente entre las facturas (las más vencidas primero / FIFO).
 // El usuario NO toca montos por factura — sólo el total y los detalles del pago.
@@ -158,23 +142,22 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
       }
 
       // 3. Crear 1 expense por el monto total
-      const allItems = allocation.flatMap((a) => Array.isArray(a.restock.items) ? a.restock.items : []);
-      const expenseCategory = deriveExpenseCategory(allItems);
       try {
-        await supabase.from("expenses").insert({
-          id: "exp_" + Math.random().toString(36).slice(2, 12),
-          expense_type: "variable",
-          category: expenseCategory,
-          name: `Pago a ${supplier}${allocation.length > 1 ? ` (${allocation.length} facturas)` : ""}`,
+        await supabase.from("cantina_expenses").insert({
+          id: "cex_sp_" + Math.random().toString(36).slice(2, 12),
+          expense_date: paidAt,
+          category: "Materia Prima / Insumos",
+          description: `Pago a ${supplier}${allocation.length > 1 ? ` (${allocation.length} facturas)` : ""}`,
+          amount_ref: amountNum,
           amount_usd: amountNum,
           amount_bs: amountBs,
-          exchange_rate: rateNum > 0 ? rateNum : null,
+          exchange_rate_bs: rateNum > 0 ? rateNum : null,
           payment_method: method,
           reference: reference.trim() || null,
-          provider: supplier,
-          expense_date: paidAt,
           created_by: user?.name || "Cantina",
-          notes: `Pago a ${supplier} · facturas: ${allocation.map((a) => a.restock.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
+          receipt_note: `Pago a ${supplier} · facturas: ${allocation.map((a) => a.restock.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
+          source: "auto_payable",
+          source_ref_id: allocation[0]?.restock?.id || null,
         });
       } catch (linkErr) {
         console.error("[SUPPLIER_PAYMENT→GASTO]", linkErr);
