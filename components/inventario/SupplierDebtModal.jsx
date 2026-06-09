@@ -11,6 +11,14 @@ function daysUntil(dueDate) {
   return Math.round((due - today) / 86400000);
 }
 
+// Formato corto DD-MM-YY para ahorrar espacio horizontal.
+function fmtShort(iso) {
+  if (!iso) return "";
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
+}
+
 // Modal con detalle completo de la deuda con un proveedor.
 // Muestra: facturas con productos + fechas + vencimientos, historial de pagos hechos,
 // y un solo botón "Registrar pago" que abre RestockPaymentModal con TODOS los restocks.
@@ -91,54 +99,50 @@ export default function SupplierDebtModal({ supplier, restocks, paymentsByRestoc
 
         {/* Contenido scrolleable */}
         <div className="flex-1 overflow-y-auto">
-          {/* Facturas */}
+          {/* Facturas — formato compacto */}
           <div className="px-5 pt-4">
-            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">Facturas pendientes</h4>
-            <div className="space-y-2">
+            <h4 className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-1.5">Facturas pendientes</h4>
+            <div className="border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100">
               {sortedRestocks.map((r) => {
                 const owed = Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0));
                 const overdueDays = r.due_date ? -daysUntil(r.due_date) : null;
                 const isOverdue = overdueDays != null && overdueDays > 0;
                 const isPartial = r.payment_status === "partial";
+                const itemsLabel = Array.isArray(r.items) && r.items.length > 0
+                  ? r.items.map((it) => `${it.name || "?"}×${it.qty || 0}`).join(", ")
+                  : "";
                 return (
                   <div
                     key={r.id}
-                    className={`border rounded-xl p-3 ${isOverdue ? "border-red-200 bg-red-50/40" : "border-stone-200 bg-white"}`}
+                    className={`px-3 py-2 flex items-center gap-2 ${isOverdue ? "bg-red-50/40" : "bg-white"}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-stone-500 font-medium">{r.restock_date}</span>
-                          {isPartial && (
-                            <span className="px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-[10px] uppercase tracking-wider font-bold">
-                              Parcial · pagado ${Number(r.paid_amount_ref || 0).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        {Array.isArray(r.items) && r.items.length > 0 && (
-                          <div className="text-xs text-stone-700 mt-1">
-                            {r.items.map((it) => `${it.name || "?"} ×${it.qty || 0}`).join(", ")}
-                          </div>
-                        )}
-                        {r.notes && (
-                          <div className="text-[11px] text-stone-400 italic mt-0.5" title={r.notes}>
-                            {r.notes}
-                          </div>
-                        )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                        <span className="text-stone-700 font-semibold tabular-nums">{fmtShort(r.restock_date)}</span>
                         {r.due_date && (
-                          <div className={`mt-1 inline-flex items-center gap-1 text-[11px] ${isOverdue ? "text-red-600 font-bold" : "text-stone-500"}`}>
-                            <Calendar size={10} />
-                            Vence: {r.due_date}
-                            {isOverdue && <> · VENCIDO {overdueDays} día{overdueDays !== 1 ? "s" : ""}</>}
-                          </div>
+                          <span className={`inline-flex items-center gap-0.5 ${isOverdue ? "text-red-600 font-bold" : "text-stone-400"}`}>
+                            <Calendar size={9} />
+                            {fmtShort(r.due_date)}
+                            {isOverdue && <span className="ml-0.5">· {overdueDays}d</span>}
+                          </span>
+                        )}
+                        {isPartial && (
+                          <span className="px-1 py-0 bg-violet-100 text-violet-700 rounded text-[9px] uppercase tracking-wider font-bold">
+                            Parcial
+                          </span>
                         )}
                       </div>
-                      <div className="text-right shrink-0">
-                        <div className="font-bold text-stone-800 text-sm">${owed.toFixed(2)}</div>
-                        {usdRate && (
-                          <div className="text-[10px] text-stone-500">Bs {(owed * usdRate).toLocaleString("es-VE", { maximumFractionDigits: 0 })}</div>
-                        )}
-                      </div>
+                      {itemsLabel && (
+                        <div className="text-[11px] text-stone-600 truncate mt-0.5" title={itemsLabel}>
+                          {itemsLabel}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-stone-800 text-sm tabular-nums">${owed.toFixed(2)}</div>
+                      {usdRate && (
+                        <div className="text-[10px] text-stone-400 tabular-nums">Bs {(owed * usdRate).toLocaleString("es-VE", { maximumFractionDigits: 0 })}</div>
+                      )}
                     </div>
                   </div>
                 );

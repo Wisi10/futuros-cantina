@@ -68,17 +68,38 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
   const [reference, setReference] = useState("");
   const [paidAt, setPaidAt] = useState(todayISO());
   const [rateInput, setRateInput] = useState(rate?.usd ? Number(rate.usd).toFixed(4) : "");
+  const [bcvRate, setBcvRate] = useState(rate?.usd ? Number(rate.usd) : null); // tasa "oficial" pre-cargada para detectar override
+  const [bcvFetched, setBcvFetched] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Métodos que requieren tasa Bs/USD para registrar el Bs.
-  const methodNeedsRate = (m) => ["pago_movil", "efectivo_bs", "datafono"].includes(m);
+  // Fetch tasa BCV del día (microservicio). Si falla, queda la tasa del sistema.
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch("https://futuros-bcv.vercel.app/api/rates", { signal: AbortSignal.timeout(4000) });
+        const json = await res.json();
+        if (aborted) return;
+        if (json?.success && json?.data?.usd_bs > 0) {
+          const bcv = Number(json.data.usd_bs);
+          setBcvRate(bcv);
+          setBcvFetched(true);
+          // Solo override el input si no fue tocado manualmente todavía
+          setRateInput((prev) => prev === (rate?.usd ? Number(rate.usd).toFixed(4) : "") ? bcv.toFixed(4) : prev);
+        }
+      } catch (_) { /* fallback silencioso a tasa del sistema */ }
+    })();
+    return () => { aborted = true; };
+  }, [rate?.usd]);
 
   const amountNum = Math.max(0, parseFloat(amount) || 0);
   const rateNum = Math.max(0, parseFloat(rateInput) || 0);
-  const usesRate = methodNeedsRate(method);
-  const amountBs = usesRate && rateNum > 0 ? amountNum * rateNum : null;
+  // La tasa siempre se guarda (aunque el método sea USD-only), para auditoría posterior.
+  const amountBs = rateNum > 0 ? amountNum * rateNum : null;
+  // Override = tasa editada distinta de BCV cargada
+  const isRateOverridden = bcvRate != null && rateNum > 0 && Math.abs(rateNum - bcvRate) > 0.0001;
   const isFullPayment = amountNum >= totalDebt - 0.005;
   const exceedsDebt = amountNum > totalDebt + 0.005;
 
@@ -98,7 +119,7 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
     return result;
   }, [sortedRestocks, amountNum]);
 
-  const canSubmit = amountNum > 0 && !exceedsDebt && (!usesRate || rateNum > 0) && !saving;
+  const canSubmit = amountNum > 0 && !exceedsDebt && rateNum > 0 && !saving;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -106,14 +127,14 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
     setError("");
 
     try {
-      // 1. Insert pagos por factura
+      // 1. Insert pagos por factura — siempre guardamos la tasa para auditoría
       const paymentInserts = allocation.map((a) => ({
         restock_id: a.restock.id,
         amount_ref: a.amount,
-        amount_bs: usesRate && rateNum > 0 ? a.amount * rateNum : null,
+        amount_bs: rateNum > 0 ? a.amount * rateNum : null,
         payment_method: method,
         reference: reference.trim() || null,
-        exchange_rate_bs: usesRate && rateNum > 0 ? rateNum : null,
+        exchange_rate_bs: rateNum > 0 ? rateNum : null,
         paid_at: paidAt,
         notes: notes.trim()
           ? `${notes.trim()}${allocation.length > 1 ? ` (pago a ${supplier} · ${allocation.length} facturas)` : ""}`
@@ -147,7 +168,7 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
           name: `Pago a ${supplier}${allocation.length > 1 ? ` (${allocation.length} facturas)` : ""}`,
           amount_usd: amountNum,
           amount_bs: amountBs,
-          exchange_rate: usesRate && rateNum > 0 ? rateNum : null,
+          exchange_rate: rateNum > 0 ? rateNum : null,
           payment_method: method,
           reference: reference.trim() || null,
           provider: supplier,
@@ -231,25 +252,45 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
             </select>
           </div>
 
-          {/* Tasa si aplica */}
-          {usesRate && (
-            <div>
-              <label className="text-xs uppercase tracking-wider text-stone-500 font-semibold">Tasa Bs/USD del día</label>
-              <input
-                type="number"
-                step="0.0001"
-                value={rateInput}
-                onChange={(e) => setRateInput(e.target.value)}
-                placeholder="Ej. 567.6800"
-                className="mt-1 w-full px-3 py-2.5 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-              />
-              {amountBs != null && (
-                <div className="text-xs text-stone-500 mt-1">
-                  Pago: ${amountNum.toFixed(2)} = Bs {amountBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}
-                </div>
+          {/* Tasa BCV — siempre visible, pre-cargada con BCV del día, editable con warning */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs uppercase tracking-wider text-stone-500 font-semibold">
+                Tasa Bs/USD
+                {bcvFetched && <span className="ml-1 normal-case text-stone-400">(BCV del día)</span>}
+              </label>
+              {isRateOverridden && (
+                <button
+                  type="button"
+                  onClick={() => bcvRate && setRateInput(bcvRate.toFixed(4))}
+                  className="text-[10px] text-brand hover:underline"
+                >
+                  Restaurar a BCV
+                </button>
               )}
             </div>
-          )}
+            <input
+              type="number"
+              step="0.0001"
+              value={rateInput}
+              onChange={(e) => setRateInput(e.target.value)}
+              placeholder="Ej. 567.6800"
+              className={`mt-1 w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand ${isRateOverridden ? "border-amber-400 bg-amber-50" : "border-stone-300"}`}
+            />
+            {isRateOverridden && (
+              <div className="text-[11px] text-amber-700 mt-1 flex items-start gap-1">
+                <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                <span>
+                  Tasa editada manualmente · BCV de hoy: <strong>{bcvRate.toFixed(4)}</strong>. Confirmá que es lo que querés.
+                </span>
+              </div>
+            )}
+            {amountBs != null && (
+              <div className="text-xs text-stone-500 mt-1">
+                Pago: ${amountNum.toFixed(2)} = Bs {amountBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}
+              </div>
+            )}
+          </div>
 
           {/* Referencia */}
           <div>
