@@ -144,11 +144,12 @@ export default function PorPagarView({ user, rate }) {
           const isOpen = expandedSuppliers.has(g.supplier);
           return (
             <div key={g.supplier} className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-              <button
-                onClick={() => toggleSupplier(g.supplier)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50 transition-colors text-left"
-              >
-                <div className="flex items-center gap-2 min-w-0">
+              {/* Header: click para expandir; botón "Pagar a proveedor" siempre visible */}
+              <div className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-stone-50 transition-colors">
+                <button
+                  onClick={() => toggleSupplier(g.supplier)}
+                  className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                >
                   {isOpen ? <ChevronDown size={16} className="text-stone-400 shrink-0" /> : <ChevronRight size={16} className="text-stone-400 shrink-0" />}
                   <div className="min-w-0">
                     <div className="font-medium text-stone-800 truncate">{g.supplier}</div>
@@ -161,7 +162,7 @@ export default function PorPagarView({ user, rate }) {
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
                 <div className="text-right shrink-0">
                   <div className="font-bold text-brand">${g.totalPending.toFixed(2)}</div>
                   {usdRate && (
@@ -170,51 +171,27 @@ export default function PorPagarView({ user, rate }) {
                     </div>
                   )}
                 </div>
-              </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPayingRestocks(g.items); }}
+                  className="px-3 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0"
+                  title={`Pagar a ${g.supplier}`}
+                >
+                  <DollarSign size={12} /> Pagar
+                </button>
+              </div>
 
               {isOpen && (
-                <div className="border-t border-stone-100">
+                <div className="border-t border-stone-100 bg-stone-50/40">
                   {g.items.map((r) => (
                     <RestockRow
                       key={r.id}
                       restock={r}
                       payments={payments[r.id] || []}
                       usdRate={usdRate}
-                      selected={selectedIds.has(r.id)}
-                      onToggleSelect={() => {
-                        setSelectedIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
-                          return next;
-                        });
-                      }}
-                      onPay={() => setPayingRestock(r)}
                       onToggleHistory={() => setHistoryOpen(historyOpen === r.id ? null : r.id)}
                       historyOpen={historyOpen === r.id}
                     />
                   ))}
-                  {/* Botón pago combinado cuando hay ≥2 seleccionadas de este proveedor */}
-                  {(() => {
-                    const selected = g.items.filter((r) => selectedIds.has(r.id));
-                    if (selected.length < 2) return null;
-                    const sumOutstanding = selected.reduce(
-                      (s, r) => s + Math.max(0, Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0)), 0
-                    );
-                    return (
-                      <div className="px-4 py-3 bg-brand/5 border-t border-brand/20 flex items-center justify-between">
-                        <div className="text-xs text-brand">
-                          <span className="font-bold">{selected.length} facturas seleccionadas</span>
-                          <span className="ml-2 text-stone-600">· Total a pagar: <strong>${sumOutstanding.toFixed(2)}</strong></span>
-                        </div>
-                        <button
-                          onClick={() => setPayingRestocks(selected)}
-                          className="px-3 py-1.5 bg-brand text-white hover:bg-brand-dark rounded-lg text-xs font-bold flex items-center gap-1.5"
-                        >
-                          <DollarSign size={12} /> Pagar las {selected.length} juntas
-                        </button>
-                      </div>
-                    );
-                  })()}
                 </div>
               )}
             </div>
@@ -255,7 +232,7 @@ export default function PorPagarView({ user, rate }) {
   );
 }
 
-function RestockRow({ restock, payments, usdRate, selected, onToggleSelect, onPay, onToggleHistory, historyOpen }) {
+function RestockRow({ restock, payments, usdRate, onToggleHistory, historyOpen }) {
   const r = restock;
   const owed = Number(r.total_cost_ref || 0) - Number(r.paid_amount_ref || 0);
   const overdueDays = r.due_date ? -daysUntil(r.due_date) : null; // si dueDate pasada, positivo
@@ -263,18 +240,8 @@ function RestockRow({ restock, payments, usdRate, selected, onToggleSelect, onPa
   const isPartial = r.payment_status === "partial";
 
   return (
-    <div className={`border-b border-stone-100 last:border-b-0 ${isOverdue ? "bg-red-50/40" : ""} ${selected ? "bg-brand/5" : ""}`}>
+    <div className={`border-b border-stone-100 last:border-b-0 ${isOverdue ? "bg-red-50/40" : ""}`}>
       <div className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-        {onToggleSelect && (
-          <input
-            type="checkbox"
-            checked={!!selected}
-            onChange={onToggleSelect}
-            onClick={(e) => e.stopPropagation()}
-            className="w-4 h-4 cursor-pointer shrink-0"
-            title="Seleccionar para pagar con otras facturas del mismo proveedor"
-          />
-        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-stone-500">{r.restock_date}</span>
@@ -319,12 +286,6 @@ function RestockRow({ restock, payments, usdRate, selected, onToggleSelect, onPa
             <div className="text-[11px] text-stone-500">Bs {(owed * usdRate).toLocaleString("es-VE", { maximumFractionDigits: 0 })}</div>
           )}
         </div>
-        <button
-          onClick={onPay}
-          className="px-3 py-2 bg-brand text-white hover:bg-brand-dark rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0"
-        >
-          <DollarSign size={12} /> Registrar pago
-        </button>
       </div>
 
       {/* Historial de pagos parciales */}
