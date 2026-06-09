@@ -17,7 +17,7 @@ import ConfigView from "@/components/config/ConfigView";
 import InventarioView from "@/components/inventario/InventarioView";
 import CajaView from "@/components/caja/CajaView";
 import ReportesView from "@/components/reportes/ReportesView";
-import CostosView from "@/components/costos/CostosView";
+import GastosTabView from "@/components/gastos/GastosTabView";
 import CalendarioView from "@/components/calendario/CalendarioView";
 import AdminView from "@/components/admin/AdminView";
 import ShiftPill from "@/components/shifts/ShiftPill";
@@ -1355,9 +1355,9 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "costos" && canAdmin && (
+        {activeTab === "gastos" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <CostosView user={user} />
+            <GastosTabView user={user} rate={rate} />
           </div>
         )}
 
