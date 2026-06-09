@@ -356,6 +356,32 @@ export default function RestockForm({ products, user, scope = "productos", onRes
         setSuppliers((prev) => [...prev, { id: resolvedSupplierId, name: resolvedSupplierName }].sort((a, b) => a.name.localeCompare(b.name)));
       }
 
+      // Guardrail anti-FK-violation: verificar que el supplier_id realmente exista en BD.
+      // Si la lista local del frontend tenía un ID stale (supplier borrado/renombrado en otra sesión,
+      // race condition, cache desincronizado), creamos uno con el nombre conocido para no perder
+      // el trabajo del staff.
+      if (resolvedSupplierId) {
+        const { data: existing } = await supabase
+          .from("suppliers")
+          .select("id, name")
+          .eq("id", resolvedSupplierId)
+          .maybeSingle();
+        if (!existing) {
+          const fallbackName = resolvedSupplierName || "Sin nombre";
+          const { data: newSup, error: newSupErr } = await supabase
+            .from("suppliers")
+            .insert({ name: fallbackName })
+            .select("id, name")
+            .single();
+          if (newSupErr) throw newSupErr;
+          resolvedSupplierId = newSup.id;
+          resolvedSupplierName = newSup.name;
+          setSuppliers((prev) => [...prev, { id: resolvedSupplierId, name: resolvedSupplierName }].sort((a, b) => a.name.localeCompare(b.name)));
+        } else if (existing.name && !resolvedSupplierName) {
+          resolvedSupplierName = existing.name;
+        }
+      }
+
       const items = validRows.map((r) => {
         const product = productById(r.productId);
         const qty = effectiveQty(r);
