@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, METHOD_LABELS } from "@/lib/utils";
 import HorarioView from "./HorarioView";
+import TurnosGuide from "./TurnosGuide";
 
 export default function ShiftsView({ user }) {
   const [view, setView] = useState("turnos"); // turnos | horario
@@ -62,9 +63,17 @@ export default function ShiftsView({ user }) {
         >
           Horario semanal
         </button>
+        <button
+          onClick={() => setView("guia")}
+          className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+            view === "guia" ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-stone-700"
+          }`}
+        >
+          ¿Cómo funciona?
+        </button>
       </div>
 
-      {view === "horario" ? <HorarioView user={user} /> : (<>
+      {view === "guia" ? <TurnosGuide /> : view === "horario" ? <HorarioView user={user} /> : (<>
       {shifts.length === 0 ? (
         <p className="text-sm text-stone-400 text-center py-8">Sin turnos registrados</p>
       ) : (
