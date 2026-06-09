@@ -280,6 +280,14 @@ function RestockRow({ restock, payments, usdRate, selected, onToggleSelect, onPa
             <span className="text-xs text-stone-500">{r.restock_date}</span>
             {r.notes && <span className="text-xs text-stone-400 truncate max-w-md" title={r.notes}>{r.notes}</span>}
           </div>
+          {Array.isArray(r.items) && r.items.length > 0 && (
+            <div
+              className="text-xs text-stone-600 mt-0.5 line-clamp-2"
+              title={r.items.map((it) => `${it.name || "?"} ×${it.qty || 0}`).join(", ")}
+            >
+              {r.items.map((it) => `${it.name || "?"} ×${it.qty || 0}`).join(", ")}
+            </div>
+          )}
           <div className="flex items-center gap-3 mt-1 text-xs flex-wrap">
             {r.payment_terms && (
               <span className="text-stone-500">Términos: {r.payment_terms}</span>
