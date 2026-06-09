@@ -36,6 +36,20 @@ export default function OpenShiftModal({ user, onOpen, onClose }) {
 
       if (insertErr) {
         if (insertErr.message?.includes("unique") || insertErr.message?.includes("duplicate") || insertErr.code === "23505") {
+          // Ya hay un turno abierto en la DB pero esta tablet no lo tenia cargado
+          // (carga inicial fallida / race). En vez de dejar al staff trabado,
+          // adoptamos el turno existente para que pueda seguir vendiendo.
+          const { data: existing } = await supabase
+            .from("shifts")
+            .select("*")
+            .eq("status", "open")
+            .order("opened_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (existing) {
+            onOpen(existing);
+            return;
+          }
           setError("Ya hay un turno abierto. Cierra el turno actual primero.");
         } else {
           setError("Error abriendo turno: " + insertErr.message);

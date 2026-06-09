@@ -286,12 +286,16 @@ function POSPageInner() {
 
   const loadActiveShift = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("shifts")
       .select("*")
       .eq("status", "open")
+      .order("opened_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+    // Si la carga falla (red), NO borrar un turno ya conocido: evita que la
+    // tablet "pierda" el turno y ofrezca abrir uno nuevo que la DB rechaza.
+    if (error) return;
     setActiveShift(data || null);
   }, []);
 
