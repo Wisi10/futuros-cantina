@@ -8,7 +8,7 @@ import InvoiceUploadModal from "./InvoiceUploadModal";
 // Combobox con búsqueda. Renderiza el dropdown via Portal a document.body
 // para escapar overflow:hidden/auto de padres (form card, inventario wrapper).
 // Posicion fixed calculada con getBoundingClientRect del trigger.
-function ProductPicker({ products, value, onChange }) {
+function ProductPicker({ products, value, onChange, onShowAll, isFiltered }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [coords, setCoords] = useState({ left: 0, top: 0, width: 0, openUp: false });
@@ -90,7 +90,21 @@ function ProductPicker({ products, value, onChange }) {
       </div>
       <div className="overflow-y-auto flex-1 scrollbar-hide">
         {filtered.length === 0 ? (
-          <p className="text-sm text-stone-400 text-center py-6">Sin resultados</p>
+          <div className="text-center py-6 px-4 space-y-3">
+            <p className="text-sm text-stone-400">Sin resultados</p>
+            {isFiltered && onShowAll && (
+              <button
+                type="button"
+                onClick={() => {
+                  onShowAll();
+                  // Mantener búsqueda — la nueva renderización tendrá los productos completos
+                }}
+                className="inline-flex items-center gap-1 text-xs font-bold text-brand bg-brand/10 hover:bg-brand/20 px-3 py-2 rounded-lg"
+              >
+                Mostrar todos los productos del catálogo
+              </button>
+            )}
+          </div>
         ) : (
           filtered.map((p) => (
             <button
@@ -573,6 +587,8 @@ export default function RestockForm({ products, user, scope = "productos", onRes
                         products={productsForRow(i)}
                         value={row.productId}
                         onChange={(id) => { updateRow(i, "productId", id); updateRow(i, "entryUnit", ""); }}
+                        isFiltered={!!supplierId && !rowShowAll[i] && !!supplierProductMap[supplierId] && supplierProductMap[supplierId].size > 0}
+                        onShowAll={() => setRowShowAll({ ...rowShowAll, [i]: true })}
                       />
                       {supplierId && !rowShowAll[i] && supplierProductMap[supplierId] && supplierProductMap[supplierId].size > 0 && (
                         <button
