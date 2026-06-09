@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronRight, AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import SupplierDebtModal from "./SupplierDebtModal";
+import SupplierProfileModal from "./SupplierProfileModal";
 import SupplierPaymentModal from "./SupplierPaymentModal";
 
 // Vista "Por Pagar" — lista todos los restocks con payment_status pending o partial.
@@ -162,11 +162,12 @@ export default function PorPagarView({ user, rate }) {
         ))}
       </div>
 
-      {/* Modal de detalle por proveedor */}
+      {/* Modal de perfil completo del proveedor */}
       {openGroup && (
-        <SupplierDebtModal
-          supplier={openGroup.supplier}
-          restocks={openGroup.items}
+        <SupplierProfileModal
+          supplierId={openGroup.items[0]?.supplier_id || null}
+          supplierName={openGroup.supplier}
+          pendingRestocks={openGroup.items}
           paymentsByRestock={payments}
           usdRate={usdRate}
           onClose={() => setOpenSupplier(null)}
