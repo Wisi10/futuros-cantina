@@ -7,7 +7,8 @@ import { generateCantinaReceipt, generateCantinaInvoice, ensureInvoiceNumber, lo
 
 const VOID_WINDOW_MS = 5 * 60 * 1000;
 
-export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNewSale, onVoidSale, canVoid, saleTimestamp }) {
+export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNewSale, onVoidSale, canVoid, saleTimestamp, isOnline = true }) {
+  const isOffline = !isOnline || sale?.isOffline;
   const [printing, setPrinting] = useState(null);
   const [businessInfo, setBusinessInfo] = useState(null);
   // Datos del cliente fiscal: se autollenan si el saleRecord ya tiene cliente.
@@ -245,24 +246,30 @@ export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNe
             </button>
           </div>
           {sale.hasFactura && (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handlePrintInvoice("bs")}
-                disabled={printing === "invoice_bs"}
-                className="py-2 rounded-lg border-2 border-brand/30 bg-brand/5 text-brand text-xs font-bold hover:bg-brand/10 disabled:opacity-50 flex items-center justify-center gap-1"
-              >
-                {printing === "invoice_bs" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-                Factura Bs
-              </button>
-              <button
-                onClick={() => handlePrintInvoice("usd")}
-                disabled={printing === "invoice_usd"}
-                className="py-2 rounded-lg border-2 border-brand/30 bg-brand/5 text-brand text-xs font-bold hover:bg-brand/10 disabled:opacity-50 flex items-center justify-center gap-1"
-              >
-                {printing === "invoice_usd" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-                Factura $
-              </button>
-            </div>
+            isOffline ? (
+              <div className="border-2 border-amber-300 bg-amber-50 rounded-lg px-3 py-2 text-[11px] text-amber-900">
+                ⏳ Factura disponible cuando vuelva el internet. La venta queda guardada y la factura se podrá emitir desde Caja después.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handlePrintInvoice("bs")}
+                  disabled={printing === "invoice_bs"}
+                  className="py-2 rounded-lg border-2 border-brand/30 bg-brand/5 text-brand text-xs font-bold hover:bg-brand/10 disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {printing === "invoice_bs" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                  Factura Bs
+                </button>
+                <button
+                  onClick={() => handlePrintInvoice("usd")}
+                  disabled={printing === "invoice_usd"}
+                  className="py-2 rounded-lg border-2 border-brand/30 bg-brand/5 text-brand text-xs font-bold hover:bg-brand/10 disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {printing === "invoice_usd" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                  Factura $
+                </button>
+              </div>
+            )
           )}
         </div>
 

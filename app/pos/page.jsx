@@ -33,6 +33,10 @@ import DashboardView from "@/components/dashboard/DashboardView";
 import GlobalClientSearch from "@/components/shared/GlobalClientSearch";
 import WhatsNewModal from "@/components/shared/WhatsNewModal";
 import { LATEST as LATEST_WHATS_NEW } from "@/lib/whatsNew";
+import OfflineBanner, { ConnectionBadge } from "@/components/shared/OfflineBanner";
+import { useConnectionStatus } from "@/lib/useConnectionStatus";
+import { enqueueSale, generateLocalSaleId } from "@/lib/offlineQueue";
+import { runSync } from "@/lib/syncWorker";
 import { loadLowStockThreshold, isLowStock } from "@/lib/stockHelpers";
 
 function GlobalProfileMount({ user, rate, onStartCreditSale }) {
@@ -86,6 +90,10 @@ function POSPageInner() {
   const [processing, setProcessing] = useState(false);
   const [lastSale, setLastSale] = useState(null);
   const [todayStats, setTodayStats] = useState({ total: 0, count: 0 });
+
+  // Offline status + sync queue
+  const { isOnline, pendingCount, refreshPending } = useConnectionStatus();
+  const lastSyncOnlineRef = useRef(true);
 
   // Void sale state
   const [lastSaleRecord, setLastSaleRecord] = useState(null); // full DB record for void
@@ -296,6 +304,22 @@ function POSPageInner() {
     setKillswitchSales(ks?.value || { enabled: false, message: "" });
     loadRate();
   }, [loadRate]);
+
+  // Auto-sync: cuando volvemos a online y hay pendientes, procesar la cola
+  useEffect(() => {
+    if (isOnline && pendingCount > 0) {
+      runSync().then(() => {
+        refreshPending();
+        loadProducts().catch(() => {});
+        loadTodayStats().catch(() => {});
+      });
+    }
+    // Si pasamos de offline a online, también triggear sync proactivo
+    if (isOnline && !lastSyncOnlineRef.current) {
+      runSync().then(() => refreshPending());
+    }
+    lastSyncOnlineRef.current = isOnline;
+  }, [isOnline, pendingCount, refreshPending]);
 
   useEffect(() => {
     if (!user) return;
@@ -701,6 +725,125 @@ function POSPageInner() {
     // Reference for legacy field: first payment with reference, or null
     const firstRef = payments.find((p) => p.reference)?.reference || null;
 
+    // ========================================================================
+    // OFFLINE PATH: enqueue + optimistic success. Sync worker se encarga después.
+    // ========================================================================
+    if (!isOnline) {
+      const localId = generateLocalSaleId();
+      const items = cart.map((item) => ({
+        product_id: item.product.id,
+        name: item.product.name,
+        qty: item.qty,
+        price_ref: parseFloat(item.product.price_ref),
+        cost_ref: parseFloat(item.product.cost_ref || 0),
+      }));
+      // Payments rows con sale_id placeholder (se reemplaza al sync)
+      const paymentRows = payments.map((p) => ({
+        id: "csp_" + Math.random().toString(36).slice(2, 14),
+        sale_id: localId,
+        payment_method: p.method,
+        amount_ref: p.amount_ref,
+        amount_bs: p.method === "cash_bs" && rate?.usd ? Number(p.amount_ref) * rate.usd : null,
+        exchange_rate: rate?.usd || null,
+        reference: p.reference || null,
+        is_change: false,
+      }));
+      if (change && change.kind === "cash" && change.amount > 0) {
+        paymentRows.push({
+          id: "csp_chg_" + Math.random().toString(36).slice(2, 14),
+          sale_id: localId,
+          payment_method: change.method,
+          amount_ref: -Math.abs(change.amount),
+          amount_bs: change.method === "cash_bs" && rate?.usd ? -Math.abs(change.amount) * rate.usd : null,
+          exchange_rate: rate?.usd || null,
+          reference: null,
+          is_change: true,
+          notes: "Vuelto al cliente",
+        });
+      }
+      // Stock decrements para sync. Recetas se omiten en offline (el sync no las decrementa tampoco; admin ve faltante después).
+      const productDecrements = items
+        .filter((it) => {
+          const prod = products.find((p) => p.id === it.product_id);
+          return prod && !prod.has_recipe;
+        })
+        .map((it) => ({ product_id: it.product_id, qty: it.qty }));
+
+      try {
+        await enqueueSale({
+          local_id: localId,
+          sale_date: getLocalDate(),
+          items,
+          total_ref: finalTotalRef,
+          total_bs: finalTotalBs,
+          payment_method: legacyMethod,
+          reference: firstRef,
+          payment_status: "paid",
+          client_id: saleClient?.id || null,
+          client_name: saleClient?.name || null,
+          exchange_rate_bs: rate?.usd || null,
+          has_factura: hasFactura,
+          iva_amount_ref: ivaAmountRef,
+          created_by: user?.name || "Cantina",
+          payments_rows: paymentRows,
+          product_decrements: productDecrements,
+        });
+
+        // Optimistic UI: decrementar stock local + actualizar UI
+        setProducts((prev) => prev.map((p) => {
+          const dec = productDecrements.find((d) => d.product_id === p.id);
+          if (!dec) return p;
+          return { ...p, stock_quantity: Math.max(0, Number(p.stock_quantity || 0) - dec.qty) };
+        }));
+        setTodayStats((prev) => ({
+          total: (prev.total || 0) + finalTotalRef,
+          count: (prev.count || 0) + 1,
+          lastClient: saleClient?.name || prev.lastClient,
+        }));
+
+        setLastSale({
+          saleNumber: null, // se asigna al sync
+          items: cart.map((it) => ({ name: it.product.name, qty: it.qty, price_ref: it.product.price_ref })),
+          subtotalRef: totalRef,
+          ivaAmountRef,
+          igtfAmountRef,
+          hasFactura,
+          totalRef: finalTotalRef,
+          totalBs: finalTotalBs,
+          rate: rate?.usd || null,
+          paymentMethod: legacyMethod,
+          reference: firstRef,
+          payments,
+          change,
+          isOffline: true,
+        });
+        setLastSaleRecord({
+          id: localId,
+          sale_number: null,
+          sale_date: getLocalDate(),
+          items,
+          total_ref: finalTotalRef,
+          iva_amount_ref: ivaAmountRef,
+          has_factura: hasFactura,
+          payment_method: legacyMethod,
+          client_id: saleClient?.id || null,
+          client_name: saleClient?.name || null,
+          created_at: new Date().toISOString(),
+          isOffline: true,
+        });
+        setLastSaleTime(Date.now());
+        setCart([]);
+        setScreen("success");
+        refreshPending();
+      } catch (err) {
+        alert("Error guardando venta offline: " + err.message);
+      }
+      return;
+    }
+    // ========================================================================
+    // ONLINE PATH: continúa con el flow normal abajo
+    // ========================================================================
+
     setProcessing(true);
     try {
       const result = await executeSale({
@@ -1020,6 +1163,13 @@ function POSPageInner() {
       <SideNav activeTab={activeTab} onTabChange={setActiveTab} userRole={effectiveUser.cantinaRole || "staff"} />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0 pb-16 lg:pb-0">
+        {/* Banner offline + sync queue status */}
+        <OfflineBanner
+          isOnline={isOnline}
+          pendingCount={pendingCount}
+          onRetry={() => runSync().then(() => refreshPending())}
+        />
+
         {/* Killswitch ventas activado por owner */}
         {killswitchSales.enabled && (
           <div className="bg-red-600 text-white px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium shrink-0">
@@ -1073,6 +1223,7 @@ function POSPageInner() {
               )}
             </button>
             <GlobalClientSearch />
+            <ConnectionBadge isOnline={isOnline} pendingCount={pendingCount} />
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             {/* Toggle moneda principal: $ ↔ REF (afecta precios mostrados en POS) */}
@@ -1338,6 +1489,7 @@ function POSPageInner() {
           canVoid={canVoid}
           saleTimestamp={lastSaleTime}
           onVoidSale={handleVoidSale}
+          isOnline={isOnline}
         />
       )}
 

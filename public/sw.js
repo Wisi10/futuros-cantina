@@ -1,5 +1,5 @@
 // Versionado: bumpear cada deploy para invalidar cache viejo.
-const CACHE_VERSION = 'v4-swr';
+const CACHE_VERSION = 'v5-offline';
 const CACHE_NAME = `futuros-cantina-${CACHE_VERSION}`;
 const SHELL = ['/'];
 
