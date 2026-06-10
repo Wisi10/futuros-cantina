@@ -128,7 +128,10 @@ export default function SupplierProfileModal({ supplierId, supplierName, pending
     } finally {
       setLoading(false);
     }
-  }, [supplierId, supplierName]);
+    // pendingRestocks.length se incluye para que cuando el padre refresca
+    // (alguien pagó algo y bajó el count), también refresquemos allRestocks/allPayments
+    // y los KPIs no queden stale.
+  }, [supplierId, supplierName, pendingRestocks.length]);
 
   useEffect(() => { load(); }, [load]);
 

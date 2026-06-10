@@ -263,16 +263,16 @@ function BookingTile({ booking }) {
       className={`absolute left-0.5 right-0.5 ${meta.bg} ${meta.text} border-l-4 ${meta.border} rounded-r-md px-1.5 py-1 overflow-hidden`}
       style={{ top: `${offsetTop}px`, height: `${height}px`, zIndex: 10 }}
     >
-      <div className="text-[9px] opacity-70 leading-tight">{timeRange}</div>
-      <div className="text-[11px] font-semibold leading-tight truncate">{clientName}</div>
+      <div className="text-[11px] opacity-80 font-semibold leading-tight tabular-nums">{timeRange}</div>
+      <div className="text-xs font-bold leading-tight truncate">{clientName}</div>
       {dur >= 1 && (
-        <div className="text-[9px] opacity-80 leading-tight truncate flex items-center gap-0.5 mt-0.5">
-          <Icon size={9} className="flex-shrink-0" />
+        <div className="text-[11px] opacity-90 leading-tight truncate flex items-center gap-0.5 mt-0.5">
+          <Icon size={11} className="flex-shrink-0" />
           <span className="truncate">{meta.label}{dur > 0 ? ` · ${dur}h` : ""}</span>
         </div>
       )}
       {booking.birthday_package && dur >= 1.5 && (
-        <div className="text-[9px] opacity-60 leading-tight truncate mt-0.5">{booking.birthday_package}</div>
+        <div className="text-[11px] opacity-70 leading-tight truncate mt-0.5">{booking.birthday_package}</div>
       )}
     </div>
   );

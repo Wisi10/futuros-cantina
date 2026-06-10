@@ -29,7 +29,8 @@ export default function DashboardView({ user, rate, products, embedded = false }
     if (!supabase) return;
     const [salesRes, shiftRes] = await Promise.all([
       supabase.from("cantina_sales").select("*").eq("sale_date", today).is("voided_at", null).order("created_at", { ascending: false }),
-      supabase.from("shifts").select("*").eq("status", "open").limit(1).single(),
+      // maybeSingle() — si no hay turno abierto, devuelve null sin tirar error.
+      supabase.from("shifts").select("*").eq("status", "open").limit(1).maybeSingle(),
     ]);
     const list = salesRes.data || [];
     setSales(list);

@@ -25,9 +25,7 @@ import ClientModal from "@/components/client/ClientModal";
 import OpenShiftModal from "@/components/shifts/OpenShiftModal";
 import CloseShiftModal from "@/components/shifts/CloseShiftModal";
 import ShiftsView from "@/components/shifts/ShiftsView";
-import PuntosView from "@/components/puntos/PuntosView";
 import ClientesView from "@/components/clientes/ClientesView";
-import EventosView from "@/components/eventos/EventosView";
 import StockAlertToast from "@/components/vender/StockAlertToast";
 import DashboardView from "@/components/dashboard/DashboardView";
 import GlobalClientSearch from "@/components/shared/GlobalClientSearch";
@@ -1359,12 +1357,6 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "eventos" && (
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <EventosView user={user} rate={rate} onNavigate={setActiveTab} />
-          </div>
-        )}
-
         {activeTab === "reportes" && canAdmin && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ReportesView
@@ -1393,12 +1385,6 @@ function POSPageInner() {
         {activeTab === "turnos" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ShiftsView user={user} />
-          </div>
-        )}
-
-        {activeTab === "puntos" && canAdmin && (
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <PuntosView user={user} rate={rate} saleClient={saleClient} />
           </div>
         )}
 

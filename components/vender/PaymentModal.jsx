@@ -654,8 +654,12 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
                           {p.reference && <span className="text-stone-400 ml-1">· {p.reference}</span>}
                         </span>
                         <span className="text-sm font-bold text-stone-800">${Number(p.amount_ref).toFixed(2)}</span>
-                        <button onClick={() => removePayment(p.tmpId)} className="text-stone-400 hover:text-red-500 p-0.5">
-                          <Trash2 size={12} />
+                        <button
+                          onClick={() => removePayment(p.tmpId)}
+                          className="text-stone-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 rounded min-w-[40px] min-h-[40px] flex items-center justify-center"
+                          aria-label="Eliminar pago"
+                        >
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     );

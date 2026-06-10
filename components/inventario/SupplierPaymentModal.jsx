@@ -141,26 +141,27 @@ export default function SupplierPaymentModal({ supplier, restocks, rate, user, o
         if (upErr) throw upErr;
       }
 
-      // 3. Crear 1 expense por el monto total
-      try {
-        await supabase.from("cantina_expenses").insert({
-          id: "cex_sp_" + Math.random().toString(36).slice(2, 12),
-          expense_date: paidAt,
-          category: "Materia Prima / Insumos",
-          description: `Pago a ${supplier}${allocation.length > 1 ? ` (${allocation.length} facturas)` : ""}`,
-          amount_ref: amountNum,
-          amount_usd: amountNum,
-          amount_bs: amountBs,
-          exchange_rate_bs: rateNum > 0 ? rateNum : null,
-          payment_method: method,
-          reference: reference.trim() || null,
-          created_by: user?.name || "Cantina",
-          receipt_note: `Pago a ${supplier} · facturas: ${allocation.map((a) => a.restock.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
-          source: "auto_payable",
-          source_ref_id: allocation[0]?.restock?.id || null,
-        });
-      } catch (linkErr) {
-        console.error("[SUPPLIER_PAYMENT→GASTO]", linkErr);
+      // 3. Crear 1 expense por el monto total. Si falla, avisar al usuario para que sepa
+      // que el pago se registró OK pero el gasto no quedó en Gastos (puede crear uno manual).
+      const { error: expErr } = await supabase.from("cantina_expenses").insert({
+        id: "cex_sp_" + Math.random().toString(36).slice(2, 12),
+        expense_date: paidAt,
+        category: "Materia Prima / Insumos",
+        description: `Pago a ${supplier}${allocation.length > 1 ? ` (${allocation.length} facturas)` : ""}`,
+        amount_ref: amountNum,
+        amount_usd: amountNum,
+        amount_bs: amountBs,
+        exchange_rate_bs: rateNum > 0 ? rateNum : null,
+        payment_method: method,
+        reference: reference.trim() || null,
+        created_by: user?.name || "Cantina",
+        receipt_note: `Pago a ${supplier} · facturas: ${allocation.map((a) => a.restock.id).join(", ")}${notes ? ` · ${notes}` : ""}`,
+        source: "auto_payable",
+        source_ref_id: allocation[0]?.restock?.id || null,
+      });
+      if (expErr) {
+        console.error("[SUPPLIER_PAYMENT→GASTO]", expErr);
+        alert(`Pago registrado OK, pero NO se pudo crear el gasto auto en Gastos: ${expErr.message || "error desconocido"}.\nPodés crear el gasto manualmente desde Gastos > Nuevo.`);
       }
 
       if (onPaid) onPaid();
