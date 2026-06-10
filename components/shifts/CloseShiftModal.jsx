@@ -42,7 +42,9 @@ export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
   }, [shift?.id]);
 
   const openTime = new Date(shift.opened_at).toLocaleTimeString("es-VE", { timeZone: "America/Caracas", hour: "2-digit", minute: "2-digit" });
-  const totalSalesRef = sales.reduce((s, v) => s + parseFloat(v.total_ref || 0), 0);
+  // round2 evita acumulación de floats (0.1+0.2=0.30000004) en cuadre de turno.
+  const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const totalSalesRef = round2(sales.reduce((s, v) => s + parseFloat(v.total_ref || 0), 0));
   const salesCount = sales.length;
 
   // Breakdown by method (from cantina_sale_payments). Credits stay aggregated separately.
@@ -51,13 +53,16 @@ export default function CloseShiftModal({ shift, rate, onClose, onClosed }) {
     const m = p.payment_method || "otro";
     byMethod[m] = (byMethod[m] || 0) + parseFloat(p.amount_ref || 0);
   }
+  // Round acumulado por método al final para evitar drift de centavos.
+  for (const m of Object.keys(byMethod)) byMethod[m] = round2(byMethod[m]);
   // Add credits aggregate
-  const creditTotal = sales.filter((s) => s.payment_status === "credit").reduce((s, v) => s + parseFloat(v.total_ref || 0), 0);
-  if (creditTotal > 0) byMethod.credit = (byMethod.credit || 0) + creditTotal;
+  const creditTotal = round2(sales.filter((s) => s.payment_status === "credit").reduce((s, v) => s + parseFloat(v.total_ref || 0), 0));
+  if (creditTotal > 0) byMethod.credit = round2((byMethod.credit || 0) + creditTotal);
 
   // Expected cash drawer = opening + cash_bs + cash_usd contributions
   // amount_ref is negative for change-out rows, so SUM naturally subtracts vueltos
-  const cashBsSales = (byMethod.cash_bs || 0) * (rate?.eur || 0);
+  // amount_ref está en USD (cantina). Para Bs hay que multiplicar por rate.usd (Bs/USD), no rate.eur.
+  const cashBsSales = (byMethod.cash_bs || 0) * (rate?.usd || 0);
   const cashUsdSales = byMethod.cash_usd || 0;
   const expectedBs = parseFloat(shift.opening_cash_bs || 0) + cashBsSales;
   const expectedUsd = parseFloat(shift.opening_cash_usd || 0) + cashUsdSales;

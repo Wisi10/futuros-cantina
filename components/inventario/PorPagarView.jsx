@@ -170,8 +170,10 @@ export default function PorPagarView({ user, rate }) {
           pendingRestocks={openGroup.items}
           paymentsByRestock={payments}
           usdRate={usdRate}
+          user={user}
           onClose={() => setOpenSupplier(null)}
           onPay={() => setPayingRestocks(openGroup.items)}
+          onChanged={() => load()}
         />
       )}
 

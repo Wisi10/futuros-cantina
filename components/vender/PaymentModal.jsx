@@ -515,7 +515,8 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
             className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
               isCredit ? "bg-brand text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
             }`}>Credito</button>
-          {userRole === "admin" && (
+          {/* Manager+: gerente/admin/owner pueden registrar cortesia (CLAUDE.md requirement). */}
+          {["admin", "owner", "gerente"].includes(userRole) && (
             <button onClick={switchToCortesia} disabled={processing}
               className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
                 isCortesia ? "bg-gold text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"

@@ -24,7 +24,8 @@ export default function CajaView({ user, rate }) {
   const [selectedSale, setSelectedSale] = useState(null);
 
   const isToday = selectedDate === new Date().toISOString().split("T")[0];
-  const isAdmin = user?.cantinaRole === "admin" || user?.cantinaRole === "owner";
+  // Manager+: incluye gerente además de admin/owner (consistente con isManagerOrAbove de lib/utils).
+  const isAdmin = ["admin", "owner", "gerente"].includes(user?.cantinaRole);
 
   const [salePayments, setSalePayments] = useState([]); // sprint 7B
   const [productStock, setProductStock] = useState({}); // {productId: {name, stock, has_recipe}}

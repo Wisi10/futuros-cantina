@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   X, AlertTriangle, Calendar, ChevronDown, ChevronRight, DollarSign,
-  ShoppingCart, History, Package, Phone, FileText, Loader2, CheckCircle2,
+  ShoppingCart, History, Package, Phone, FileText, Loader2, CheckCircle2, Undo2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -34,12 +34,63 @@ function daysSince(isoDate) {
 
 // Perfil completo del proveedor: resumen financiero + indicadores + secciones expandibles.
 // Reemplaza al antiguo SupplierDebtModal con info más amplia.
-export default function SupplierProfileModal({ supplierId, supplierName, pendingRestocks, paymentsByRestock: paymentsPendingMap, usdRate, onClose, onPay }) {
+export default function SupplierProfileModal({ supplierId, supplierName, pendingRestocks, paymentsByRestock: paymentsPendingMap, usdRate, user, onClose, onPay, onChanged }) {
   const [supplier, setSupplier] = useState(null);
   const [allRestocks, setAllRestocks] = useState(null); // todos: pending/partial/paid
   const [allPayments, setAllPayments] = useState(null); // pagos a TODOS los restocks del proveedor
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({ pending: true });
+  const [reverting, setReverting] = useState(null); // restock_id en proceso de revert
+
+  // Manager+ puede deshacer "pagada" si fue marcada por error.
+  const canRevertPaid = ["admin", "owner", "gerente"].includes(user?.cantinaRole);
+
+  const handleRevertPaid = async (restock) => {
+    if (!canRevertPaid) return;
+    if (reverting) return;
+    const ok = window.confirm(
+      `¿Deshacer "Pagada" de la compra del ${restock.restock_date} (${supplierName}, $${Number(restock.total_cost_ref || 0).toFixed(2)})?\n\n` +
+      `Esto:\n` +
+      `• Cambia el estado a "Pendiente"\n` +
+      `• Elimina el gasto auto-creado en Gastos\n` +
+      `• Vuelve a aparecer en Por Pagar\n\n` +
+      `NO afecta el stock ni los productos.`
+    );
+    if (!ok) return;
+    setReverting(restock.id);
+    try {
+      // 1. Update restock: pending + 0 pagado. due_date = +7 días default si no tenía.
+      const newDue = restock.due_date || (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        return d.toISOString().slice(0, 10);
+      })();
+      const { error: upErr } = await supabase
+        .from("cantina_restocks")
+        .update({ payment_status: "pending", paid_amount_ref: 0, due_date: newDue })
+        .eq("id", restock.id);
+      if (upErr) throw upErr;
+
+      // 2. Borrar expense auto-creado por el restock (source = "auto_restock", source_ref_id = restock.id)
+      const { error: expErr } = await supabase
+        .from("cantina_expenses")
+        .delete()
+        .eq("source", "auto_restock")
+        .eq("source_ref_id", restock.id);
+      if (expErr) console.error("[REVERT] expense delete:", expErr);
+
+      // 3. Borrar cantina_restock_payments si llegó a tener (poco común para auto_restock pero por si acaso)
+      await supabase.from("cantina_restock_payments").delete().eq("restock_id", restock.id);
+
+      await load(); // refresh modal
+      if (onChanged) onChanged(); // refresh listado padre
+    } catch (e) {
+      console.error("[REVERT] error:", e);
+      alert(`Error al deshacer: ${e.message || e}`);
+    } finally {
+      setReverting(null);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -288,6 +339,17 @@ export default function SupplierProfileModal({ supplierId, supplierName, pending
                           <div className="text-right shrink-0">
                             <div className="font-bold text-stone-800 text-sm tabular-nums">${Number(r.total_cost_ref || 0).toFixed(2)}</div>
                           </div>
+                          {/* Botón deshacer "pagada" — solo manager+ y solo si está pagada. */}
+                          {isPaid && canRevertPaid && (
+                            <button
+                              onClick={() => handleRevertPaid(r)}
+                              disabled={reverting === r.id}
+                              title="Deshacer pagada (se marcó por error)"
+                              className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded disabled:opacity-50 shrink-0"
+                            >
+                              {reverting === r.id ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+                            </button>
+                          )}
                         </div>
                       );
                     })}

@@ -567,6 +567,9 @@ function POSPageInner() {
         items,
         total_ref: totalRef,
         total_bs: totalBs,
+        // Snapshot de la tasa al momento de la venta para que recibos reimprimidos
+        // muestren el monto Bs correcto incluso si la tasa cambió después.
+        exchange_rate_bs: rate?.usd || null,
         subtotal_ref: subtotalRef,
         discount_amount_ref: discountAmount,
         cantina_discount_id: saleClient?.discount?.id || null,
@@ -1053,31 +1056,47 @@ function POSPageInner() {
         if (restoreErr) console.error("[VOID] restore_product_stock fallo", productId, restoreErr);
       }
 
+      // Acumular errores no críticos para reportar al final sin abortar el flujo.
+      // Si la marca de voided falla (paso 4), eso sí abortamos.
+      const voidWarnings = [];
+
       // 2. Delete stock movements for this sale
-      await supabase.from("stock_movements").delete().eq("reference_id", saleId);
+      const { error: smErr } = await supabase.from("stock_movements").delete().eq("reference_id", saleId);
+      if (smErr) { console.error("[VOID] stock_movements:", smErr); voidWarnings.push("stock movements"); }
 
       // 3. Delete credit if it was a credit sale
       if (lastSaleRecord.payment_status === "credit") {
-        await supabase.from("cantina_credits").delete().eq("sale_id", saleId);
+        const { error: ccErr } = await supabase.from("cantina_credits").delete().eq("sale_id", saleId);
+        if (ccErr) { console.error("[VOID] cantina_credits:", ccErr); voidWarnings.push("crédito cantina"); }
       }
 
       // 3b. If sale had overpay -> client_credits row from sobrepago, delete it
       // (cantina_sale_payments rows are removed by FK CASCADE when cantina_sales is deleted —
       //  but we soft-delete via voided_at, so explicit DELETE for the credit record by concept match)
-      try {
-        await supabase.from("client_credits")
-          .delete()
-          .eq("concept", `Sobrepago en venta cantina ${saleId}`);
-      } catch (e) { console.error("[VOID] client_credits revert error:", e); }
+      const { error: clcErr } = await supabase.from("client_credits")
+        .delete()
+        .eq("concept", `Sobrepago en venta cantina ${saleId}`);
+      if (clcErr) { console.error("[VOID] client_credits revert:", clcErr); voidWarnings.push("crédito cliente"); }
 
       // 3c. Delete cantina_sale_payments (soft-deleted parent so FK cascade not triggered)
-      await supabase.from("cantina_sale_payments").delete().eq("sale_id", saleId);
+      const { error: cspErr } = await supabase.from("cantina_sale_payments").delete().eq("sale_id", saleId);
+      if (cspErr) { console.error("[VOID] cantina_sale_payments:", cspErr); voidWarnings.push("pagos de venta"); }
 
-      // 4. Soft-delete: mark as voided (preserves audit trail)
-      await supabase.from("cantina_sales").update({
+      // 4. Soft-delete: mark as voided (preserves audit trail). Si esto falla,
+      // la venta sigue activa para el sistema → abortamos para no dejar data inconsistente.
+      const { error: voidErr } = await supabase.from("cantina_sales").update({
         voided_at: new Date().toISOString(),
         voided_reason: `Anulada por ${user?.name || "Staff"} dentro de ventana de 5min`,
       }).eq("id", saleId);
+      if (voidErr) {
+        console.error("[VOID] marca de anulada falló:", voidErr);
+        alert(`No se pudo anular la venta (paso final): ${voidErr.message || voidErr}. Cleanup parcial ya ejecutado. Avisa a un admin.`);
+        throw voidErr;
+      }
+      if (voidWarnings.length > 0) {
+        // Stock ya restaurado + venta anulada OK, pero hubo limpieza parcial. Avisar al usuario.
+        alert(`Venta anulada, pero falló limpieza de: ${voidWarnings.join(", ")}. Avisa a un admin para revisar.`);
+      }
 
       // 4b. Loyalty: reverse points (non-blocking)
       try {

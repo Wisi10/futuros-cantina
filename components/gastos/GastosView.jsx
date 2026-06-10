@@ -292,7 +292,8 @@ export default function GastosView({ user, rate }) {
     const amountRef = parseFloat(form.amount_ref);
     if (!amountRef || amountRef <= 0) { alert("Ingresa un monto válido"); return; }
     setSaving(true);
-    const rateBs = rate?.eur || null;
+    // amount_ref está en USD (cantina). Para Bs hay que multiplicar por rate.usd (Bs/USD), no rate.eur.
+    const rateBs = rate?.usd || null;
     const record = {
       expense_type: form.expense_type,
       category: form.category,
@@ -333,7 +334,7 @@ export default function GastosView({ user, rate }) {
     exportExpensesToCSV(filtered, `gastos-cantina-${period}-${tag}`);
   };
 
-  const amountBsPreview = (parseFloat(form.amount_ref) || 0) * (rate?.eur || 0);
+  const amountBsPreview = (parseFloat(form.amount_ref) || 0) * (rate?.usd || 0);
 
   const periods = [
     { id: "today",  label: "Hoy" },
@@ -414,10 +415,10 @@ export default function GastosView({ user, rate }) {
                   onChange={(e) => setForm({ ...form, amount_ref: e.target.value })}
                   placeholder="0.00"
                   className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-                {parseFloat(form.amount_ref) > 0 && rate?.eur && (
+                {parseFloat(form.amount_ref) > 0 && rate?.usd && (
                   <p className="text-xs text-stone-400 mt-1">
                     = Bs. {amountBsPreview.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    <span className="text-stone-300 ml-1">(tasa: {rate.eur})</span>
+                    <span className="text-stone-300 ml-1">(tasa: {rate.usd})</span>
                   </p>
                 )}
               </div>
