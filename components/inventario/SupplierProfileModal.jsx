@@ -71,16 +71,23 @@ export default function SupplierProfileModal({ supplierId, supplierName, pending
         .eq("id", restock.id);
       if (upErr) throw upErr;
 
-      // 2. Borrar expense auto-creado por el restock (source = "auto_restock", source_ref_id = restock.id)
+      // 2. Borrar expense auto-creado por el restock.
+      // Cubre AMBOS flujos: source='auto_restock' (RestockForm marcó pagada directo) y
+      // source='auto_payable' (SupplierPaymentModal pagó después). Sin el segundo
+      // case, los gastos creados via flujo de pago quedaban huérfanos en Gastos.
       const { error: expErr } = await supabase
         .from("cantina_expenses")
         .delete()
-        .eq("source", "auto_restock")
+        .in("source", ["auto_restock", "auto_payable"])
         .eq("source_ref_id", restock.id);
-      if (expErr) console.error("[REVERT] expense delete:", expErr);
+      if (expErr) {
+        console.error("[REVERT] expense delete:", expErr);
+        alert(`Compra revertida pero NO se pudo borrar el gasto auto en Gastos: ${expErr.message || "error desconocido"}.\nElimínalo manualmente desde Gastos.`);
+      }
 
-      // 3. Borrar cantina_restock_payments si llegó a tener (poco común para auto_restock pero por si acaso)
-      await supabase.from("cantina_restock_payments").delete().eq("restock_id", restock.id);
+      // 3. Borrar cantina_restock_payments si llegó a tener
+      const { error: rpErr } = await supabase.from("cantina_restock_payments").delete().eq("restock_id", restock.id);
+      if (rpErr) console.error("[REVERT] restock_payments delete:", rpErr);
 
       await load(); // refresh modal
       if (onChanged) onChanged(); // refresh listado padre

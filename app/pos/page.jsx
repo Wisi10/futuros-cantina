@@ -1022,6 +1022,7 @@ function POSPageInner() {
   // Void last sale
   const handleVoidSale = async () => {
     if (!lastSaleRecord || !canVoid) return;
+    if (voidingState) return; // double-click guard
     const confirmed = window.confirm("Seguro que quieres anular esta venta? Se restaurara el stock.");
     if (!confirmed) return;
 

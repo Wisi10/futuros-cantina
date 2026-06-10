@@ -47,7 +47,7 @@ export default function SuccessScreen({ sale, saleRecord, rate, todayStats, onNe
         iva_amount_ref: sale.ivaAmountRef ?? 0,
         has_factura: !!sale.hasFactura,
         payment_method: sale.paymentMethod,
-        exchange_rate_bs: rate?.eur || null,
+        exchange_rate_bs: rate?.usd || null,
         created_at: new Date().toISOString(),
       };
     }

@@ -120,7 +120,8 @@ export default function SaleDetailModal({ sale, rate, onClose }) {
   const totalRef = Number(saleSnapshot.total_ref || 0);
   const ivaRef = Number(saleSnapshot.iva_amount_ref || 0);
   const subtotalRef = saleSnapshot.has_factura ? Math.max(0, totalRef - ivaRef) : totalRef;
-  const ratEur = Number(saleSnapshot.exchange_rate_bs || rate?.eur || 0);
+  // En cantina, exchange_rate_bs es Bs/USD. Fallback a rate.usd, no rate.eur.
+  const ratEur = Number(saleSnapshot.exchange_rate_bs || rate?.usd || 0);
 
   return (
     <>

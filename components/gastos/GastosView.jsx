@@ -134,7 +134,8 @@ export default function GastosView({ user, rate }) {
     const totalBs = filtered.reduce((s, e) => {
       const bs = Number(e.amount_bs || 0);
       if (bs > 0) return s + bs;
-      return s + Number(e.amount_ref || 0) * (rate?.eur || 0);
+      // amount_ref está en USD en cantina → multiplicar por rate.usd (Bs/USD).
+      return s + Number(e.amount_ref || 0) * (rate?.usd || 0);
     }, 0);
     return { totalRef, totalBs, count: filtered.length };
   }, [filtered, rate]);
