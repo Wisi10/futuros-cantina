@@ -1280,8 +1280,8 @@ function POSPageInner() {
         {/* Tab content */}
         {activeTab === "vender" && (
           <div className="flex-1 flex min-h-0">
-            {/* LEFT: scrolleable - productos + en vivo */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+            {/* LEFT: dashboard FIJO arriba + productos con su propio scroll abajo */}
+            <div className="flex-1 flex flex-col min-h-0">
               {/* Live strip — sutil */}
               <div className="bg-stone-50 border-b border-stone-200 px-4 py-1.5 text-[11px] text-stone-500 flex items-center gap-3 flex-wrap shrink-0">
                 <span><span className="text-stone-400">Hoy:</span> <span className="font-semibold text-stone-700">REF {todayStats.total.toFixed(2)}</span></span>
@@ -1294,34 +1294,39 @@ function POSPageInner() {
                   </>
                 )}
               </div>
-              {loading ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <p className="text-stone-400 text-sm animate-pulse">Cargando productos...</p>
-                </div>
-              ) : (
-                <ProductGrid
-                  products={products}
-                  cart={cart}
-                  rate={rate}
-                  onAdd={addToCart}
-                  lowStockThreshold={lowStockThreshold}
-                  displayCurrency={displayCurrency}
-                  popularity={popularity}
-                />
-              )}
 
-              {/* Dashboard en Vivo — colapsable. Cuando abre, abre HACIA ABAJO
-                  con max-h limitado y scroll interno, sin comprimir el grid
-                  de productos (que tiene min-h-0 + flex-1 arriba). */}
-              <div className={`border-t border-stone-200 shrink-0 ${showLiveDashboard ? "max-h-[40vh] overflow-y-auto" : ""}`}>
+              {/* Dashboard FIJO arriba (request del owner): cuando está abierto ocupa max-h fijo
+                  con scroll interno. NO se mueve al scrollear productos. Toggle a la derecha. */}
+              {showLiveDashboard && (
+                <div className="border-b border-stone-200 shrink-0 max-h-[40vh] overflow-y-auto bg-white">
+                  <DashboardView user={user} rate={rate} products={products} embedded />
+                </div>
+              )}
+              <div className="border-b border-stone-200 shrink-0 flex items-center justify-end px-4 py-1 bg-white">
                 <button
                   onClick={() => setShowLiveDashboard(!showLiveDashboard)}
-                  className="w-full px-4 py-1.5 flex items-center justify-end hover:bg-stone-50 transition-colors sticky top-0 bg-white z-10 border-b border-stone-100"
+                  className="text-[11px] text-stone-400 hover:text-brand"
                 >
-                  <span className="text-[11px] text-stone-400">{showLiveDashboard ? "Ocultar dashboard" : "Mostrar dashboard"}</span>
+                  {showLiveDashboard ? "▲ Ocultar dashboard" : "▼ Mostrar dashboard"}
                 </button>
-                {showLiveDashboard && (
-                  <DashboardView user={user} rate={rate} products={products} embedded />
+              </div>
+
+              {/* Productos: su propio scroll, no afecta al dashboard de arriba */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {loading ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-stone-400 text-sm animate-pulse">Cargando productos...</p>
+                  </div>
+                ) : (
+                  <ProductGrid
+                    products={products}
+                    cart={cart}
+                    rate={rate}
+                    onAdd={addToCart}
+                    lowStockThreshold={lowStockThreshold}
+                    displayCurrency={displayCurrency}
+                    popularity={popularity}
+                  />
                 )}
               </div>
             </div>

@@ -522,6 +522,42 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
         )}
       </div>
 
+      {/* KPI Cards — primero de la página (request del usuario). Siempre visibles. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard label="Ventas" value={formatREF(totalSalesRef)} sub={rate?.eur ? formatBs(totalSalesRef, rate.usd) : null}
+          change={salesChangePct} hasPrev={hasPrevData} partial={isPartialData} count={`${activeSales.length} ventas`} color="text-brand" />
+        <KpiCard label="Transacciones" value={activeSales.length} change={countChangePct} hasPrev={hasPrevData} partial={isPartialData} />
+        <KpiCard label="Ticket promedio" value={formatREF(ticketPromedio)} sub={rate?.eur ? formatBs(ticketPromedio, rate.usd) : null}
+          change={ticketChangePct} hasPrev={hasPrevData} partial={isPartialData} />
+        <KpiCard label="Items por venta" value={itemsPorVenta.toFixed(1)} sub="promedio por transaccion" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <p className="text-xs text-stone-500 mb-1">Gastos</p>
+          <p className="text-xl font-bold text-red-600">{formatREF(totalExpRef)}</p>
+          <p className="text-xs text-stone-400">{expenses.length} gastos</p>
+        </div>
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <p className="text-xs text-stone-500 mb-1">Utilidad</p>
+          <p className={`text-xl font-bold ${utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>{formatREF(utilidad)}</p>
+          <p className="text-xs text-stone-400">{totalSalesRef > 0 ? `${((utilidad / totalSalesRef) * 100).toFixed(0)}% margen` : "—"}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <p className="text-xs text-stone-500 mb-1">Creditos</p>
+          <p className="text-xl font-bold text-yellow-600">{formatREF(totalCreditsOutstanding)}</p>
+          <p className="text-xs text-stone-400">{credits.length} pendientes</p>
+        </div>
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <p className="text-xs text-stone-500 mb-1">Anulaciones</p>
+          <p className="text-xl font-bold text-stone-600">{voidedCount}</p>
+          <p className="text-xs text-stone-400">
+            {(activeSales.length + voidedCount) > 0
+              ? `${((voidedCount / (activeSales.length + voidedCount)) * 100).toFixed(1)}% del total`
+              : "—"}
+          </p>
+        </div>
+      </div>
+
       {/* Monthly trend (últimos 12 meses) — siempre ON TOP */}
       <MonthlyTrendChart
         data={monthlySales}
@@ -557,43 +593,6 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
         </div>
       ) : (
         <>
-          {/* KPI Cards — Row 1 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard label="Ventas" value={formatREF(totalSalesRef)} sub={rate?.eur ? formatBs(totalSalesRef, rate.usd) : null}
-              change={salesChangePct} hasPrev={hasPrevData} partial={isPartialData} count={`${activeSales.length} ventas`} color="text-brand" />
-            <KpiCard label="Transacciones" value={activeSales.length} change={countChangePct} hasPrev={hasPrevData} partial={isPartialData} />
-            <KpiCard label="Ticket promedio" value={formatREF(ticketPromedio)} sub={rate?.eur ? formatBs(ticketPromedio, rate.usd) : null}
-              change={ticketChangePct} hasPrev={hasPrevData} partial={isPartialData} />
-            <KpiCard label="Items por venta" value={itemsPorVenta.toFixed(1)} sub="promedio por transaccion" />
-          </div>
-          {/* KPI Cards — Row 2 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <p className="text-xs text-stone-500 mb-1">Gastos</p>
-              <p className="text-xl font-bold text-red-600">{formatREF(totalExpRef)}</p>
-              <p className="text-xs text-stone-400">{expenses.length} gastos</p>
-            </div>
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <p className="text-xs text-stone-500 mb-1">Utilidad</p>
-              <p className={`text-xl font-bold ${utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>{formatREF(utilidad)}</p>
-              <p className="text-xs text-stone-400">{totalSalesRef > 0 ? `${((utilidad / totalSalesRef) * 100).toFixed(0)}% margen` : "—"}</p>
-            </div>
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <p className="text-xs text-stone-500 mb-1">Creditos</p>
-              <p className="text-xl font-bold text-yellow-600">{formatREF(totalCreditsOutstanding)}</p>
-              <p className="text-xs text-stone-400">{credits.length} pendientes</p>
-            </div>
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <p className="text-xs text-stone-500 mb-1">Anulaciones</p>
-              <p className="text-xl font-bold text-stone-600">{voidedCount}</p>
-              <p className="text-xs text-stone-400">
-                {(activeSales.length + voidedCount) > 0
-                  ? `${((voidedCount / (activeSales.length + voidedCount)) * 100).toFixed(1)}% del total`
-                  : "—"}
-              </p>
-            </div>
-          </div>
-
           {/* P&L by product */}
           {/* ─── Top 10 Productos ─── */}
           {top10.length > 0 && (
