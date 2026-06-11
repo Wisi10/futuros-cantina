@@ -678,8 +678,13 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                         {closed.map((cr) => (
                           <div key={cr.id} className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-stone-600">
-                                Original: <span className="font-medium">{formatREF(cr.original_amount_ref)}</span>
+                              <p className="text-xs text-stone-600 flex items-center gap-1.5 flex-wrap">
+                                {cr.source === "legacy" && (
+                                  <span className="inline-block bg-stone-200 text-stone-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                    Histórica
+                                  </span>
+                                )}
+                                <span>Original: <span className="font-medium">{formatREF(cr.original_amount_ref)}</span></span>
                               </p>
                               <p className="text-[11px] text-stone-400">{fmtDate(cr.created_at)}</p>
                             </div>
