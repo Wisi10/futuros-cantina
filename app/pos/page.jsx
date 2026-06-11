@@ -1368,7 +1368,7 @@ function POSPageInner() {
           </div>
         )}
 
-        {activeTab === "gastos" && canAdmin && (
+        {activeTab === "gastos" && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <GastosTabView user={user} rate={rate} />
           </div>

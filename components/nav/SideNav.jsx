@@ -12,7 +12,7 @@ const TABS = [
   { id: "turnos", label: "Turnos", icon: Clock },
   { id: "clientes", label: "Clientes", icon: Users, adminOnly: true },
   { id: "caja", label: "Caja", icon: Wallet },
-  { id: "gastos", label: "Gastos", icon: Receipt, adminOnly: true },
+  { id: "gastos", label: "Gastos", icon: Receipt },
   { id: "reportes", label: "Reportes", icon: BarChart3, adminOnly: true },
   { id: "config", label: "Config", icon: Settings, adminOnly: true },
   { id: "admin", label: "Admin", icon: Shield, ownerOnly: true },
