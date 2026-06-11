@@ -9,14 +9,15 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
   const [last, setLast] = useState(client?.last_name || "");
   const [phone, setPhone] = useState(client?.phone || "");
   const [cedula, setCedula] = useState(client?.cedula || "");
+  const [email, setEmail] = useState(client?.email || "");
   const [notes, setNotes] = useState(client?.notes || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSave() {
     if (saving) return;
-    if (!first.trim() && !last.trim()) {
-      setError("Nombre requerido");
+    if (!first.trim()) {
+      setError("Nombre requerido (apellido, teléfono, cédula y correo son opcionales)");
       return;
     }
     setSaving(true);
@@ -30,6 +31,7 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
             last_name: last.trim() || null,
             phone: phone.trim() || null,
             cedula: cedula.trim() || null,
+            email: email.trim() || null,
             notes: notes.trim() || null,
           })
           .eq("id", client.id);
@@ -38,9 +40,10 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
       } else {
         const { data: id, error } = await supabase.rpc("create_client_quick", {
           p_first_name: first.trim(),
-          p_last_name: last.trim(),
+          p_last_name: last.trim() || "",
           p_phone: phone.trim() || null,
           p_cedula: cedula.trim() || null,
+          p_email: email.trim() || null,
           p_notes: notes.trim() || null,
         });
         if (error || !id) throw (error || new Error("No se pudo crear el cliente"));
@@ -65,7 +68,9 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Nombre</label>
+              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+                Nombre <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 value={first}
@@ -75,7 +80,9 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Apellido</label>
+              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+                Apellido <span className="text-stone-400 normal-case font-normal">(opcional)</span>
+              </label>
               <input
                 type="text"
                 value={last}
@@ -86,7 +93,9 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Telefono</label>
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+              Teléfono <span className="text-stone-400 normal-case font-normal">(opcional)</span>
+            </label>
             <input
               type="tel"
               value={phone}
@@ -97,7 +106,9 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Cedula</label>
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+              Cédula <span className="text-stone-400 normal-case font-normal">(opcional)</span>
+            </label>
             <input
               type="text"
               value={cedula}
@@ -107,7 +118,22 @@ export default function ClientFormModal({ client, user, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">Notas</label>
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+              Correo <span className="text-stone-400 normal-case font-normal">(opcional)</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="cliente@ejemplo.com"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block mb-1">
+              Notas <span className="text-stone-400 normal-case font-normal">(opcional)</span>
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
