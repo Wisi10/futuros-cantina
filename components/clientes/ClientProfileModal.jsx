@@ -49,6 +49,12 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
   const [limitDraft, setLimitDraft] = useState("");
   const isAdmin = isManagerOrAbove(user?.cantinaRole);
 
+  // Deuda histórica (legacy debt sin tracking de productos)
+  const [showLegacyModal, setShowLegacyModal] = useState(false);
+  const [legacyAmount, setLegacyAmount] = useState("");
+  const [legacyNotes, setLegacyNotes] = useState("");
+  const [legacySaving, setLegacySaving] = useState(false);
+
   const load = useCallback(async () => {
     if (!clientId) return;
     setLoading(true);
@@ -238,6 +244,44 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
     }
     setCreditLimit(value);
     setEditingLimit(false);
+  };
+
+  // ----- Deuda histórica (legacy debt) -----
+  const openLegacyModal = () => {
+    setLegacyAmount("");
+    setLegacyNotes("");
+    setShowLegacyModal(true);
+  };
+
+  const saveLegacyDebt = async () => {
+    const amount = parseFloat(legacyAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert("Ingresa un monto válido (mayor a 0)");
+      return;
+    }
+    setLegacySaving(true);
+    const profileClient = profile?.client;
+    const fullName = `${profileClient?.first_name || ""} ${profileClient?.last_name || ""}`.trim() || "Cliente";
+    const { error } = await supabase.from("cantina_credits").insert({
+      id: "cre_lg_" + Math.random().toString(36).slice(2, 14),
+      client_id: clientId,
+      client_name: fullName,
+      sale_id: null,
+      source: "legacy",
+      original_amount_ref: amount,
+      paid_amount_ref: 0,
+      status: "pending",
+      notes: legacyNotes.trim() || null,
+      created_by: user?.name || "Cantina",
+    });
+    setLegacySaving(false);
+    if (error) {
+      alert("Error guardando deuda histórica: " + error.message);
+      return;
+    }
+    setShowLegacyModal(false);
+    await loadCredits();
+    if (onUpdated) await onUpdated();
   };
 
   // ----- Credit sale (navegar a Vender) -----
@@ -440,6 +484,15 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                         <ShoppingCart size={12} /> Venta a crédito
                       </button>
                     )}
+                    {c?.id && (
+                      <button
+                        onClick={openLegacyModal}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-stone-300 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-50 transition-colors min-h-[40px]"
+                        title="Registrar deuda histórica del cliente sin tracking de productos"
+                      >
+                        <Wallet size={12} /> Deuda histórica
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -545,13 +598,23 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                           return (
                             <div key={cr.id} className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs text-stone-700">
-                                  Original: <span className="font-medium">{formatREF(cr.original_amount_ref)}</span>
-                                  {Number(cr.paid_amount_ref || 0) > 0 && (
-                                    <> · Pagado: <span className="font-medium">{formatREF(cr.paid_amount_ref)}</span></>
+                                <p className="text-xs text-stone-700 flex items-center gap-1.5 flex-wrap">
+                                  {cr.source === "legacy" && (
+                                    <span className="inline-block bg-stone-200 text-stone-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      Histórica
+                                    </span>
                                   )}
+                                  <span>
+                                    Original: <span className="font-medium">{formatREF(cr.original_amount_ref)}</span>
+                                    {Number(cr.paid_amount_ref || 0) > 0 && (
+                                      <> · Pagado: <span className="font-medium">{formatREF(cr.paid_amount_ref)}</span></>
+                                    )}
+                                  </span>
                                 </p>
-                                {orderItems.length > 0 && (
+                                {cr.source === "legacy" && cr.notes && (
+                                  <p className="text-xs text-stone-500 mt-0.5 italic">{cr.notes}</p>
+                                )}
+                                {cr.source !== "legacy" && orderItems.length > 0 && (
                                   <p className="text-xs text-stone-500 mt-0.5">
                                     <span className="text-stone-400">Pidió: </span>
                                     {orderItems.map((it, i) => (
@@ -695,6 +758,87 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
             if (onUpdated) await onUpdated();
           }}
         />
+      )}
+
+      {showLegacyModal && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onClick={() => !legacySaving && setShowLegacyModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between p-5 border-b border-stone-200">
+              <div>
+                <h3 className="text-base font-bold text-stone-800 flex items-center gap-2">
+                  <Wallet size={16} className="text-brand" /> Deuda histórica
+                </h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  Para clientes con cuenta abierta sin tracking de productos. Solo registra el monto que deben.
+                </p>
+              </div>
+              <button
+                onClick={() => !legacySaving && setShowLegacyModal(false)}
+                className="p-1 rounded hover:bg-stone-100 text-stone-500 shrink-0"
+                disabled={legacySaving}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-1 block">
+                  Monto que debe (REF) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={legacyAmount}
+                  onChange={(e) => setLegacyAmount(e.target.value)}
+                  placeholder="0.00"
+                  autoFocus
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-base focus:border-brand focus:outline-none"
+                />
+                {parseFloat(legacyAmount) > 0 && rate?.usd && (
+                  <p className="text-[11px] text-stone-400 mt-1">
+                    = Bs. {(parseFloat(legacyAmount) * rate.usd).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className="text-stone-300 ml-1">(tasa: {rate.usd})</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-1 block">
+                  Notas (opcional)
+                </label>
+                <textarea
+                  value={legacyNotes}
+                  onChange={(e) => setLegacyNotes(e.target.value)}
+                  placeholder="Ej: Cuenta abierta desde diciembre 2025"
+                  rows={2}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none resize-none"
+                />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                <p className="text-[11px] text-amber-800">
+                  El cliente podrá pagar este monto desde "Cobrar". El abono descontará la deuda igual que un crédito normal.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 p-5 border-t border-stone-200">
+              <button
+                onClick={() => setShowLegacyModal(false)}
+                disabled={legacySaving}
+                className="flex-1 py-2.5 bg-stone-200 hover:bg-stone-300 rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveLegacyDebt}
+                disabled={legacySaving || !legacyAmount}
+                className="flex-1 py-2.5 bg-brand hover:bg-brand-dark text-white rounded-lg text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {legacySaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                {legacySaving ? "Guardando..." : "Registrar deuda"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
