@@ -1295,20 +1295,11 @@ function POSPageInner() {
                 )}
               </div>
 
-              {/* Dashboard FIJO arriba (request del owner): cuando está abierto ocupa max-h fijo
-                  con scroll interno. NO se mueve al scrollear productos. Toggle a la derecha. */}
-              {showLiveDashboard && (
-                <div className="border-b border-stone-200 shrink-0 max-h-[40vh] overflow-y-auto bg-white">
-                  <DashboardView user={user} rate={rate} products={products} embedded />
-                </div>
-              )}
-              <div className="border-b border-stone-200 shrink-0 flex items-center justify-end px-4 py-1 bg-white">
-                <button
-                  onClick={() => setShowLiveDashboard(!showLiveDashboard)}
-                  className="text-[11px] text-stone-400 hover:text-brand"
-                >
-                  {showLiveDashboard ? "▲ Ocultar dashboard" : "▼ Mostrar dashboard"}
-                </button>
+              {/* Dashboard SIEMPRE VISIBLE y FIJO arriba (request del owner).
+                  Sin toggle de ocultar. Ocupa max-h fijo con scroll interno.
+                  NO se mueve al scrollear productos. */}
+              <div className="border-b border-stone-200 shrink-0 max-h-[40vh] overflow-y-auto bg-white">
+                <DashboardView user={user} rate={rate} products={products} embedded />
               </div>
 
               {/* Productos: su propio scroll, no afecta al dashboard de arriba */}
