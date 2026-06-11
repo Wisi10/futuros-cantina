@@ -1295,12 +1295,13 @@ function POSPageInner() {
                 )}
               </div>
 
-              {/* Dashboard SIEMPRE VISIBLE y FIJO arriba (request del owner).
-                  Sin toggle de ocultar. Ocupa max-h fijo con scroll interno.
-                  NO se mueve al scrollear productos. */}
-              <div className="border-b border-stone-200 shrink-0 max-h-[40vh] overflow-y-auto bg-white">
-                <DashboardView user={user} rate={rate} products={products} embedded />
-              </div>
+              {/* Dashboard SOLO para owner, expandido completo (sin scroll interno),
+                  compact, FIJO arriba. NO se mueve al scrollear productos. */}
+              {user?.cantinaRole === "owner" && (
+                <div className="border-b border-stone-200 shrink-0 bg-white">
+                  <DashboardView user={user} rate={rate} products={products} embedded compact />
+                </div>
+              )}
 
               {/* Productos: su propio scroll, no afecta al dashboard de arriba */}
               <div className="flex-1 min-h-0 overflow-y-auto">

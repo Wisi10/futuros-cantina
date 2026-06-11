@@ -7,7 +7,7 @@ import { formatREF, formatBs, METHOD_LABELS, ProductImage } from "@/lib/utils";
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
-export default function DashboardView({ user, rate, products, embedded = false }) {
+export default function DashboardView({ user, rate, products, embedded = false, compact = false }) {
   const productsById = useMemo(() => {
     const map = {};
     for (const p of products || []) map[p.id] = p;
@@ -125,11 +125,15 @@ export default function DashboardView({ user, rate, products, embedded = false }
   const serif = { fontFamily: "Georgia, serif", letterSpacing: "-0.3px" };
 
   return (
-    <div className={embedded ? "px-3 py-2 bg-brand-cream-light" : "flex-1 overflow-y-auto p-4 md:p-6 bg-brand-cream-light"}>
+    <div className={
+      compact ? "px-3 py-1.5 bg-brand-cream-light"
+      : embedded ? "px-3 py-2 bg-brand-cream-light"
+      : "flex-1 overflow-y-auto p-4 md:p-6 bg-brand-cream-light"
+    }>
       {/* Header (excluded from export) */}
-      <div className={`flex items-center justify-between ${embedded ? "mb-2" : "mb-6"}`}>
+      <div className={`flex items-center justify-between ${compact ? "mb-1.5" : embedded ? "mb-2" : "mb-6"}`}>
         <div>
-          <h2 className={`font-bold text-stone-800 ${embedded ? "text-sm" : "text-lg"}`}>Dashboard en Vivo</h2>
+          <h2 className={`font-bold text-stone-800 ${compact ? "text-xs" : embedded ? "text-sm" : "text-lg"}`}>Dashboard en Vivo</h2>
           {!embedded && <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px]" style={mono}>
             {today} — auto-refresh cada 30s
             {lastRefresh && ` — ultimo: ${fmtTime(lastRefresh)}`}
@@ -151,63 +155,65 @@ export default function DashboardView({ user, rate, products, embedded = false }
       <div id="dashboard-export-area">
 
       {/* KPIs */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${embedded ? "gap-2 mb-2" : "gap-4 mb-6"}`}>
-        <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-          <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Ventas hoy</p>
-          <p className={`font-normal text-stone-800 ${embedded ? "text-lg" : "text-3xl"}`} style={serif}>{formatREF(totalRef)}</p>
-          <p className="text-[10px] text-stone-400" style={mono}>{formatBs(totalRef, rate?.usd)}</p>
+      <div className={`grid grid-cols-4 ${compact ? "gap-1.5 mb-1.5" : embedded ? "gap-2 mb-2" : "gap-4 mb-6"}`}>
+        <div className={`bg-white border ${compact ? "rounded-lg p-1.5" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className="text-[9px] text-stone-400 uppercase tracking-wider font-medium">Ventas hoy</p>
+          <p className={`font-normal text-stone-800 ${compact ? "text-sm" : embedded ? "text-lg" : "text-3xl"}`} style={serif}>{formatREF(totalRef)}</p>
+          <p className="text-[9px] text-stone-400" style={mono}>{formatBs(totalRef, rate?.usd)}</p>
         </div>
-        <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-          <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Transacciones</p>
-          <p className={`font-normal text-stone-800 ${embedded ? "text-lg" : "text-3xl"}`} style={serif}>{salesCount}</p>
-          <p className="text-[10px] text-stone-400" style={mono}>
+        <div className={`bg-white border ${compact ? "rounded-lg p-1.5" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className="text-[9px] text-stone-400 uppercase tracking-wider font-medium">Transacciones</p>
+          <p className={`font-normal text-stone-800 ${compact ? "text-sm" : embedded ? "text-lg" : "text-3xl"}`} style={serif}>{salesCount}</p>
+          <p className="text-[9px] text-stone-400" style={mono}>
             {salesCount > 0 ? `Prom: ${formatREF(totalRef / salesCount)}` : "Sin ventas"}
           </p>
         </div>
-        <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-          <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Turno</p>
+        <div className={`bg-white border ${compact ? "rounded-lg p-1.5" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className="text-[9px] text-stone-400 uppercase tracking-wider font-medium">Turno</p>
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${shift ? "bg-ok" : "bg-stone-300"}`}
               style={shift ? { animation: "pulse-dot 2s ease-in-out infinite" } : {}} />
-            <p className={`text-stone-800 ${embedded ? "text-sm" : "text-lg"}`} style={serif}>
+            <p className={`text-stone-800 ${compact ? "text-xs" : embedded ? "text-sm" : "text-lg"}`} style={serif}>
               {shift ? "Abierto" : "Cerrado"}
             </p>
           </div>
-          {shift && <p className="text-[10px] text-stone-400" style={mono}>desde {fmtTime(shift.opened_at)}</p>}
+          {shift && <p className="text-[9px] text-stone-400" style={mono}>desde {fmtTime(shift.opened_at)}</p>}
         </div>
-        <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-          <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-0.5">Tasa</p>
-          <p className={`font-normal text-stone-800 ${embedded ? "text-base" : "text-2xl"}`} style={serif}>
+        <div className={`bg-white border ${compact ? "rounded-lg p-1.5" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className="text-[9px] text-stone-400 uppercase tracking-wider font-medium">Tasa</p>
+          <p className={`font-normal text-stone-800 ${compact ? "text-xs" : embedded ? "text-base" : "text-2xl"}`} style={serif}>
             {rate?.usd ? `Bs ${rate.usd.toFixed(2)}` : "—"}
           </p>
-          <p className="text-[10px] text-stone-400" style={mono}>
+          <p className="text-[9px] text-stone-400" style={mono}>
             {rate?.eur ? `REF ${rate.eur.toFixed(2)}` : ""}
           </p>
         </div>
       </div>
 
-      <div className={`grid grid-cols-1 md:grid-cols-3 ${embedded ? "gap-2" : "gap-4"}`}>
-        {/* Recent sales */}
-        <div className={`md:col-span-2 bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-          <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-3">Ultimas ventas</p>
+      <div className={`grid grid-cols-3 ${compact ? "gap-1.5" : embedded ? "gap-2" : "gap-4"}`}>
+        {/* Recent sales — compact muestra 3, sino 5 */}
+        <div className={`col-span-2 bg-white border ${compact ? "rounded-lg p-2" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className={`text-[9px] text-stone-400 uppercase tracking-wider font-medium ${compact ? "mb-1" : "mb-3"}`}>Ultimas ventas</p>
           {recentSales.length === 0 ? (
-            <p className="text-sm text-stone-300 text-center py-8">Sin ventas hoy</p>
+            <p className={`text-xs text-stone-300 text-center ${compact ? "py-2" : "py-8"}`}>Sin ventas hoy</p>
           ) : (
-            <div className="space-y-2">
-              {recentSales.map((sale, i) => {
+            <div className={compact ? "space-y-0.5" : "space-y-2"}>
+              {recentSales.slice(0, compact ? 3 : recentSales.length).map((sale, i) => {
                 const items = sale.items || [];
                 const itemSummary = items.map(it => `${it.qty}x ${it.name}`).join(", ");
                 const method = METHOD_LABELS[sale.payment_method] || (sale.payment_status === "credit" ? "Credito" : "—");
                 return (
-                  <div key={sale.id || i} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                  <div key={sale.id || i} className={`flex items-center justify-between ${compact ? "py-0.5" : "py-2 border-b border-stone-100 last:border-0"}`}>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-stone-700 truncate">{itemSummary || "Venta"}</p>
-                      <p className="text-[10px] text-stone-400" style={mono}>
-                        {fmtTime(sale.created_at)} — {method}
-                        {sale.client_name ? ` — ${sale.client_name}` : ""}
-                      </p>
+                      <p className={`text-stone-700 truncate ${compact ? "text-[11px]" : "text-sm"}`}>{itemSummary || "Venta"}</p>
+                      {!compact && (
+                        <p className="text-[10px] text-stone-400" style={mono}>
+                          {fmtTime(sale.created_at)} — {method}
+                          {sale.client_name ? ` — ${sale.client_name}` : ""}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-sm font-medium text-stone-800 ml-3 shrink-0" style={serif}>{formatREF(sale.total_ref)}</p>
+                    <p className={`font-medium text-stone-800 ml-2 shrink-0 ${compact ? "text-[11px]" : "text-sm"}`} style={serif}>{formatREF(sale.total_ref)}</p>
                   </div>
                 );
               })}
@@ -216,23 +222,23 @@ export default function DashboardView({ user, rate, products, embedded = false }
         </div>
 
         {/* Right column */}
-        <div className={embedded ? "space-y-2" : "space-y-4"}>
+        <div className={compact ? "space-y-1.5" : embedded ? "space-y-2" : "space-y-4"}>
           {/* By payment method */}
-          <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-            <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-3">Por metodo de pago</p>
+          <div className={`bg-white border ${compact ? "rounded-lg p-2" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+            <p className={`text-[9px] text-stone-400 uppercase tracking-wider font-medium ${compact ? "mb-1" : "mb-3"}`}>Por metodo de pago</p>
             {Object.keys(byMethod).length === 0 ? (
               <p className="text-xs text-stone-300">—</p>
             ) : (
-              <div className="space-y-2">
-                {Object.entries(byMethod).sort((a, b) => b[1] - a[1]).map(([method, total]) => {
+              <div className={compact ? "space-y-1" : "space-y-2"}>
+                {Object.entries(byMethod).sort((a, b) => b[1] - a[1]).slice(0, compact ? 3 : undefined).map(([method, total]) => {
                   const pct = totalRef > 0 ? (total / totalRef * 100) : 0;
                   return (
                     <div key={method}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-stone-600">{METHOD_LABELS[method] || method}</span>
+                      <div className="flex justify-between text-[11px] mb-0.5">
+                        <span className="text-stone-600 truncate">{METHOD_LABELS[method] || method}</span>
                         <span style={mono}>{formatREF(total)}</span>
                       </div>
-                      <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                      <div className={`bg-stone-100 rounded-full overflow-hidden ${compact ? "h-1" : "h-1.5"}`}>
                         <div className="h-full bg-gold rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
@@ -242,20 +248,20 @@ export default function DashboardView({ user, rate, products, embedded = false }
             )}
           </div>
 
-          {/* Top products */}
-          <div className={`bg-white rounded-2xl border ${embedded ? "p-2.5" : "p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-            <p className="text-[10px] text-stone-400 uppercase tracking-[1.5px] font-medium mb-3">Mas vendidos hoy</p>
+          {/* Top products — compact 3, sino 5 */}
+          <div className={`bg-white border ${compact ? "rounded-lg p-2" : embedded ? "rounded-2xl p-2.5" : "rounded-2xl p-5"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+            <p className={`text-[9px] text-stone-400 uppercase tracking-wider font-medium ${compact ? "mb-1" : "mb-3"}`}>Mas vendidos hoy</p>
             {topProducts.length === 0 ? (
               <p className="text-xs text-stone-300">—</p>
             ) : (
-              <div className="space-y-2">
-                {topProducts.map((p, i) => {
+              <div className={compact ? "space-y-1" : "space-y-2"}>
+                {topProducts.slice(0, compact ? 3 : topProducts.length).map((p, i) => {
                   const productData = p.id ? productsById[p.id] : null;
                   return (
-                    <div key={p.id || p.name} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded-full bg-stone-100 flex items-center justify-center text-[10px] font-bold text-stone-500 shrink-0">{i + 1}</span>
-                        <ProductImage product={productData || { name: p.name }} size={24} className="rounded" />
+                    <div key={p.id || p.name} className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`rounded-full bg-stone-100 flex items-center justify-center font-bold text-stone-500 shrink-0 ${compact ? "w-4 h-4 text-[9px]" : "w-5 h-5 text-[10px]"}`}>{i + 1}</span>
+                        {!compact && <ProductImage product={productData || { name: p.name }} size={24} className="rounded" />}
                         <span className="text-stone-700 truncate">{p.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
