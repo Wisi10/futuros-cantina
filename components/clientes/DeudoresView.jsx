@@ -273,11 +273,8 @@ export default function DeudoresView({ user, rate, onNavigateToVender }) {
       .eq("id", credit.id);
     if (upErr) throw upErr;
 
-    if (paymentRow?.id) {
-      try {
-        await supabase.rpc("award_loyalty_for_credit_payment", { p_payment_id: paymentRow.id });
-      } catch (e) { console.error("[LOYALTY] credit payment award error:", e); }
-    }
+    // Regla del negocio: loyalty SOLO en compras de contado.
+    // No otorgar puntos por método crédito ni por pago al crédito.
   };
 
   const goVender = (group) => {

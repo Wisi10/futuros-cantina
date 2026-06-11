@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { X, Edit2, Loader2, Wallet, ShoppingCart, AlertCircle, Check } from "lucide-react";
+import { X, Edit2, Loader2, Wallet, ShoppingCart, AlertCircle, Check, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatREF, PAYMENT_METHODS, isManagerOrAbove } from "@/lib/utils";
 import { avatarColor, avatarInitials, relativeFromNow, daysSince, formatVePhone } from "@/lib/clientHelpers";
@@ -54,6 +54,7 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
   const [legacyAmount, setLegacyAmount] = useState("");
   const [legacyNotes, setLegacyNotes] = useState("");
   const [legacySaving, setLegacySaving] = useState(false);
+  const [editingLegacy, setEditingLegacy] = useState(null); // null = creando | obj = editando
 
   const load = useCallback(async () => {
     if (!clientId) return;
@@ -135,13 +136,6 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
     setPayRef("");
   };
 
-  const openPayCredit = (credit) => {
-    setPayTarget({ kind: "credit", credit });
-    setPayAmount(Number(credit.outstanding).toFixed(2));
-    setPayMethod("");
-    setPayRef("");
-  };
-
   const cancelPay = () => {
     setPayTarget(null);
     setPayAmount("");
@@ -174,11 +168,8 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
       .eq("id", credit.id);
     if (upErr) throw upErr;
 
-    if (paymentRow?.id) {
-      try {
-        await supabase.rpc("award_loyalty_for_credit_payment", { p_payment_id: paymentRow.id });
-      } catch (e) { console.error("[LOYALTY] credit payment award error:", e); }
-    }
+    // Regla del negocio: loyalty SOLO en compras de contado.
+    // No otorgar puntos por método crédito ni por pago al crédito.
   };
 
   const confirmPay = async () => {
@@ -248,8 +239,16 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
 
   // ----- Deuda histórica (legacy debt) -----
   const openLegacyModal = () => {
+    setEditingLegacy(null);
     setLegacyAmount("");
     setLegacyNotes("");
+    setShowLegacyModal(true);
+  };
+
+  const openEditLegacy = (credit) => {
+    setEditingLegacy(credit);
+    setLegacyAmount(String(credit.original_amount_ref));
+    setLegacyNotes(credit.notes || "");
     setShowLegacyModal(true);
   };
 
@@ -259,27 +258,57 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
       alert("Ingresa un monto válido (mayor a 0)");
       return;
     }
+    if (editingLegacy) {
+      // Validar que el nuevo monto no sea menor a lo ya pagado
+      const paid = Number(editingLegacy.paid_amount_ref || 0);
+      if (amount < paid - 0.005) {
+        alert(`El nuevo monto (${formatREF(amount)}) no puede ser menor a lo ya pagado (${formatREF(paid)})`);
+        return;
+      }
+    }
     setLegacySaving(true);
-    const profileClient = profile?.client;
-    const fullName = `${profileClient?.first_name || ""} ${profileClient?.last_name || ""}`.trim() || "Cliente";
-    const { error } = await supabase.from("cantina_credits").insert({
-      id: "cre_lg_" + Math.random().toString(36).slice(2, 14),
-      client_id: clientId,
-      client_name: fullName,
-      sale_id: null,
-      source: "legacy",
-      original_amount_ref: amount,
-      paid_amount_ref: 0,
-      status: "pending",
-      notes: legacyNotes.trim() || null,
-      created_by: user?.name || "Cantina",
-    });
-    setLegacySaving(false);
-    if (error) {
-      alert("Error guardando deuda histórica: " + error.message);
-      return;
+    if (editingLegacy) {
+      // UPDATE
+      const paid = Number(editingLegacy.paid_amount_ref || 0);
+      const newStatus = paid >= amount - 0.005 ? "paid" : (paid > 0 ? "partial" : "pending");
+      const { error } = await supabase
+        .from("cantina_credits")
+        .update({
+          original_amount_ref: amount,
+          status: newStatus,
+          notes: legacyNotes.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingLegacy.id);
+      setLegacySaving(false);
+      if (error) {
+        alert("Error actualizando deuda: " + error.message);
+        return;
+      }
+    } else {
+      // INSERT
+      const profileClient = profile?.client;
+      const fullName = `${profileClient?.first_name || ""} ${profileClient?.last_name || ""}`.trim() || "Cliente";
+      const { error } = await supabase.from("cantina_credits").insert({
+        id: "cre_lg_" + Math.random().toString(36).slice(2, 14),
+        client_id: clientId,
+        client_name: fullName,
+        sale_id: null,
+        source: "legacy",
+        original_amount_ref: amount,
+        paid_amount_ref: 0,
+        status: "pending",
+        notes: legacyNotes.trim() || null,
+        created_by: user?.name || "Cantina",
+      });
+      setLegacySaving(false);
+      if (error) {
+        alert("Error guardando deuda histórica: " + error.message);
+        return;
+      }
     }
     setShowLegacyModal(false);
+    setEditingLegacy(null);
     await loadCredits();
     if (onUpdated) await onUpdated();
   };
@@ -473,7 +502,16 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                         onClick={openPayFIFO}
                         className="flex items-center gap-1.5 px-3 py-2 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand-dark transition-colors min-h-[40px]"
                       >
-                        <Wallet size={12} /> Cobrar
+                        <Wallet size={12} /> Abonar
+                      </button>
+                    )}
+                    {c?.id && (
+                      <button
+                        onClick={openLegacyModal}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors min-h-[40px]"
+                        title="Agregar monto que debe el cliente (sin tracking de productos)"
+                      >
+                        <Plus size={12} /> Agregar deuda
                       </button>
                     )}
                     {onStartCreditSale && c?.id && (
@@ -482,15 +520,6 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                         className="flex items-center gap-1.5 px-3 py-2 bg-white border border-brand text-brand rounded-lg text-xs font-bold hover:bg-brand/5 transition-colors min-h-[40px]"
                       >
                         <ShoppingCart size={12} /> Venta a crédito
-                      </button>
-                    )}
-                    {c?.id && (
-                      <button
-                        onClick={openLegacyModal}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-stone-300 text-stone-600 rounded-lg text-xs font-bold hover:bg-stone-50 transition-colors min-h-[40px]"
-                        title="Registrar deuda histórica del cliente sin tracking de productos"
-                      >
-                        <Wallet size={12} /> Deuda histórica
                       </button>
                     )}
                   </div>
@@ -615,29 +644,35 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                                   <p className="text-xs text-stone-500 mt-0.5 italic">{cr.notes}</p>
                                 )}
                                 {cr.source !== "legacy" && orderItems.length > 0 && (
-                                  <p className="text-xs text-stone-500 mt-0.5">
-                                    <span className="text-stone-400">Pidió: </span>
+                                  <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                                    <span className="text-[10px] text-stone-400 uppercase tracking-wider font-bold mr-1">Productos:</span>
                                     {orderItems.map((it, i) => (
                                       <span key={i}>
                                         {i > 0 && <span className="text-stone-300"> · </span>}
-                                        {it.qty}× {it.name}
+                                        <span className="font-medium">{it.qty}×</span> {it.name}
                                       </span>
                                     ))}
                                   </p>
                                 )}
-                                <p className={`text-[11px] mt-0.5 ${ageColor(days)}`}>
+                                {cr.source !== "legacy" && orderItems.length === 0 && cr.sale_id && (
+                                  <p className="text-[11px] text-stone-400 mt-0.5 italic">Sin detalle de productos</p>
+                                )}
+                                <p className={`text-[11px] mt-1 ${ageColor(days)}`}>
                                   {fmtDate(cr.created_at)} · {days === 0 ? "Hoy" : days === 1 ? "Ayer" : `Hace ${days}d`}
                                   {cr.status === "partial" && " · Parcial"}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                <p className="text-sm font-bold text-brand whitespace-nowrap">{formatREF(cr.outstanding)}</p>
-                                <button
-                                  onClick={() => openPayCredit(cr)}
-                                  className="px-3 py-2 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors min-h-[36px]"
-                                >
-                                  Cobrar
-                                </button>
+                                <p className="text-base font-bold text-brand whitespace-nowrap">{formatREF(cr.outstanding)}</p>
+                                {cr.source === "legacy" && (
+                                  <button
+                                    onClick={() => openEditLegacy(cr)}
+                                    className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors"
+                                    title="Editar monto"
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -771,10 +806,13 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
             <div className="flex items-start justify-between p-5 border-b border-stone-200">
               <div>
                 <h3 className="text-base font-bold text-stone-800 flex items-center gap-2">
-                  <Wallet size={16} className="text-brand" /> Deuda histórica
+                  <Wallet size={16} className="text-brand" />
+                  {editingLegacy ? "Editar deuda" : "Agregar deuda"}
                 </h3>
                 <p className="text-xs text-stone-500 mt-1">
-                  Para clientes con cuenta abierta sin tracking de productos. Solo registra el monto que deben.
+                  {editingLegacy
+                    ? "Ajusta el monto total que debe el cliente."
+                    : "Para clientes con cuenta abierta sin tracking de productos. Solo registra el monto que deben."}
                 </p>
               </div>
               <button
@@ -786,9 +824,17 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
               </button>
             </div>
             <div className="p-5 space-y-4">
+              {editingLegacy && Number(editingLegacy.paid_amount_ref || 0) > 0 && (
+                <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5">
+                  <p className="text-[11px] text-stone-600">
+                    Ya pagado: <span className="font-bold">{formatREF(editingLegacy.paid_amount_ref)}</span>.
+                    El monto total no puede ser menor a este valor.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-1 block">
-                  Monto que debe (REF) *
+                  Monto total que debe (REF) *
                 </label>
                 <input
                   type="number"
@@ -819,11 +865,13 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                   className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none resize-none"
                 />
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                <p className="text-[11px] text-amber-800">
-                  El cliente podrá pagar este monto desde "Cobrar". El abono descontará la deuda igual que un crédito normal.
-                </p>
-              </div>
+              {!editingLegacy && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                  <p className="text-[11px] text-amber-800">
+                    El cliente podrá pagar este monto desde "Abonar". El abono descontará del total que debe.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex gap-2 p-5 border-t border-stone-200">
               <button
@@ -839,7 +887,7 @@ export default function ClientProfileModal({ clientId, user, rate, onClose, onUp
                 className="flex-1 py-2.5 bg-brand hover:bg-brand-dark text-white rounded-lg text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {legacySaving ? <Loader2 size={14} className="animate-spin" /> : null}
-                {legacySaving ? "Guardando..." : "Registrar deuda"}
+                {legacySaving ? "Guardando..." : editingLegacy ? "Actualizar deuda" : "Registrar deuda"}
               </button>
             </div>
           </div>
