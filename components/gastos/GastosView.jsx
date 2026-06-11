@@ -68,6 +68,7 @@ export default function GastosView({ user, rate }) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [staffSavedToast, setStaffSavedToast] = useState(false);
 
   // View
   const [viewMode, setViewMode] = useState("dashboard");
@@ -319,6 +320,10 @@ export default function GastosView({ user, rate }) {
     if (error) { alert("Error: " + error.message); return; }
     resetForm();
     loadExpenses();
+    if (!isAdmin) {
+      setStaffSavedToast(true);
+      setTimeout(() => setStaffSavedToast(false), 3500);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -351,6 +356,92 @@ export default function GastosView({ user, rate }) {
     month: "vs mes anterior",
     year:  "vs año anterior",
   };
+
+  // Vista simplificada para staff: solo cargar gastos, sin ver histórico ni nómina.
+  // Razón: tabla de gastos contiene categoría "Nómina / Sueldos" con montos sensibles.
+  if (!isAdmin) {
+    const staffCategories = EXPENSE_CATEGORIES.filter((c) => c !== "Nómina / Sueldos");
+    return (
+      <div className="h-full overflow-auto p-4 md:p-6">
+        <div className="max-w-2xl mx-auto space-y-4">
+          <div className="flex items-center gap-2">
+            <Receipt size={20} className="text-brand" />
+            <h2 className="text-xl font-bold text-stone-800">Cargar gasto</h2>
+          </div>
+          <p className="text-sm text-stone-500">
+            Registra gastos operativos (insumos, servicios, mantenimiento). El histórico y los reportes los gestiona el gerente.
+          </p>
+          {staffSavedToast && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2">
+              <span className="font-bold">✓</span> Gasto cargado correctamente.
+            </div>
+          )}
+          <div className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Tipo</label>
+                <select value={form.expense_type} onChange={(e) => setForm({ ...form, expense_type: e.target.value })}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                  {EXPENSE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Categoría</label>
+                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                  {staffCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Descripción *</label>
+                <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Ej: Recarga de gas para cocina"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Método de pago</label>
+                <select value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm">
+                  {PAYMENT_METHODS.filter((m) => m.id !== "cortesia").map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Monto (REF) *</label>
+                <input type="number" step="0.01" value={form.amount_ref}
+                  onChange={(e) => setForm({ ...form, amount_ref: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+                {parseFloat(form.amount_ref) > 0 && rate?.usd && (
+                  <p className="text-xs text-stone-400 mt-1">
+                    = Bs. {amountBsPreview.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className="text-stone-300 ml-1">(tasa: {rate.usd})</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Fecha</label>
+                <input type="date" value={form.expense_date}
+                  onChange={(e) => setForm({ ...form, expense_date: e.target.value })}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Referencia (opcional)</label>
+                <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                  placeholder="Nº de comprobante / factura"
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <button onClick={handleSave} disabled={saving}
+              className="w-full py-3 bg-brand hover:bg-brand-dark text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+              <Save size={14} /> {saving ? "Guardando..." : "Registrar gasto"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-auto p-4 md:p-6 space-y-6">
