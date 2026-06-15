@@ -698,7 +698,7 @@ function POSPageInner() {
     }
   };
 
-  // Confirm regular sale (saleData = { payments: [], change?: {kind, amount, method?, client_id?}, legacy_method })
+  // Confirm regular sale (saleData = { payments: [], change?: {kind, amount, method?, client_id?}, legacy_method, sale_date? })
   const confirmSale = async (saleData) => {
     const payments = saleData?.payments || [];
     const change = saleData?.change || null;
@@ -708,6 +708,14 @@ function POSPageInner() {
     const ivaAmountRef = tax ? Number(tax.iva_amount_ref || 0) : 0;
     const igtfAmountRef = tax ? Number(tax.igtf_amount_ref || 0) : 0;
     const hasFactura = !!tax?.has_factura;
+    // Venta retroactiva: si PaymentModal envía sale_date distinto a hoy, lo
+    // respetamos. Default = hoy. Tope de 7 días enforced en el modal.
+    const today = getLocalDate();
+    const saleDate = saleData?.sale_date || today;
+    const isRetroactive = saleDate !== today;
+    const retroNote = isRetroactive
+      ? `Venta retroactiva — registrada el ${today} con fecha ${saleDate}`
+      : null;
     // Si PaymentModal envió un total con impuestos, lo respetamos (el desglose ahí
     // ya consideró IVA/IGTF). Si no, caemos al cálculo base subtotal - descuento.
     const finalTotalRef = tax?.total_with_tax_ref != null
@@ -776,6 +784,8 @@ function POSPageInner() {
 
       try {
         await enqueueSale({
+          sale_date: saleDate,
+          ...(retroNote && { notes: retroNote }),
           local_id: localId,
           sale_date: getLocalDate(),
           items,
@@ -825,7 +835,7 @@ function POSPageInner() {
         setLastSaleRecord({
           id: localId,
           sale_number: null,
-          sale_date: getLocalDate(),
+          sale_date: saleDate,
           items,
           total_ref: finalTotalRef,
           iva_amount_ref: ivaAmountRef,
@@ -866,6 +876,8 @@ function POSPageInner() {
         // Esto incluye los impuestos para reflejar lo que efectivamente cobró el staff.
         total_ref: finalTotalRef,
         total_bs: finalTotalBs,
+        sale_date: saleDate,
+        ...(retroNote && { notes: retroNote }),
       });
       if (!result) { setProcessing(false); return; }
 
@@ -965,17 +977,24 @@ function POSPageInner() {
   };
 
   // Confirm credit sale
-  const confirmCreditSale = async ({ clientId, clientName, notes, dueDate }) => {
+  const confirmCreditSale = async ({ clientId, clientName, notes, dueDate, sale_date }) => {
     setProcessing(true);
     try {
+      const today = getLocalDate();
+      const saleDate = sale_date || today;
+      const retroNote = saleDate !== today
+        ? `Venta retroactiva — registrada el ${today} con fecha ${saleDate}`
+        : null;
+      const combinedNotes = [notes, retroNote].filter(Boolean).join(" · ") || null;
       const result = await executeSale({
         payment_status: "credit",
         payment_method: null,
         client_id: clientId,
         client_name: clientName,
-        notes: notes || null,
+        notes: combinedNotes,
         exchange_rate_bs: rate?.usd || null,
         created_by: user?.name || "Cantina",
+        sale_date: saleDate,
       });
       if (!result) { setProcessing(false); return; }
 

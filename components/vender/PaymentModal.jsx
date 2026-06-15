@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2, CheckCircle, Split, FileText, Receipt } from "lucide-react";
+import { ArrowLeft, Loader2, Search, AlertCircle, User, Plus, Trash2, CheckCircle, Split, FileText, Receipt, Calendar } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBs, formatREFsec, PAYMENT_METHODS, METHOD_LABELS, ProductImage } from "@/lib/utils";
 import ClientLink from "@/components/shared/ClientLink";
@@ -10,7 +10,22 @@ const MIXED_METHODS = PAYMENT_METHODS.filter((m) => !m.exclusive);
 
 function round2(n) { return Math.round(Number(n) * 100) / 100; }
 
+// Helpers para "venta retroactiva": fecha local hoy + tope 7 días atrás.
+function todayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function minDateRetroactive() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function PaymentModal({ cart, rate, processing, saleClient, userRole, onAssociateClient, onConfirm, onConfirmCredit, onBack }) {
+  const TODAY = todayLocal();
+  const [saleDate, setSaleDate] = useState(TODAY);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const isRetroactive = saleDate !== TODAY;
   const subtotalRef = round2(cart.reduce((sum, item) => sum + Number(item.product.price_ref) * item.qty, 0));
   const hasTasa = !!rate;
 
@@ -321,7 +336,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
       const clientName = selectedClient
         ? (selectedClient.full_name || "").trim().replace(/\s+/g, " ")
         : manualClientName.trim();
-      onConfirmCredit({ clientId, clientName, notes: creditNotes, dueDate: dueDate || null });
+      onConfirmCredit({ clientId, clientName, notes: creditNotes, dueDate: dueDate || null, sale_date: saleDate });
       return;
     }
     if (isCortesia) {
@@ -329,6 +344,7 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
       onConfirm({
         payments: [{ method: "cortesia", amount_ref: totalRef, reference: null }],
         legacy_method: "cortesia",
+        sale_date: saleDate,
       });
       return;
     }
@@ -356,17 +372,64 @@ export default function PaymentModal({ cart, rate, processing, saleClient, userR
         igtf_amount_ref: igtfAmount,
         total_with_tax_ref: totalRef,
       },
+      sale_date: saleDate,
     });
   };
 
   return (
     <div className="fixed inset-0 bg-brand-cream-light z-40 flex flex-col">
-      <div className="bg-white border-b border-stone-200 px-4 py-3 flex items-center gap-3">
+      <div className="bg-white border-b border-stone-200 px-4 py-3 flex items-center gap-3 flex-wrap">
         <button onClick={onBack} disabled={processing} className="p-2 rounded-lg hover:bg-stone-100 text-stone-500 disabled:opacity-30">
           <ArrowLeft size={20} />
         </button>
         <h2 className="font-bold text-lg text-stone-800">Metodo de pago</h2>
+        <div className="ml-auto flex items-center gap-2">
+          {!showDatePicker ? (
+            <button
+              onClick={() => setShowDatePicker(true)}
+              disabled={processing}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                isRetroactive
+                  ? "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                  : "bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100"
+              } disabled:opacity-50`}
+              title="Cambiar fecha de la venta (hasta 7 días atrás)"
+            >
+              <Calendar size={14} />
+              {isRetroactive ? `📅 ${new Date(saleDate + "T12:00:00").toLocaleDateString("es-VE")}` : "Hoy"}
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 bg-amber-50 border border-amber-300 rounded-lg px-2 py-1">
+              <input
+                type="date"
+                value={saleDate}
+                min={minDateRetroactive()}
+                max={TODAY}
+                onChange={(e) => setSaleDate(e.target.value || TODAY)}
+                className="bg-transparent text-sm font-medium text-stone-700 px-1 focus:outline-none cursor-pointer"
+              />
+              <button onClick={() => { setSaleDate(TODAY); setShowDatePicker(false); }}
+                className="ml-1 px-2 py-0.5 text-xs text-brand hover:bg-amber-100 rounded font-medium">
+                Hoy
+              </button>
+              <button onClick={() => setShowDatePicker(false)}
+                className="px-1.5 text-stone-500 hover:bg-amber-100 rounded">
+                ✓
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+      {isRetroactive && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>
+            Esta venta se registrará con fecha{" "}
+            <strong>{new Date(saleDate + "T12:00:00").toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long" })}</strong>.
+            Se va a marcar como "venta retroactiva" en la nota.
+          </span>
+        </div>
+      )}
 
       {/* Loyalty client picker */}
       <div className="bg-white border-b border-stone-200 px-4 py-3">
