@@ -472,6 +472,7 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                 <th className="text-left px-3 py-2 font-medium"><SortHeader k="category" label="Categoría" /></th>
                 <th className="text-center px-3 py-2 font-medium" title="Cuenta para deuda intercompania con el complejo"><SortHeader k="is_cantina" label="Es cantina" align="center" /></th>
                 <th className="text-center px-3 py-2 font-medium"><SortHeader k="active" label="Activo" align="center" /></th>
+                <th className="text-center px-3 py-2 font-medium text-amber-700" title="Unidad de medida (solo materia prima)">Unidad</th>
                 <th className="text-right px-3 py-2 font-medium"><SortHeader k="price" label="Precio $" align="right" /></th>
                 <th className="text-right px-3 py-2 font-medium"><SortHeader k="cost" label="Costo $" align="right" /></th>
                 <th className="text-right px-3 py-2 font-medium hidden md:table-cell"><SortHeader k="margin" label="Margen" align="right" /></th>
@@ -498,6 +499,20 @@ export default function ConfigView({ user, rate, onRateUpdated }) {
                       className={`w-10 h-5 rounded-full transition-colors ${p.active ? "bg-green-500" : "bg-stone-300"}`}>
                       <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${p.active ? "translate-x-5" : "translate-x-0.5"}`} />
                     </button>
+                  </td>
+                  <td className="px-3 py-2 text-center text-xs">
+                    {p.type === "materia_prima" ? (() => {
+                      const u = p.unit_label || "u";
+                      const c = Number(p.cost_ref || 0);
+                      const isMass = u === "g" || u === "ml";
+                      const perK = isMass ? c * 1000 : 0;
+                      const loca = isMass && perK > 50;
+                      return (
+                        <span className={loca ? "text-red-600 font-bold" : "text-amber-700 font-medium"}>
+                          {loca && "🚨 "}{u}
+                        </span>
+                      );
+                    })() : <span className="text-stone-300">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right">{Number(p.price_ref).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right text-stone-500">{Number(p.cost_ref || 0).toFixed(2)}</td>
@@ -538,8 +553,13 @@ function EditProductModal({ product, onClose, onSave }) {
   const [name, setName] = useState(product.name || "");
   const [priceRef, setPriceRef] = useState(product.price_ref?.toString() || "");
   const [costRef, setCostRef] = useState(product.cost_ref?.toString() || "0");
+  const [unitLabel, setUnitLabel] = useState(product.unit_label || "u");
+  const [unitSize, setUnitSize] = useState(product.unit_size?.toString() || "1");
   const [emoji, setEmoji] = useState(product.emoji || "🍽️");
   const [category, setCategory] = useState(product.category || "");
+  // Solo materia prima necesita declarar unidad de medida (g/kg/ml/L). Productos
+  // finales se cuentan siempre por unidad.
+  const isMP = product.type === "materia_prima";
   // Catálogo de categorías editable (Config > Categorías). Fallback a la
   // lista hardcoded si falla la carga. Si la categoría actual del producto
   // no está en el catálogo (data legacy), la inyectamos para que aparezca.
@@ -574,7 +594,7 @@ function EditProductModal({ product, onClose, onSave }) {
     }
     setValidationErr("");
     setSaving(true);
-    await onSave(product, {
+    const updates = {
       name,
       price_ref: parseFloat(priceRef) || 0,
       cost_ref: parseFloat(costRef) || 0,
@@ -583,7 +603,12 @@ function EditProductModal({ product, onClose, onSave }) {
       low_stock_alert: parseInt(alert) || 10,
       is_redeemable: isRedeemable,
       redemption_cost_points: isRedeemable ? parseInt(redemptionCost) : null,
-    });
+    };
+    if (isMP) {
+      updates.unit_label = unitLabel;
+      updates.unit_size = parseFloat(unitSize) || 1;
+    }
+    await onSave(product, updates);
     setSaving(false);
   };
 
@@ -607,11 +632,63 @@ function EditProductModal({ product, onClose, onSave }) {
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 block mb-1">Costo REF</label>
-              <input type="number" step="0.01" value={costRef} onChange={(e) => setCostRef(e.target.value)}
+              <label className="text-xs font-medium text-stone-500 block mb-1">
+                Costo REF {isMP ? `por ${unitLabel}` : "por unidad"}
+              </label>
+              <input type="number" step="0.0001" value={costRef} onChange={(e) => setCostRef(e.target.value)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
+              {isMP && (() => {
+                const c = parseFloat(costRef) || 0;
+                // Para g/ml: $/kg = c × 1000. Warning si > 50 (papa $840/kg, café $146/kg etc.)
+                if (unitLabel === "g" || unitLabel === "ml") {
+                  const perK = c * 1000;
+                  const big = unitLabel === "g" ? "kg" : "L";
+                  const loca = perK > 50;
+                  return (
+                    <p className={`text-[10px] mt-1 ${loca ? "text-red-600 font-bold" : "text-stone-400"}`}>
+                      {loca ? "🚨 " : "= "}REF {perK.toFixed(2)} por {big}
+                      {loca ? " — ¿es realmente por gramo?" : ""}
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
+
+          {/* Materia prima: unidad de medida editable. Solo MP necesita esto;
+              productos finales se cuentan siempre por unidad. */}
+          {isMP && (
+            <div className="border border-amber-200 bg-amber-50/50 rounded-lg p-3 space-y-2">
+              <p className="text-[10px] uppercase tracking-[1.5px] text-amber-700 font-bold">
+                📏 Unidad de medida (materia prima)
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-stone-600 block mb-1">Se mide en</label>
+                  <select value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)}
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-brand focus:outline-none">
+                    <option value="u">u — unidades / piezas</option>
+                    <option value="g">g — gramos</option>
+                    <option value="kg">kg — kilogramos</option>
+                    <option value="ml">ml — mililitros</option>
+                    <option value="l">L — litros</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-stone-600 block mb-1">Tamaño base</label>
+                  <input type="number" step="0.01" value={unitSize} onChange={(e) => setUnitSize(e.target.value)}
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:border-brand focus:outline-none" />
+                  <p className="text-[10px] text-stone-500 mt-0.5">
+                    Cuánto pesa/mide 1 unidad de inventario
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-stone-600 italic">
+                💡 Si el sistema te muestra el costo "por gramo" pero vos comprás "por kg", cambiá la unidad acá. El costo se ingresa por la unidad seleccionada.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-medium text-stone-500 block mb-1">Emoji</label>
