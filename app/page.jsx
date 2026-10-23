@@ -13,41 +13,43 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      // PINs hardcoded — checkeados ANTES del query DB.
-      // 5555 = owner (Sam), 9999 = admin/gerente generico, 1234 = staff generico
-      if (pin === "5555") {
-        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "owner", name: "Owner", role: "owner", cantinaRole: "owner" }));
-        router.push("/pos");
+      // 1) PIN -> email de la cuenta de cantina (RPC con limite de intentos por IP)
+      const { data: email, error: rpcError } = await supabase.rpc("cantina_pin_login", { p_pin: pin });
+      if (rpcError) {
+        setError(rpcError.message?.includes("Demasiados") ? rpcError.message : "Error de conexion");
         setLoading(false);
         return;
       }
-      if (pin === "9999") {
-        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "gerente_generic", name: "Gerente", role: "gerente", cantinaRole: "gerente" }));
-        router.push("/pos");
-        setLoading(false);
-        return;
-      }
-      if (pin === "1234") {
-        sessionStorage.setItem("cantina_user", JSON.stringify({ id: "staff_generic", name: "Staff", role: "staff", cantinaRole: "staff" }));
-        router.push("/pos");
-        setLoading(false);
-        return;
-      }
-
-      const { data, error: dbError } = await supabase
-        .from("user_profiles")
-        .select("id, name, role, cantina_role")
-        .eq("pin", pin)
-        .eq("is_active", true)
-        .not("pin", "is", null);
-
-      if (dbError || !data || data.length === 0) {
+      if (!email) {
         setError("PIN incorrecto");
         setLoading(false);
         return;
       }
 
-      const user = { ...data[0], cantinaRole: data[0].cantina_role || "staff" };
+      // 2) Sesion real de Supabase Auth: todas las queries salen como "authenticated"
+      const { data: auth, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password: `cantina:${pin}`,
+      });
+      if (authError || !auth?.user) {
+        setError("PIN incorrecto");
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("id, name, role, cantina_role")
+        .eq("id", auth.user.id)
+        .single();
+      if (!profile) {
+        await supabase.auth.signOut();
+        setError("Usuario sin perfil");
+        setLoading(false);
+        return;
+      }
+
+      const user = { ...profile, cantinaRole: profile.cantina_role || "staff" };
       sessionStorage.setItem("cantina_user", JSON.stringify(user));
       router.push("/pos");
     } catch {

@@ -2,20 +2,22 @@
 import { useState } from "react";
 import { Delete } from "lucide-react";
 
+const PIN_LENGTH = 6;
+
 export default function PinLogin({ onLogin, error, loading }) {
   const [pin, setPin] = useState("");
 
   const handleDigit = (d) => {
-    if (pin.length >= 4) return;
+    if (pin.length >= PIN_LENGTH) return;
     const next = pin + d;
     setPin(next);
-    if (next.length === 4) onLogin(next);
+    if (next.length === PIN_LENGTH) { onLogin(next); setPin(""); }
   };
 
   const handleDelete = () => setPin((p) => p.slice(0, -1));
   const handleClear = () => setPin("");
 
-  const dots = Array.from({ length: 4 }, (_, i) => (
+  const dots = Array.from({ length: PIN_LENGTH }, (_, i) => (
     <div
       key={i}
       className={`w-5 h-5 rounded-full border-2 transition-all ${

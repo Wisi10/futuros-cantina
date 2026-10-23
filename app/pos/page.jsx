@@ -149,7 +149,15 @@ function POSPageInner() {
   useEffect(() => {
     const stored = sessionStorage.getItem("cantina_user");
     if (!stored) { router.push("/"); return; }
-    setUser(JSON.parse(stored));
+    // Sin sesion de Supabase Auth las queries no tienen acceso: volver al PIN
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        sessionStorage.removeItem("cantina_user");
+        router.push("/");
+        return;
+      }
+      setUser(JSON.parse(stored));
+    });
   }, [router]);
 
   // Data loading
@@ -1178,7 +1186,7 @@ function POSPageInner() {
     setSaleClient(null);
     localStorage.removeItem("cantina_cart");
     sessionStorage.removeItem("cantina_user");
-    router.push("/");
+    supabase.auth.signOut().finally(() => router.push("/"));
   };
 
   const handleNewSale = () => {

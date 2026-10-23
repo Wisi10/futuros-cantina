@@ -35,7 +35,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
     if (!supabase) return;
     setLoading(true);
     const [profilesRes, killRes] = await Promise.all([
-      supabase.from("user_profiles").select("id, name, role, cantina_role, is_active, pin, phone, cortesia_limit_monthly_ref").order("name"),
+      supabase.from("user_profiles").select("id, name, role, cantina_role, is_active, is_cantina_login, phone, cortesia_limit_monthly_ref").order("name"),
       supabase.from("app_settings").select("value").eq("key", "killswitch_cantina_sales").maybeSingle(),
     ]);
     setProfiles(profilesRes.data || []);
@@ -58,8 +58,8 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
 
   const handleResetPin = async () => {
     if (!resetPinFor || !newPin.trim()) return;
-    if (!/^\d{4,8}$/.test(newPin)) { alert("PIN debe ser 4-8 digitos"); return; }
-    const { error } = await supabase.from("user_profiles").update({ pin: newPin }).eq("id", resetPinFor.id);
+    if (!/^\d{6}$/.test(newPin)) { alert("PIN debe tener 6 digitos"); return; }
+    const { error } = await supabase.rpc("reset_cantina_pin", { p_user_id: resetPinFor.id, p_pin: newPin });
     if (error) { alert("Error: " + error.message); return; }
     setResetPinFor(null); setNewPin("");
     alert(`PIN actualizado para ${resetPinFor.name}`);
@@ -150,7 +150,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
                           {p.phone && <p className="text-[10px] text-stone-400">{p.phone}</p>}
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs hidden md:table-cell">
-                          {p.pin ? <span className="font-mono">{p.pin}</span> : <span className="text-stone-300">—</span>}
+                          {p.is_cantina_login ? <span>Configurado</span> : <span className="text-stone-300">—</span>}
                         </td>
                         <td className="px-3 py-2 text-stone-500 text-xs hidden md:table-cell capitalize">{p.role || "—"}</td>
                         <td className="px-3 py-2 text-center">
@@ -180,7 +180,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
                           {p.is_active ? <Check size={14} className="text-green-500 inline" /> : <X size={14} className="text-stone-300 inline" />}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          {p.pin && (
+                          {p.is_cantina_login && user?.cantinaRole === "owner" && (
                             <button onClick={() => { setResetPinFor(p); setNewPin(""); }} className="text-[11px] text-brand hover:underline">
                               Reset PIN
                             </button>
@@ -442,14 +442,14 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               </button>
             </div>
             <div className="px-5 py-4 space-y-2">
-              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block">Nuevo PIN (4-8 digitos)</label>
+              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block">Nuevo PIN (6 digitos)</label>
               <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={newPin}
                 onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
-                maxLength={8}
+                maxLength={6}
                 autoFocus
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-lg font-mono tracking-widest text-center focus:border-brand focus:outline-none"
               />
@@ -457,7 +457,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
             </div>
             <div className="flex gap-2 px-5 py-3 border-t border-stone-100 bg-stone-50 rounded-b-2xl">
               <button onClick={() => setResetPinFor(null)} className="flex-1 px-3 py-2 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium">Cancelar</button>
-              <button onClick={handleResetPin} disabled={!newPin || newPin.length < 4} className="flex-1 px-3 py-2 text-xs text-white bg-brand hover:bg-brand-dark disabled:opacity-50 rounded-lg font-medium">Reset PIN</button>
+              <button onClick={handleResetPin} disabled={newPin.length !== 6} className="flex-1 px-3 py-2 text-xs text-white bg-brand hover:bg-brand-dark disabled:opacity-50 rounded-lg font-medium">Reset PIN</button>
             </div>
           </div>
         </div>
