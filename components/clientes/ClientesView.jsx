@@ -48,19 +48,23 @@ export default function ClientesView({ user, rate, saleClient, initialSubTab, on
 
   const load = useCallback(async () => {
     setLoading(true);
-    // .range fuerza a PostgREST a saltar su cap default de 1000 filas
-    // (sin esto, get_cantina_clients_summary devuelve solo los primeros 1000
-    // clientes aunque p_limit=5000). Hay 1278+ clientes en producción.
-    const { data } = await supabase
-      .rpc("get_cantina_clients_summary", {
+    // PostgREST corta cada respuesta en 1000 filas (max-rows del proyecto) y
+    // .range no lo supera: hay que paginar con p_offset. Hay 1600+ clientes.
+    const PAGE = 1000;
+    let all = [];
+    for (let offset = 0; offset < 20000; offset += PAGE) {
+      const { data, error } = await supabase.rpc("get_cantina_clients_summary", {
         p_search: debouncedSearch || null,
         p_filter: filter,
         p_sort: sort,
-        p_limit: 5000,
-        p_offset: 0,
-      })
-      .range(0, 4999);
-    setRows(data || []);
+        p_limit: PAGE,
+        p_offset: offset,
+      });
+      if (error || !data) break;
+      all = all.concat(data);
+      if (data.length < PAGE) break;
+    }
+    setRows(all);
     setLoading(false);
   }, [debouncedSearch, filter, sort]);
 
