@@ -58,7 +58,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
 
   const handleResetPin = async () => {
     if (!resetPinFor || !newPin.trim()) return;
-    if (!/^\d{6}$/.test(newPin)) { alert("PIN debe tener 6 digitos"); return; }
+    if (!/^\d{4}$/.test(newPin)) { alert("PIN debe tener 4 digitos"); return; }
     const { error } = await supabase.rpc("reset_cantina_pin", { p_user_id: resetPinFor.id, p_pin: newPin });
     if (error) { alert("Error: " + error.message); return; }
     setResetPinFor(null); setNewPin("");
@@ -442,14 +442,14 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
               </button>
             </div>
             <div className="px-5 py-4 space-y-2">
-              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block">Nuevo PIN (6 digitos)</label>
+              <label className="text-[10px] uppercase tracking-wider text-stone-500 font-medium block">Nuevo PIN (4 digitos)</label>
               <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={newPin}
                 onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
-                maxLength={6}
+                maxLength={4}
                 autoFocus
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-lg font-mono tracking-widest text-center focus:border-brand focus:outline-none"
               />
@@ -457,7 +457,7 @@ export default function AdminView({ user, onImpersonate, impersonatedRole }) {
             </div>
             <div className="flex gap-2 px-5 py-3 border-t border-stone-100 bg-stone-50 rounded-b-2xl">
               <button onClick={() => setResetPinFor(null)} className="flex-1 px-3 py-2 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium">Cancelar</button>
-              <button onClick={handleResetPin} disabled={newPin.length !== 6} className="flex-1 px-3 py-2 text-xs text-white bg-brand hover:bg-brand-dark disabled:opacity-50 rounded-lg font-medium">Reset PIN</button>
+              <button onClick={handleResetPin} disabled={newPin.length !== 4} className="flex-1 px-3 py-2 text-xs text-white bg-brand hover:bg-brand-dark disabled:opacity-50 rounded-lg font-medium">Reset PIN</button>
             </div>
           </div>
         </div>

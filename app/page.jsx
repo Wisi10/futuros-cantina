@@ -14,22 +14,24 @@ export default function LoginPage() {
     setLoading(true);
     try {
       // 1) PIN -> email de la cuenta de cantina (RPC con limite de intentos por IP)
-      const { data: email, error: rpcError } = await supabase.rpc("cantina_pin_login", { p_pin: pin });
+      const { data: login, error: rpcError } = await supabase.rpc("cantina_pin_login_v2", { p_pin: pin });
       if (rpcError) {
         setError(rpcError.message?.includes("Demasiados") ? rpcError.message : "Error de conexion");
         setLoading(false);
         return;
       }
-      if (!email) {
+      if (!login?.email) {
         setError("PIN incorrecto");
         setLoading(false);
         return;
       }
 
-      // 2) Sesion real de Supabase Auth: todas las queries salen como "authenticated"
+      // 2) Sesion real de Supabase Auth: todas las queries salen como "authenticated".
+      //    El secreto solo llega con PIN correcto, asi el PIN de 4 digitos no se
+      //    puede probar por fuerza bruta directo contra Supabase Auth.
       const { data: auth, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password: `cantina:${pin}`,
+        email: login.email,
+        password: `cantina:${login.secret}:${pin}`,
       });
       if (authError || !auth?.user) {
         setError("PIN incorrecto");

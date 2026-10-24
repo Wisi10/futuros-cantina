@@ -1,12 +1,19 @@
 -- 054_cantina_pin_4_digits.sql
 -- PIN de 4 digitos. Para que 10.000 combinaciones no se puedan probar
 -- directo contra Supabase Auth, la contrasena de Auth incluye un secreto
--- aleatorio por cuenta (login_secret) que solo devuelve cantina_pin_login_v2
+-- aleatorio por cuenta (cantina_login_secrets) que solo devuelve cantina_pin_login_v2
 -- cuando el PIN es correcto (y esa funcion limita 10 fallos / 15 min por IP).
--- Contrasena de Auth = 'cantina:' || login_secret || ':' || pin
+-- Contrasena de Auth = 'cantina:' || secret || ':' || pin
 
-ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS login_secret text;
-REVOKE SELECT (login_secret) ON public.user_profiles FROM anon, authenticated;
+-- Tabla aparte, sin privilegios para anon/authenticated: ni el staff logueado
+-- puede leer el secreto de otra cuenta.
+CREATE TABLE IF NOT EXISTS public.cantina_login_secrets (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  secret text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.cantina_login_secrets ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.cantina_login_secrets FROM anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.cantina_pin_login_v2(p_pin text)
 RETURNS json
@@ -23,10 +30,11 @@ BEGIN
       WHERE ip = v_ip AND NOT ok AND created_at > now() - interval '15 minutes') >= 10 THEN
     RAISE EXCEPTION 'Demasiados intentos. Espera 15 minutos.' USING ERRCODE = 'P0001';
   END IF;
-  SELECT u.email, p.login_secret INTO v_email, v_secret
+  SELECT u.email, s.secret INTO v_email, v_secret
   FROM user_profiles p JOIN auth.users u ON u.id = p.id
+  JOIN cantina_login_secrets s ON s.user_id = p.id
   WHERE p.is_cantina_login AND coalesce(p.is_active, true)
-    AND p.pin_hash IS NOT NULL AND p.login_secret IS NOT NULL
+    AND p.pin_hash IS NOT NULL
     AND p.pin_hash = crypt(p_pin, p.pin_hash)
   LIMIT 1;
   INSERT INTO cantina_login_attempts (ip, ok) VALUES (v_ip, v_email IS NOT NULL);
@@ -53,9 +61,10 @@ BEGIN
              AND pin_hash = crypt(p_pin, pin_hash)) THEN
     RAISE EXCEPTION 'PIN ya usado por otra cuenta';
   END IF;
-  UPDATE user_profiles SET pin_hash = crypt(p_pin, gen_salt('bf')), login_secret = v_secret,
-    is_cantina_login = true
+  UPDATE user_profiles SET pin_hash = crypt(p_pin, gen_salt('bf')), is_cantina_login = true
   WHERE id = p_user_id;
+  INSERT INTO cantina_login_secrets (user_id, secret) VALUES (p_user_id, v_secret)
+  ON CONFLICT (user_id) DO UPDATE SET secret = EXCLUDED.secret, updated_at = now();
   UPDATE auth.users SET encrypted_password = crypt('cantina:' || v_secret || ':' || p_pin, gen_salt('bf')),
     updated_at = now()
   WHERE id = p_user_id;

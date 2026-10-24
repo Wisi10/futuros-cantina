@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Delete } from "lucide-react";
 
-const PIN_LENGTH = 6;
+const PIN_LENGTH = 4;
 
 export default function PinLogin({ onLogin, error, loading }) {
   const [pin, setPin] = useState("");
