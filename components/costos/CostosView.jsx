@@ -11,6 +11,7 @@ import {
 } from "chart.js";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/fetchAll";
 import { formatREF, ProductImage } from "@/lib/utils";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, ChartTooltip, Legend);
@@ -117,10 +118,11 @@ export default function CostosView({ user }) {
         .select("id, restock_date, items, total_cost_ref, supplier")
         .gte("restock_date", dateCutoff)
         .order("restock_date", { ascending: false }),
-      supabase
+      fetchAll(() => supabase
         .from("cantina_sales")
         .select("id, sale_date, items, total_ref")
-        .gte("sale_date", dateCutoff),
+        .gte("sale_date", dateCutoff)
+        .order("id")),
       supabase
         .from("stock_movements")
         .select("product_id, product_name, quantity, cost_ref, created_at")

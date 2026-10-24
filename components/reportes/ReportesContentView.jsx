@@ -9,7 +9,24 @@ import TopProductsBarChart from "./TopProductsBarChart";
 import HoursHeatmap from "./HoursHeatmap";
 import TopClientsList from "./TopClientsList";
 import MonthlyTrendChart from "./MonthlyTrendChart";
+import CierreComparison from "./CierreComparison";
 import * as XLSX from "xlsx";
+import { fetchAll } from "@/lib/fetchAll";
+
+// `.in()` con miles de ids revienta el largo de la URL: partir en lotes.
+async function fetchPaymentsForSales(saleIds) {
+  let all = [];
+  for (let i = 0; i < saleIds.length; i += 200) {
+    const chunk = saleIds.slice(i, i + 200);
+    const { data } = await fetchAll(() => supabase
+      .from("cantina_sale_payments")
+      .select("sale_id, payment_method, amount_ref, is_change")
+      .in("sale_id", chunk)
+      .order("id"));
+    all = all.concat(data);
+  }
+  return all;
+}
 
 // ─── Heat Map Component ────────────────────────────────────
 
@@ -216,12 +233,12 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
     const fourteenStr = fourteenAgo.toISOString().split("T")[0];
 
     const [salesRes, expRes, creditsRes, prodsRes, prevRes, slowRes, oldestRes, voidedRes] = await Promise.all([
-      supabase.from("cantina_sales").select("*").gte("sale_date", from).lte("sale_date", to).is("voided_at", null).order("created_at", { ascending: false }),
+      fetchAll(() => supabase.from("cantina_sales").select("*").gte("sale_date", from).lte("sale_date", to).is("voided_at", null).order("created_at", { ascending: false }).order("id")),
       supabase.from("cantina_expenses").select("*").gte("expense_date", from).lte("expense_date", to),
       supabase.from("cantina_credits").select("*").in("status", ["pending", "partial"]),
       supabase.from("products").select("*").eq("is_cantina", true),
-      supabase.from("cantina_sales").select("total_ref, items").gte("sale_date", prevFromStr).lte("sale_date", prevToStr).is("voided_at", null),
-      supabase.from("cantina_sales").select("items, created_at").gte("sale_date", fourteenStr).is("voided_at", null),
+      fetchAll(() => supabase.from("cantina_sales").select("total_ref, items").gte("sale_date", prevFromStr).lte("sale_date", prevToStr).is("voided_at", null).order("id")),
+      fetchAll(() => supabase.from("cantina_sales").select("items, created_at").gte("sale_date", fourteenStr).is("voided_at", null).order("id")),
       supabase.from("cantina_sales").select("created_at").is("voided_at", null).order("created_at", { ascending: true }).limit(1),
       supabase.from("cantina_sales").select("id", { count: "exact", head: true }).gte("sale_date", from).lte("sale_date", to).not("voided_at", "is", null),
     ]);
@@ -238,11 +255,7 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
     // Sale payments for period (sprint 7B)
     const periodSaleIds = (salesRes.data || []).map((s) => s.id);
     if (periodSaleIds.length > 0) {
-      const { data: spData } = await supabase
-        .from("cantina_sale_payments")
-        .select("sale_id, payment_method, amount_ref, is_change")
-        .in("sale_id", periodSaleIds);
-      setMethodPayments(spData || []);
+      setMethodPayments(await fetchPaymentsForSales(periodSaleIds));
     } else {
       setMethodPayments([]);
     }
@@ -252,12 +265,13 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
     setHeatLoading(true);
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const { data: heatData } = await supabase
+    const { data: heatData } = await fetchAll(() => supabase
       .from("cantina_sales")
       .select("created_at, total_ref")
       .gte("created_at", thirtyDaysAgo.toISOString())
       .is("voided_at", null)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id"));
     setHeatSales(heatData || []);
     setHeatLoading(false);
 
@@ -266,11 +280,12 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
     startMonth.setMonth(startMonth.getMonth() - 11);
     startMonth.setDate(1);
     const startMonthStr = startMonth.toISOString().split("T")[0];
-    const { data: monthlyData } = await supabase
+    const { data: monthlyData } = await fetchAll(() => supabase
       .from("cantina_sales")
       .select("sale_date, total_ref")
       .gte("sale_date", startMonthStr)
-      .is("voided_at", null);
+      .is("voided_at", null)
+      .order("id"));
     setMonthlySales(monthlyData || []);
     } catch (err) {
       console.error("[REPORTES] loadData error:", err);
@@ -557,6 +572,11 @@ export default function ReportesContentView({ user, rate, onNavigateToDeudores }
           </p>
         </div>
       </div>
+
+      {(() => {
+        const { from, to } = getPeriodDates(period, customFrom, customTo);
+        return <CierreComparison from={from} to={to} />;
+      })()}
 
       {/* Monthly trend (últimos 12 meses) — siempre ON TOP */}
       <MonthlyTrendChart
